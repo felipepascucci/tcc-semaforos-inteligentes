@@ -46,10 +46,14 @@ O `context/08` §1 recomenda **5 → 2 → 3 → 1 → 7 → 4 → 6 → 8**. Es
 | 1.2 | `estado_semaforo_amostra` na forma da decisão P5 (transições, com `fase_anterior` e `duracao_fase_anterior_s`) e `execucao_simulacao.exemplar` |
 | 1.3 | Migration Alembic inicial + enums Postgres + índices do `context/03` §3.3 |
 | 1.4 | Repositories com a regra crítica do `context/03` §4.1: **nada de INSERT síncrono dentro do loop**; fila em memória + flush em lote |
-| 1.5 | Seeds: 8 TLS da malha + `PROTO_S1..S4`, fases, 3 VEs, 2 dispositivos IoT. Tags RFID ficam com UID placeholder até a leitura real no Bloco 5 |
+| 1.5 | Seeds: 8 TLS da malha + ~~`PROTO_S1..S4`~~ **`PROTO_CRUZ_01` com 4 fases**, 3 VEs, 2 dispositivos IoT. Tags RFID ficam com UID placeholder até a leitura real no Bloco 5 |
 | 1.6 | `db/schema.sql` gerado do banco vivo (anexo do TCC) |
 
+> **Correção do item 1.5.** O plano pedia quatro semáforos `PROTO_S1..S4`, o que modela cada módulo como um cruzamento independente. O `context/03` §5 já corrigiu isso por causa de P13: o protótipo é **um** cruzamento com quatro aproximações, logo **uma** linha em `semaforo` e **quatro** em `fase_semaforo`. `S1..S4` seguem existindo como nomes de aproximação no firmware e no protocolo serial. Implementado conforme o `context/`.
+
 **Pronto quando:** `alembic upgrade head` cria tudo do zero, seeds aplicam, e um teste de integração com testcontainers grava e lê um `log_prioridade` completo.
+
+**Estado: concluído em 2026-08-24.** 12 tabelas, 5 enums e os 6 índices do `context/03` §3.3 criados pela migration `eb4834072797`; `alembic check` sem divergência e ciclo `upgrade → downgrade → upgrade` verde (o `downgrade` remove os tipos ENUM, que sobrevivem ao `DROP TABLE`). Seeds idempotentes: 9 semáforos, 4 fases, 3 VEs, 2 tags **inativas**, 2 dispositivos. `db/schema.sql` gerado. Suite: **44 testes** na execução padrão, dos quais 17 de integração sob o marcador `banco` (Postgres efêmero via testcontainers). Uma dependência nova registrada em `context/09` (python-dotenv).
 
 ---
 

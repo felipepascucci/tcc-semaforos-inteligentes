@@ -1,8 +1,9 @@
 """Contrato mínimo do `/health` (context/01 §7, context/02 §7)."""
 
 import pytest
-from app.main import app
 from fastapi.testclient import TestClient
+
+from app.main import app
 
 CAMPOS_OBRIGATORIOS = {
     "estado",

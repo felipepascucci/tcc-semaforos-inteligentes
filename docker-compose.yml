@@ -31,6 +31,9 @@ services:
       context: .
       dockerfile: backend/Dockerfile
     environment:
+      # Sobrescreve o DATABASE_URL do `.env` (que aponta para `localhost`, a
+      # perspectiva de quem roda no host). Aqui dentro o banco atende pelo nome
+      # do serviço, `db`, que só existe na rede do Docker.
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-tcc}:${POSTGRES_PASSWORD:-senha}@db:5432/${POSTGRES_DB:-semaforo}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
       PERFIL_PARAMETROS: ${PERFIL_PARAMETROS:-simulacao}

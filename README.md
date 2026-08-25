@@ -74,11 +74,49 @@ silencioso e caro de achar.
 
 Verificação: `pytest -m sumo`.
 
+## Banco de dados
+
+```powershell
+docker compose up -d db          # o banco precisa estar no ar
+alembic upgrade head             # cria as 12 tabelas e os 5 enums
+python -m db.seeds.carregar      # cadastros mínimos; idempotente
+python -m db.seeds.carregar --resumo
+```
+
+As migrations vivem em [db/migrations/](db/migrations/) e o `alembic.ini` fica na
+raiz, para que `alembic upgrade head` funcione sem `-c`. A URL vem sempre do
+ambiente, nunca do `.ini`.
+
+[db/schema.sql](db/schema.sql) é **gerado**, para o anexo do TCC. Regenerar
+depois de qualquer migration:
+
+```powershell
+docker compose exec -T db pg_dump -s -U tcc semaforo
+```
+
+Duas coisas nos seeds são deliberadas e não devem surpreender:
+
+- **As tags RFID são placeholder e estão inativas.** Só recebem UID real na
+  entrega 5.8. Tag placeholder ativa seria uma credencial válida publicada no
+  repositório.
+- **Os 8 TLS da malha não têm fases semeadas.** Elas vêm do `.net.xml` e do
+  `sim/config/mapa_fases.yaml` no Bloco 3. Suas coordenadas e `tempo_ciclo` são
+  provisórios, e o próprio [db/seeds/dados.yaml](db/seeds/dados.yaml) diz quais
+  campos são e por quê.
+
+### Sobre a `DATABASE_URL`
+
+É uma variável só, com dois significados conforme onde o processo roda. No host
+ela vem do `.env` e aponta para `localhost`; dentro do contêiner, o
+`docker-compose.yml` a redefine no `environment:` apontando para o serviço `db`.
+Como o ambiente do processo vence o `.env`, os dois casos funcionam sem
+configuração extra.
+
 ## Rodar `sim/` e `bridge/` no host
 
 Ficam fora do compose de propósito (context/02 §3): `sim/` precisa do binário do
 SUMO e de GUI para gravar a demonstração; `bridge/` precisa de acesso a `COM3`.
-Ambos apontam para o backend do compose via `DATABASE_URL_HOST` e
+Ambos usam a `DATABASE_URL` do `.env` e falam com o backend em
 `http://localhost:8000`.
 
 ## Estrutura

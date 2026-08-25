@@ -20,6 +20,7 @@ dependencies = [
     "psycopg[binary]>=3.1",
     "pyyaml>=6.0",
     "structlog>=24.1",
+    "python-dotenv>=1.0",
 ]
 
 [project.optional-dependencies]
@@ -80,6 +81,11 @@ ignore = [
 [tool.ruff.lint.pydocstyle]
 convention = "google"
 
+[tool.ruff.lint.isort]
+# Sem isto o ruff trata `app`, `core` e `db` como bibliotecas de terceiros e
+# embaralha os imports do próprio projeto com os do SQLAlchemy.
+known-first-party = ["app", "core", "adapters", "db", "sim", "bridge", "analysis"]
+
 [tool.ruff.lint.per-file-ignores]
 # Docstring obrigatória vale para o núcleo do TCC. Fora dele, D1xx é ruído.
 "backend/app/**" = ["D1"]
@@ -89,6 +95,10 @@ convention = "google"
 "sim/**" = ["D1"]
 "analysis/**" = ["D1"]
 "tests/**" = ["D1"]
+"db/**" = ["D1"]
+# Migrations são majoritariamente geradas pelo autogenerate. Exigir docstring em
+# `upgrade()`/`downgrade()` só produziria ruído copiado em cada revisão nova.
+"db/migrations/versions/**" = ["D"]
 
 [tool.ruff.format]
 line-ending = "lf"
@@ -118,5 +128,6 @@ asyncio_mode = "auto"
 markers = [
     "sumo: exige o binário do SUMO instalado e SUMO_HOME configurado",
     "hardware: exige a bancada física ligada (Arduino UNO / NodeMCU)",
+    "banco: sobe um Postgres efêmero via testcontainers; exige Docker rodando",
     "lento: leva mais de alguns segundos (soak, escala, lote)",
 ]
