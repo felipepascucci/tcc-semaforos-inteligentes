@@ -99,27 +99,50 @@ Então: **NodeMCU → Wi-Fi → Backend → USB serial → Arduino UNO**. O note
 @dataclass(frozen=True)
 class VeiculoEmergencia:
     id: str
-    tipo: Literal["AMBULANCIA", "BOMBEIRO", "POLICIA"]
+    tipo: TipoVeiculo          # AMBULANCIA | BOMBEIRO | POLICIA
     posicao: tuple[float, float]
     velocidade: float          # m/s
-    rota: list[str]            # ids de vias, em ordem
+    rota: tuple[str, ...]      # ids de vias, em ordem
     indice_via_atual: int
+    posicao_na_via_m: float    # já percorrido dentro da via atual
 
 @dataclass(frozen=True)
 class EstadoSemaforo:
     id: str
     fase_atual: int
     tempo_na_fase: float       # s
-    fila_por_acesso: dict[str, int]
+    fila_por_acesso: Mapping[str, int]
     em_preempcao: bool
+    sinal: Sinal               # VERDE | AMARELO | VERMELHO (all-red)
 
 @dataclass(frozen=True)
 class EstadoMalha:
     t: float                   # s de simulação ou epoch
-    semaforos: dict[str, EstadoSemaforo]
-    veiculos_emergencia: list[VeiculoEmergencia]
-    densidade_por_via: dict[str, float]
+    semaforos: Mapping[str, EstadoSemaforo]
+    veiculos_emergencia: Sequence[VeiculoEmergencia]
+    densidade_por_via: Mapping[str, float]
 ```
+
+> **Três ajustes de forma, feitos no Bloco 2** (2026-08-24). Nenhum muda o
+> significado dos campos; a implementação em `backend/core/modelos.py` é a
+> referência.
+>
+> 1. **Contêineres imutáveis** — `tuple`/`Mapping` no lugar de `list`/`dict`.
+>    `frozen=True` só impede reatribuir o atributo: a lista e o dicionário
+>    continuavam mutáveis por dentro, e a razão declarada em `08` §3 para exigir
+>    estado imutável (evitar bug de concorrência entre o loop de simulação e o
+>    broadcast do WebSocket) ficava sem efeito.
+> 2. **`posicao_na_via_m`** — campo novo. Sem ele, a distância ao longo da rota
+>    (E1) teria resolução de via inteira, e o critério de aceitação do RF01 é
+>    justamente distinguir 480 m de 520 m (`06` §2). O TraCI fornece o valor por
+>    `traci.vehicle.getLanePosition()`.
+> 3. **`sinal`** — campo novo em `EstadoSemaforo`. E3 e E5 precisam saber se a
+>    fase corrente está em verde, amarelo ou all-red para calcular o verde mínimo
+>    residual; sem isso o motor não tem como respeitar I4.
+>
+> A topologia estática (fases, matriz de conflito, comprimento das vias) **não**
+> está nestas estruturas: ela vive em `core/malha.py` e é injetada no motor na
+> construção. Estado é o que muda a cada passo; topologia é configuração.
 
 ### 5.2 Etapas
 

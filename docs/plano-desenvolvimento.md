@@ -78,6 +78,12 @@ Python puro. Zero import de `traci`, `pyserial`, `sqlalchemy` ou `fastapi`.
 
 > Hypothesis não consta na stack fixa do `context/02` §2. É dependência **só de teste** e o `context/06` §3 a recomenda nominalmente para I1. Registro a decisão ao introduzi-la.
 
+**Estado: concluído em 2026-08-24.** `core/` com 13 módulos, `mypy --strict` limpo, e o teste de arquitetura via AST reprovando qualquer import de framework, I/O ou camada externa — inclusive `math.dist`, para que E1 não escorregue para distância euclidiana. Suite de **175 testes em ~18 s**, sem SUMO e sem hardware. Latência de decisão medida: **p95 de 0,034 ms** na malha de 8 cruzamentos e 0,070 ms com 32 — contra o orçamento de 100 ms do RNF01.
+>
+> Três achados registrados em `context/09`: **I5 não estava garantida por ninguém** (o contrato a atribui ao motor, mas o código não a implementava); **I4 escapava da verificação na primeira transição de cada execução**, furo encontrado por teste de mutação; e o **`preempcao_timeout_s` (45 s) é mais apertado que `verde_max_s` (60 s)** no perfil de simulação, então quem calibrar um precisa mexer no outro.
+>
+> Duas mudanças de forma em `context/01` §5.1, documentadas lá: contêineres imutáveis de verdade (`tuple`/`Mapping`) e os campos `posicao_na_via_m` e `sinal`, sem os quais RF01 e I4 não são verificáveis.
+
 ---
 
 ### Bloco 3 — Malha SUMO + adaptador TraCI (Sprints 1 e 2) · ~2 semanas

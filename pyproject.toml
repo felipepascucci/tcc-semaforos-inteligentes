@@ -76,6 +76,7 @@ select = [
 ignore = [
     "D203",  # conflita com D211
     "D213",  # conflita com D212
+    "D105",  # docstring em método mágico: `__str__` e `__post_init__` não ganham nada com ela
 ]
 
 [tool.ruff.lint.pydocstyle]
