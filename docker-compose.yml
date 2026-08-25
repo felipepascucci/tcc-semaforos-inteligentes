@@ -1,0 +1,81 @@
+# Serviços do TCC — context/02 §3.
+#
+# Fora do compose, por rodarem no host (precisam de USB e de display):
+#   sim/     -> binário do SUMO, e sumo-gui para gravar a demonstração
+#   bridge/  -> acesso a COM3 (Windows) / /dev/ttyUSB0 (Linux)
+# Ver README, seção "Rodar sim/ e bridge/ no host".
+
+name: tcc-semaforos
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-tcc}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-senha}
+      POSTGRES_DB: ${POSTGRES_DB:-semaforo}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # `backend` só sobe depois que isto passa (depends_on: service_healthy).
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tcc} -d ${POSTGRES_DB:-semaforo}"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-tcc}:${POSTGRES_PASSWORD:-senha}@db:5432/${POSTGRES_DB:-semaforo}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
+      PERFIL_PARAMETROS: ${PERFIL_PARAMETROS:-simulacao}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    ports:
+      - "${API_PORT:-8000}:8000"
+    volumes:
+      # Recarga a quente em desenvolvimento. O pacote é instalado em modo
+      # editável no Dockerfile, então o mount aponta para o mesmo caminho.
+      - ./backend:/app/backend
+    depends_on:
+      db:
+        condition: service_healthy
+    command:
+      ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/api/v1/health', timeout=3).status == 200 else 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+
+  adminer:
+    image: adminer:5
+    profiles: ["dev"]
+    ports:
+      - "8080:8080"
+    environment:
+      ADMINER_DEFAULT_SERVER: db
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # Só existe a partir do Bloco 7. Fica sob perfil próprio para que
+  # `docker compose up` não tente construir um diretório vazio até lá.
+  frontend:
+    profiles: ["frontend"]
+    build:
+      context: ./frontend
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_API_URL: http://localhost:${API_PORT:-8000}
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:

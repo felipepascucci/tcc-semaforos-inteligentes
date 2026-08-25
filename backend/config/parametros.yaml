@@ -1,0 +1,45 @@
+# Perfil SIMULAÇÃO — context/01 §5.3.
+#
+# Esta é a fonte de TODO número mágico do algoritmo de decisão. Se um valor de
+# comportamento aparece no meio de uma função, ele está no lugar errado
+# (context/08 §4.3).
+#
+# ATENÇÃO: este perfil produz os dados estatísticos do capítulo 5. NÃO o altere
+# para "combinar" com o protótipo de bancada — a bancada tem perfil próprio em
+# parametros.hardware.yaml (contrato-hardware-software.md §7).
+
+# --- E1: detecção (RF01) ---------------------------------------------------
+raio_deteccao_m: 500
+
+# --- E2/E3: ETA e janela de ativação --------------------------------------
+tempo_antecipacao_margem_s: 5.0
+velocidade_min_estimativa_ms: 4.0
+
+# --- E5: transição segura / duração de fases ------------------------------
+verde_min_s: 7.0
+verde_max_s: 60.0
+amarelo_s: 3.0
+all_red_s: 2.0
+
+# --- E6: manutenção e liberação -------------------------------------------
+preempcao_timeout_s: 45.0
+
+# --- E7: compensação pós-evento (H2) --------------------------------------
+n_ciclos_compensacao: 2
+ganho_compensacao_k: 0.7
+
+# --- E8: conflito entre múltiplos VEs -------------------------------------
+prioridade_tipo: [AMBULANCIA, BOMBEIRO, POLICIA]
+
+# --- Invariantes de segurança — context/01 §6 -----------------------------
+# I5: nenhum acesso em vermelho por mais que isto (starvation).
+vermelho_max_s: 120.0
+# I6: garantido pelo firmware; replicado aqui para o adaptador de hardware
+# saber com que cadência precisa enviar PING.
+watchdog_s: 3.0
+
+# --- Orçamentos de latência — decisão P2 (context/09) ---------------------
+# Duas métricas distintas, ambas instrumentadas. Usadas por
+# validar_execucao() (context/06 §4) para reprovar execução fora do orçamento.
+latencia_decisao_p95_max_ms: 100    # RNF01 — só motor.avaliar(), sem I/O
+latencia_fim_a_fim_p95_max_ms: 200  # H3   — t_deteccao -> t_atuacao

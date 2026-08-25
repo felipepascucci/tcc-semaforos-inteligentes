@@ -1,0 +1,122 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tcc-semaforos"
+version = "0.1.0"
+description = "Controle dinâmico de semáforos com priorização de veículos de emergência (TCC UNIP 2026)"
+readme = "README.md"
+requires-python = ">=3.11"
+
+# Stack fixa de context/02 §2. Não acrescente dependência sem registrar
+# a decisão em context/09-pendencias-e-decisoes.md (context/08 §4.8).
+dependencies = [
+    "fastapi>=0.115,<0.116",
+    "uvicorn[standard]>=0.30",
+    "sqlalchemy>=2.0",
+    "alembic>=1.13",
+    "pydantic>=2.7",
+    "psycopg[binary]>=3.1",
+    "pyyaml>=6.0",
+    "structlog>=24.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.6",
+    "mypy>=1.11",
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "httpx>=0.27",
+    "testcontainers[postgres]>=4.7",
+    "hypothesis>=6.100",
+    "types-PyYAML",
+]
+analysis = ["pandas>=2.2", "numpy>=1.26", "scipy>=1.13", "matplotlib>=3.8"]
+hardware = ["pyserial==3.5"]
+
+# NÃO existe extra "sim". O cliente TraCI/libsumo vem com a instalação do SUMO,
+# em %SUMO_HOME%\tools. Instalar `traci` pelo pip criaria uma segunda cópia,
+# possivelmente de versão diferente do binário — fonte clássica de bug silencioso.
+# Ver README, seção "SUMO".
+
+[tool.setuptools]
+package-dir = { "" = "backend" }
+
+[tool.setuptools.packages.find]
+where = ["backend"]
+include = ["core*", "app*", "adapters*"]
+
+# ---------------------------------------------------------------------------
+# Ruff — context/08 §3: formatação e lint, linha 100.
+# ---------------------------------------------------------------------------
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+# Markdown fica de fora: o ruff formata blocos de código embutidos, e os .md de
+# `context/` e `docs/` são documentação — reescrevê-los é corromper a fonte da
+# verdade do escopo.
+extend-exclude = ["*.md", "sim/rede", "firmware"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle
+    "W",
+    "F",    # pyflakes
+    "I",    # isort
+    "N",    # pep8-naming
+    "UP",   # pyupgrade
+    "B",    # bugbear
+    "SIM",  # simplify
+    "RUF",
+    "D",    # pydocstyle — docstrings obrigatórias em core/ (context/08 §3)
+]
+ignore = [
+    "D203",  # conflita com D211
+    "D213",  # conflita com D212
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+# Docstring obrigatória vale para o núcleo do TCC. Fora dele, D1xx é ruído.
+"backend/app/**" = ["D1"]
+"backend/adapters/**" = ["D1"]
+"backend/tests/**" = ["D1"]
+"bridge/**" = ["D1"]
+"sim/**" = ["D1"]
+"analysis/**" = ["D1"]
+"tests/**" = ["D1"]
+
+[tool.ruff.format]
+line-ending = "lf"
+
+# ---------------------------------------------------------------------------
+# Mypy — strict apenas em backend/core/ (plano, item 0.3).
+# `files` restringe o alvo padrão, então `mypy` sem argumento já é o certo.
+# ---------------------------------------------------------------------------
+[tool.mypy]
+python_version = "3.11"
+mypy_path = "backend"
+files = ["backend/core"]
+strict = true
+warn_unreachable = true
+pretty = true
+
+# ---------------------------------------------------------------------------
+# Pytest — marcadores `sumo` e `hardware` fora da execução padrão
+# (context/06 §1).
+# ---------------------------------------------------------------------------
+[tool.pytest.ini_options]
+minversion = "8.0"
+pythonpath = ["backend"]
+testpaths = ["backend/tests", "bridge/tests", "sim/tests", "tests"]
+addopts = ["-q", "--strict-markers", "-m", "not sumo and not hardware"]
+asyncio_mode = "auto"
+markers = [
+    "sumo: exige o binário do SUMO instalado e SUMO_HOME configurado",
+    "hardware: exige a bancada física ligada (Arduino UNO / NodeMCU)",
+    "lento: leva mais de alguns segundos (soak, escala, lote)",
+]

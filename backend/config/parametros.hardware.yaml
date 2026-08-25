@@ -1,0 +1,32 @@
+# Perfil HARDWARE (bancada) — sobreposição sobre parametros.yaml.
+#
+# Só as chaves que mudam aparecem aqui; as demais são herdadas do perfil de
+# simulação. Ativado por PERFIL_PARAMETROS=hardware.
+#
+# Origem: context/01 §5.3 (nota de rodapé), decisão P13 e o perfil de tempos de
+# 2026-08-24 (context/09), detalhados em docs/contrato-hardware-software.md §7.
+#
+# O protótipo é UM cruzamento com 4 aproximações em *split phasing*: 4 fases,
+# um verde por vez. Sob esse regime a matriz de conflito é total e I1 se reduz a
+# `contar_verdes() <= 1`.
+
+# --- Tempos do ciclo fixo da bancada --------------------------------------
+verde_s: 3.0        # duração do verde de cada fase no ciclo fixo
+verde_min_s: 3.0    # piso de I4 — coincide com verde_s na bancada
+amarelo_s: 2.0
+all_red_s: 1.0
+
+# Consequência de verde_s == verde_min_s: na bancada a preempção NUNCA trunca
+# um verde — aguarda o corrente terminar (no máximo 3 s). O caso de truncamento
+# continua exercitado no perfil de simulação, onde verde_min_s = 7.0.
+#
+#   Ciclo fixo completo (4 fases) : 4 x (3 + 2 + 1) = 24 s
+#   Transição de preempção, pior caso :  3 + 2 + 1  =  6 s
+
+# --- Timeouts do firmware — contrato §7, requisitos 4 e 5 -----------------
+preempcao_timeout_s: 30.0   # PREEMP_MAX_MS = 30000, mesmo sem CLR
+watchdog_s: 3.0             # I6 — WATCHDOG_MS = 3000
+
+# --- Fases do protótipo ----------------------------------------------------
+# PRE,<fase>,<dur_s> aceita fase em 1..4 (decisão P13).
+n_fases_prototipo: 4

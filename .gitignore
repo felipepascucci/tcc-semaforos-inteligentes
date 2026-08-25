@@ -1,0 +1,46 @@
+# --- Segredos (context/02 §4 e §6) -----------------------------------------
+.env
+.env.local
+firmware/**/secrets.h
+
+# --- Python ----------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# --- Node / frontend -------------------------------------------------------
+node_modules/
+frontend/dist/
+frontend/.vite/
+
+# --- SUMO ------------------------------------------------------------------
+# A malha .net.xml é GERADA por `netconvert` a partir dos .xml de entrada.
+# Versionar a entrada, não a saída (context/04 §12).
+sim/rede/*.net.xml
+sim/saida/
+
+# --- Dados experimentais ---------------------------------------------------
+# CSV de resultados É versionado (CLAUDE.md, Definition of Done).
+# Saída bruta do SUMO, não.
+analysis/data/**/*.tmp
+**/tripinfo.xml
+**/summary.xml
+**/queue.xml
+
+# --- Sistema operacional / IDE --------------------------------------------
+Thumbs.db
+desktop.ini
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
