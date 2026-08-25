@@ -90,7 +90,7 @@ Python puro. Zero import de `traci`, `pyserial`, `sqlalchemy` ou `fastapi`.
 
 | # | Entrega |
 |---|---|
-| 3.0 | `sim/calibracao_cenarios.py` — calcula a capacidade da aproximação semaforizada (`fluxo_de_saturacao × verde/ciclo`) e converte os fluxos de cada cenário em grau de saturação (v/c). Gera a tabela da metodologia. **Encaminha P11** |
+| 3.0 | **Calibração dos cenários.** `sim/calibracao/fluxo_saturacao.py` **mede** o fluxo de saturação da própria malha (marcado `sumo`); `sim/calibracao/cenarios.py` converte os fluxos 300/700/1200 em grau de saturação e gera a tabela da metodologia (puro, testável sem SUMO). **Encaminha P11** |
 | 3.1 | `sim/rede/*.xml` — grade 2×4, arterial 60 km/h com ~500 m entre cruzamentos, 4 transversais a 40 km/h; `make rede` chamando `netconvert` |
 | 3.2 | Detectores E1/E2/E3 no `.add.xml` — sem eles H2 fica sem evidência |
 | 3.3 | `sim/demanda/` — tipos de veículo, 3 arquivos de fluxo, rotas de VE (1 a cada 10 min) |
@@ -107,7 +107,28 @@ Python puro. Zero import de `traci`, `pyserial`, `sqlalchemy` ou `fastapi`.
 > pré-projeto e já estão no texto entregue. Eles são entrada da conta, não saída.
 > O que 3.0 produz é a **classificação** deles em grau de saturação, que é o que
 > permite afirmar "saturação moderada a intensa" (a condição de H1, decisão P1)
-> citando um método em vez de decretando.
+> por medição em vez de por decreto.
+>
+> **O fluxo de saturação é medido, não adotado da literatura** (decisão de
+> 2026-08-25). A malha simulada tem um fluxo de saturação próprio, que emerge dos
+> parâmetros de car-following do SUMO (`accel`, `decel`, `tau`, `minGap`,
+> `length`) — adotar 1900 veíc./h de um manual e aplicá-lo a uma malha que na
+> verdade escoa outro valor produziria um v/c errado com aparência de rigor.
+>
+> O método é o de campo, aplicado à simulação: satura uma aproximação, mantém o
+> verde, **descarta os primeiros veículos** (o *start-up lost time*, em que a fila
+> ainda está acelerando) e calcula `3600 / headway médio` do trecho saturado.
+> Assim o número vem de código versionado, como o `CLAUDE.md` exige, e é
+> regenerável.
+>
+> **Ressalva a declarar no texto — e a banca pode levantar.** Calibrar os
+> cenários pela capacidade do próprio simulador tem um quê de circular: é
+> natural que os cenários "caibam". A resposta honesta é que o objetivo não é
+> provar que o SUMO é realista, e sim **caracterizar o regime de operação do
+> experimento** — e a comparação com a faixa reportada na literatura serve
+> justamente de guarda contra o modelo estar grosseiramente fora de esquadro. Se
+> o valor medido cair muito longe do que se reporta para vias urbanas, o problema
+> está nos parâmetros do `veiculos.typ.xml`, e é isso que se corrige.
 >
 > **Atenção metodológica:** os limiares de veíc./h/faixa que circulam para
 > rodovia (capacidade ~1800–2200) valem para **fluxo ininterrupto** e não se

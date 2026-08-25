@@ -55,7 +55,7 @@ A metodologia menciona "dados de fluxo típicos de zonas arteriais" sem citar fo
 
 **Opções:** manual da CET-SP, Highway Capacity Manual (HCM), ou dados abertos de contagem volumétrica da CET. Sem referência, a calibração da demanda fica sem sustentação metodológica e é um alvo fácil na arguição.
 
-**Bloqueia:** a redação da metodologia, não o código. Mas precisa estar resolvido antes de a Sprint 1 (malha) ser considerada fechada — a calibração dos cenários `leve`/`moderado`/`intenso` referencia esses números.
+**Bloqueia:** a redação da metodologia, não o código. ~~Mas precisa estar resolvido antes de a Sprint 1 (malha) ser considerada fechada~~ — **deixou de bloquear a Sprint 1 / Bloco 3** com o encaminhamento abaixo, que mede o fluxo de saturação em vez de adotá-lo da literatura.
 
 ### Encaminhamento definido em 2026-08-25 · **item continua ABERTO**
 
@@ -69,9 +69,30 @@ capacidade_por_faixa = fluxo_de_saturacao × (verde / ciclo)
 v/c = fluxo_do_cenario / capacidade_da_aproximacao
 ```
 
-Implementado em `sim/calibracao_cenarios.py` (entrega 3.0 do plano), com
-verificação por medição no SUMO na entrega 3.4. A cadeia fica: referência →
-capacidade → v/c derivado → v/c medido. Cada elo é citação ou código versionado.
+**O `fluxo_de_saturacao` é MEDIDO na própria malha, não adotado da literatura.**
+A malha simulada tem um fluxo de saturação próprio, que emerge dos parâmetros de
+car-following do SUMO (`accel`, `decel`, `tau`, `minGap`, `length`); adotar um
+valor de manual e aplicá-lo a uma malha que na verdade escoa outro produziria um
+v/c errado com aparência de rigor.
+
+O método é o de campo, aplicado à simulação: satura uma aproximação, mantém o
+verde, descarta os primeiros veículos (*start-up lost time*) e calcula
+`3600 / headway médio` do trecho saturado. Implementado em
+`sim/calibracao/fluxo_saturacao.py`; a classificação, em
+`sim/calibracao/cenarios.py` (entrega 3.0 do plano), com verificação por medição
+de v/c na malha completa em 3.4.
+
+A cadeia fica: **medição do fluxo de saturação → capacidade → v/c derivado → v/c
+medido na malha completa**. Todo elo é código versionado, como o `CLAUDE.md`
+exige. A literatura entra como **faixa de plausibilidade**, não como fonte do
+número.
+
+**Ressalva a declarar no texto.** Calibrar os cenários pela capacidade do próprio
+simulador tem um quê de circular. A resposta é que o objetivo não é provar que o
+SUMO é realista, e sim caracterizar o regime de operação do experimento — e a
+comparação com a literatura é a guarda contra o modelo estar grosseiramente fora
+de esquadro. Valor medido muito longe do reportado para via urbana significa
+parâmetro errado em `veiculos.typ.xml`, e é isso que se corrige.
 
 **Alerta metodológico — fluxo interrompido × ininterrupto.** Os limiares de
 veíc./h/faixa que circulam para classificar trânsito (leve até ~700–800,
@@ -86,11 +107,23 @@ moderada a intensa).
 
 **O que ainda falta, e é `AÇÃO DA EQUIPE`:**
 
-1. O valor do **fluxo de saturação** (`fluxo_de_saturacao_veic_h`) com referência
-   verificável — autor, edição, ano e capítulo. Fica como parâmetro de entrada
-   documentado do script, nunca como constante no código.
-2. Confirmar com o **Prof. Marco Gomes** o enquadramento em fluxo interrompido —
+1. Uma referência para a **faixa de plausibilidade** do fluxo de saturação em via
+   urbana, com autor, edição, ano e capítulo. Não é mais a fonte do número —
+   serve para confrontar o valor medido e sustentar a afirmação de que a malha
+   opera em regime compatível com o de uma arterial real. Candidatas: Boletins
+   Técnicos da CET-SP, o Manual de Estudos de Tráfego do DNIT, ou o HCM.
+2. Uma referência para o **enquadramento por grau de saturação** — a ideia de que
+   faixas de v/c correspondem a níveis de serviço. É o que justifica os cortes de
+   40% e 75% do `04` §5.
+3. Confirmar com o **Prof. Marco Gomes** o enquadramento em fluxo interrompido —
    convém levar junto com a decisão P3, que também espera conversa com ele.
+
+> **O que mudou com a decisão de medir.** Antes, P11 exigia um número da
+> literatura para *entrar* no cálculo, e sem ele o Bloco 3 não fechava. Agora
+> exige uma referência para *conferir* um número que o próprio experimento
+> produz. O Bloco 3 deixa de estar bloqueado por bibliografia: a calibração roda,
+> a tabela sai, e a citação entra depois como validação. **P11 continua aberta**,
+> mas passou de bloqueio de execução a pendência de redação.
 
 ---
 
