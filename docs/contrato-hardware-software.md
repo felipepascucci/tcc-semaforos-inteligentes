@@ -507,9 +507,9 @@ Detalhado em [`docs/plano-desenvolvimento.md`](plano-desenvolvimento.md).
 
 | Bloco | Entrega | Prazo |
 | --- | --- | --- |
-| 0 | Fundação — git, Docker, toolchain, **instalar SUMO**, verificar P10 | ~3 dias |
-| 1 | Banco de dados — migrations, models, seeds | ~1 semana |
-| 2 | **Motor de decisão** + invariantes — núcleo do TCC | ~2 semanas |
+| 0 | Fundação — git, Docker, toolchain, **instalar SUMO** | ~3 dias · ✅ concluído |
+| 1 | Banco de dados — migrations, models, seeds | ~1 semana · ✅ concluído |
+| 2 | **Motor de decisão** + invariantes — núcleo do TCC | ~2 semanas · ✅ concluído |
 | 3 | Malha SUMO + adaptador TraCI | ~2 semanas |
 | 4 | **Piloto de 5 seeds** — descobrir cedo se as hipóteses se sustentam | ~3 dias |
 | 5 | **Camada IoT** — protocolo, bridge, firmware UNO e NodeMCU, P8 e P9 | ~2 semanas |

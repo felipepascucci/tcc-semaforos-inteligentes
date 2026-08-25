@@ -30,12 +30,26 @@ Cada RF/RNF vira pelo menos um teste automatizado. Esta tabela é a rastreabilid
 | RNF01 | p95 de `latencia_decisao_ms` < 100 ms em 10.000 chamadas | Percentil, não média. **Latência de decisão** — só `motor.avaliar()`, sem I/O (decisão P2) | `test_desempenho.py` |
 | H3 | p95 de `latencia_total_ms` (t_deteccao→t_atuacao) < 200 ms | **Latência fim-a-fim**, inclui rede e atuação. Medida no fluxo de hardware e no e2e | `test_e2e_preempcao.py` |
 | RNF02 | Sistema opera 60 min contínuos sem vazamento de memória | RSS estável ± 10% | `test_soak.py` |
-| RNF03 | Motor processa malha de 32 TLS mantendo p95 < 100 ms | Escala linear ou melhor | `test_escala.py` |
+| RNF03 | Motor processa malha de 32 TLS mantendo p95 < 100 ms | Escala linear ou melhor | `test_desempenho.py` |
 | RNF04 | POST sem `X-Device-Token` válido → 401; UID não cadastrado → 403 | Códigos corretos | `test_seguranca.py` |
 | RNF05 | Taxa de reconhecimento de tag ≥ 95% em 100 leituras | Medição manual em bancada | Checklist HW |
 | RNF07 | `core/` não importa framework nem I/O | Teste de arquitetura via AST | `test_arquitetura.py` |
 
 `test_arquitetura.py` é barato e evita a erosão da regra principal do §1 de `01-arquitetura-sistema.md`. Vale a pena.
+
+> **Estado em 2026-08-25 (fim do Bloco 2).** Já implementados: **RF01**
+> (`backend/tests/core/test_deteccao.py`), **RNF01** e **RNF03**
+> (`backend/tests/core/test_desempenho.py`), **RNF07**
+> (`backend/tests/test_arquitetura.py`) e os invariantes **I1 a I5**
+> (`test_seguranca.py` e `test_invariantes_property.py`).
+>
+> Os demais dependem de blocos ainda por fazer: RF02, RF03, RF07 e H3 exigem a
+> malha SUMO (Bloco 3); RF04, RF05, RF06 e RNF04 exigem a API e o WebSocket
+> (Bloco 6); RNF02 e RNF05 exigem execução longa e bancada (Blocos 8 e 5).
+>
+> `RNF03` foi realocado de `test_escala.py` para `test_desempenho.py`: as duas
+> medições compartilham o mesmo aparato de medição de percentil, e separá-las em
+> dois arquivos duplicaria o código sem separar conceito nenhum.
 
 ## 3. Testes de invariantes de segurança
 

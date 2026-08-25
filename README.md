@@ -23,9 +23,13 @@ Pré-requisitos: **Docker Desktop**, **Python 3.11+**, **SUMO 1.19+**, **Node 18
 ```powershell
 Copy-Item .env.example .env      # ajuste se precisar; .env nunca é commitado
 
-docker compose up -d --build     # sobe db + backend
+docker compose up -d --build     # db -> migrations + seeds -> backend
 curl http://localhost:8000/api/v1/health
 ```
+
+É só isso. O serviço `migracoes` cria o schema e aplica os seeds antes de o
+backend subir, então um clone limpo vira um sistema utilizável com um comando.
+As duas operações são idempotentes — subir de novo não duplica nada.
 
 `/api/v1/health` responde `estado: "ok"` quando o banco está acessível, e
 `degradado` com HTTP 503 caso contrário. Componentes ainda não implementados são
@@ -34,6 +38,7 @@ declarados como `nao_configurado` — nunca como verde falso.
 | Serviço | Porta | Perfil | Observação |
 | --- | --- | --- | --- |
 | `db` (PostgreSQL 16) | 5432 | padrão | volume nomeado `pgdata`, healthcheck `pg_isready` |
+| `migracoes` | — | padrão | one-shot: migrations + seeds, depois sai com código 0 |
 | `backend` (FastAPI) | 8000 | padrão | `--reload`, `/docs` para a API interativa |
 | `adminer` | 8080 | `dev` | `docker compose --profile dev up -d adminer` |
 | `frontend` (Vite) | 5173 | `frontend` | só existe a partir do Bloco 7 |
@@ -51,9 +56,38 @@ pip install -e ".[dev]"          # acrescente ",analysis" ou ",hardware" conform
 ruff check . ; ruff format --check .
 mypy                             # strict, restrito a backend/core/ (context/08 §3)
 pytest                           # `sumo` e `hardware` ficam de fora por padrão
-pytest -m sumo                    # exige SUMO instalado
-pytest -m hardware                # exige a bancada ligada
 ```
+
+Marcadores (`pyproject.toml`, seção `[tool.pytest.ini_options]`):
+
+| Marcador | O que exige | Na execução padrão? |
+| --- | --- | --- |
+| `sumo` | binário do SUMO e `SUMO_HOME` | não — `pytest -m sumo` |
+| `hardware` | a bancada física ligada | não — `pytest -m hardware` |
+| `banco` | **Docker rodando** (Postgres efêmero via testcontainers) | sim |
+| `lento` | alguns segundos (medição de latência, escala) | sim |
+
+`banco` e `lento` ficam na execução padrão de propósito: o teste de integração
+do banco e o de latência do RNF01 são critérios de pronto, e escondê-los atrás de
+um marcador seria escondê-los. Para uma rodada rápida sem Docker:
+
+```powershell
+pytest -m "not banco and not lento and not sumo and not hardware"
+```
+
+## O motor de decisão
+
+O núcleo do trabalho é [backend/core/](backend/core/): Python puro, **sem I/O e
+sem framework**, o mesmo algoritmo que roda na simulação e no protótipo. A regra
+não depende de disciplina — [test_arquitetura.py](backend/tests/test_arquitetura.py)
+reprova via AST qualquer import de framework, I/O ou camada externa dentro de
+`core/`, e até o uso de `math.dist` (E1 exige distância **ao longo da rota**,
+nunca euclidiana).
+
+Os invariantes de segurança I1–I5 estão em [seguranca.py](backend/core/seguranca.py)
+e são verificados por property-based testing: o Hypothesis dirige milhares de
+sequências aleatórias de comandos contra a máquina de estados e confere os
+invariantes em todo estado alcançado.
 
 ## SUMO
 
@@ -76,11 +110,18 @@ Verificação: `pytest -m sumo`.
 
 ## Banco de dados
 
+O `docker compose up` já cuida disso pelo serviço `migracoes`. Os comandos abaixo
+servem para rodar **do host**, contra o banco do compose — o caso de quem está
+mexendo em migration ou em seed:
+
 ```powershell
 docker compose up -d db          # o banco precisa estar no ar
 alembic upgrade head             # cria as 12 tabelas e os 5 enums
 python -m db.seeds.carregar      # cadastros mínimos; idempotente
 python -m db.seeds.carregar --resumo
+
+docker compose logs migracoes    # o que o serviço one-shot fez na última subida
+docker compose down -v           # zera o volume; a próxima subida recria tudo
 ```
 
 As migrations vivem em [db/migrations/](db/migrations/) e o `alembic.ini` fica na

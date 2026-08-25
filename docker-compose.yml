@@ -26,6 +26,35 @@ services:
       retries: 12
       start_period: 10s
 
+  # Serviço de vida curta: cria o schema e aplica os seeds, depois sai. O
+  # `backend` só sobe quando ele termina com sucesso, então `docker compose up`
+  # entrega um sistema utilizável a partir de um clone limpo — que é o que a
+  # Definition of Done do CLAUDE.md pede.
+  #
+  # Ambas as operações são idempotentes: subir de novo não duplica nada.
+  #
+  # NOTA sobre context/02 §6 ("usuário da aplicação sem privilégio de DDL;
+  # migrations com usuário separado"): aqui os dois são o mesmo usuário `tcc`.
+  # É uma simplificação consciente de ambiente de desenvolvimento, decidida em
+  # 2026-08-25 e registrada em context/09. Num ambiente real, este serviço usaria
+  # credencial própria com DDL e o backend continuaria sem.
+  migracoes:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-tcc}:${POSTGRES_PASSWORD:-senha}@db:5432/${POSTGRES_DB:-semaforo}
+    volumes:
+      - ./backend:/app/backend
+      - ./db:/app/db
+      - ./alembic.ini:/app/alembic.ini:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+    command: >
+      sh -c "alembic upgrade head && python -m db.seeds.carregar"
+
   backend:
     build:
       context: .
@@ -47,6 +76,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      migracoes:
+        condition: service_completed_successfully
     command:
       ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
     healthcheck:

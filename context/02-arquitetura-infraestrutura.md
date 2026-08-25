@@ -32,10 +32,25 @@ Não introduzir dependência fora desta lista sem registrar em `09-pendencias-e-
 | Mapa | Leaflet + react-leaflet | — |
 | Gráficos | Recharts | — |
 | Análise | pandas, numpy, scipy, matplotlib | — |
-| Testes backend | pytest, pytest-asyncio, httpx | — |
+| Testes backend | pytest, pytest-asyncio, httpx, testcontainers, **hypothesis** | — |
 | Testes frontend | Vitest + Testing Library | — |
 | Container | Docker + Docker Compose | — |
 | Firmware | Arduino IDE 2.3.10 / PlatformIO | — |
+| Configuração | **PyYAML**, **python-dotenv** | — |
+| Observabilidade | structlog | — |
+| Driver do banco | psycopg | 3.x |
+| Qualidade | ruff, mypy | — |
+
+> **As quatro últimas linhas e o `hypothesis` foram acrescentados durante os
+> Blocos 0 a 2**, cada um com a decisão registrada em
+> `09-pendencias-e-decisoes.md`, conforme a regra do §4.8 de `08`. Os motivos, em
+> uma linha cada: `PyYAML` porque `parametros.yaml` precisa de um parser e a
+> biblioteca padrão não traz um; `python-dotenv` porque `alembic`, `db/seeds`,
+> `sim/` e `bridge/` rodam **fora** do compose e não recebem as variáveis pelo
+> `environment:` do Docker; `hypothesis` porque `06` §3 a recomenda nominalmente
+> para o property-based testing de I1 — e é dependência **só de teste**;
+> `psycopg` já estava implícita na `DATABASE_URL` do §4; `structlog` já constava
+> do §7 deste arquivo; `ruff` e `mypy` já constavam do §3 de `08`.
 
 **Sobre `libsumo`:** é ~10x mais rápido que `traci` porque roda no mesmo processo, mas não permite múltiplos clientes nem GUI. Estratégia: usar `traci` no desenvolvimento (com `sumo-gui`, para gravar vídeo da demonstração) e `libsumo` nas 50 execuções em lote. A camada de adaptador deve abstrair os dois atrás da mesma interface.
 
@@ -44,10 +59,25 @@ Não introduzir dependência fora desta lista sem registrar em `09-pendencias-e-
 ```yaml
 services:
   db:         # postgres:16-alpine, volume nomeado, healthcheck
-  backend:    # FastAPI, depends_on db healthy
-  frontend:   # Vite dev server (dev) ou nginx (prod)
+  migracoes:  # one-shot: alembic upgrade head + seeds, depois sai
+  backend:    # FastAPI, depends_on db healthy + migracoes concluído
+  frontend:   # Vite dev server (dev) ou nginx (prod) — perfil "frontend"
   adminer:    # inspeção do banco em dev — perfil "dev"
 ```
+
+> **`migracoes` (acrescentado em 2026-08-25).** Serviço de vida curta que cria o
+> schema e aplica os seeds antes de o `backend` subir
+> (`condition: service_completed_successfully`). Existe para que
+> `docker compose up` entregue um sistema utilizável a partir de um clone limpo,
+> que é o que a Definition of Done do `CLAUDE.md` pede. As duas operações são
+> idempotentes: subir de novo não duplica nada.
+>
+> **Consequência para o §6 deste arquivo:** em desenvolvimento, `migracoes` e
+> `backend` usam o **mesmo** usuário `tcc`, então a separação "usuário da
+> aplicação sem privilégio de DDL" não vale no compose local. A separação
+> continua sendo o desenho correto e permanece descrita no §6 como alvo — o
+> serviço já está isolado justamente para que ganhar credencial própria seja uma
+> mudança de uma linha. Decisão registrada em `09-pendencias-e-decisoes.md`.
 
 Fora do compose (rodam no host, precisam de USB e display):
 
@@ -105,7 +135,7 @@ Escopo realista para TCC, com honestidade sobre o que é demonstração:
 | Dispositivo → API | Header `X-Device-Token` com token pré-compartilhado por dispositivo, validado contra `dispositivo_iot.token_hash` |
 | Anti-replay | Campo `sequencia` monotônico + janela de deduplicação de 2 s por UID |
 | Autorização de tag | UID precisa existir em `tag_rfid` com `ativo = true`. UID desconhecido → HTTP 403 e log de tentativa |
-| Banco | Usuário da aplicação sem privilégio de DDL; migrations com usuário separado |
+| Banco | Usuário da aplicação sem privilégio de DDL; migrations com usuário separado. **Em desenvolvimento ainda não vale:** o serviço `migracoes` e o `backend` compartilham o usuário `tcc` (ver nota do §3) |
 | Segredos | `.env` + `secrets.h` gerado, ambos fora do Git |
 
 **Ser explícito no texto do TCC:** UID de tag Mifare S50 é clonável; num sistema real seria necessário criptografia assimétrica com certificados por veículo (padrão IEEE 1609.2). Reconhecer essa limitação vale mais na banca do que fingir que não existe. Anotar como trabalho futuro.

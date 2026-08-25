@@ -84,7 +84,10 @@ def _hash_token(codigo: str, token_dev: str) -> str:
     desenvolvimento do YAML é fallback e precisa ser trocado antes da
     apresentação (`context/02` §6) — por isso o aviso em stderr.
     """
-    token = os.getenv(f"TOKEN_{codigo}")
+    # `or None` trata variável definida como string vazia igual a ausente. Sem
+    # isso, um `TOKEN_LEITOR_CRUZ_01=` esquecido no .env viraria o hash da string
+    # vazia — um token válido que qualquer um adivinha.
+    token = os.getenv(f"TOKEN_{codigo}") or None
     if token is None:
         token = token_dev
         print(
