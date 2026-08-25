@@ -21,7 +21,7 @@ Cada RF/RNF vira pelo menos um teste automatizado. Esta tabela é a rastreabilid
 | --- | --- | --- | --- |
 | RF01 | VE a 480 m na rota é detectado; a 520 m não é | Detecção exata no limiar | `test_deteccao.py` |
 | RF01 | VE a 100 m em linha reta mas **fora da rota** não é detectado | Distância de rota, não euclidiana | `test_deteccao.py` |
-| RF02 | Da detecção ao primeiro comando aplicado < 3 s | `t_atuacao - t_deteccao < 3000 ms` | `test_e2e_preempcao.py` |
+| RF02 | Da detecção ao **início da atuação** < 3 s (decisão P14) | `t_atuacao - t_deteccao < 3000 ms`, com `t_atuacao` carimbado na chegada do `ACK` | `test_e2e_preempcao.py` |
 | RF03 | VE atravessa 8 cruzamentos sem parada | `waitingCount == 0` para o VE | `test_corredor_verde.py` |
 | RF04 | WebSocket emite mudança de estado em < 500 ms | Evento recebido no cliente de teste | `test_ws.py` |
 | RF05 | Toda preempção gera linha em `log_prioridade` | Contagem bate com nº de eventos | `test_persistencia.py` |

@@ -218,5 +218,6 @@ Em paralelo: diagramas PlantUML do `context/08` §5, DER via eralchemy2, relató
 ## Pendências que continuam abertas
 
 - **P4, P6, P11, P12** — ações de redação no texto do TCC. O código já implementa a versão correta; falta a equipe atualizar o documento. **P6 é o maior risco acadêmico** e depende do Bloco 8.
+- ~~**P14** — ponto final de medição do RF02.~~ ✅ **Decidida em 2026-08-25:** mede da detecção até o **início da atuação**. O perfil de tempos da bancada e o ciclo de 24 s de P13 ficam inalterados, e o firmware do Bloco 5 já tem contra o que ser escrito.
 - **P8, P9** — resolvidas por teste de bancada no Bloco 5.
 - **P3** — decidida (agente reativo determinístico), mas **comunicar ao orientador** antes de fechar a redação dos capítulos 2 e 6.

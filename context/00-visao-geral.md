@@ -58,12 +58,30 @@ Ambas são controladas pelo **mesmo motor de decisão** (`backend/core/priorizac
 | Código | Requisito | Critério de aceitação |
 | --- | --- | --- |
 | RF01 | Identificar veículos de emergência | Detectar VE em até 500 m do cruzamento |
-| RF02 | Priorizar automaticamente a rota emergencial | Alterar semáforos em até 3 s a partir da detecção |
+| RF02 | Priorizar automaticamente a rota emergencial | Alterar semáforos em até 3 s a partir da detecção, medidos **da detecção até o início da atuação** (decisão P14) |
 | RF03 | Liberar corredores prioritários | Garantir passagem contínua (VE não para em cruzamento priorizado) |
 | RF04 | Exibir o estado dos semáforos | Atualização em tempo real no dashboard |
 | RF05 | Registrar eventos no banco | Registro automático de logs de priorização |
 | RF06 | Monitorar localização das viaturas | Visualização contínua no dashboard |
 | RF07 | Recalcular a priorização | Ajuste dinâmico quando a rota do VE muda |
+
+> **Decisão P14 (2026-08-25) — onde termina a medição do RF02.** O requisito
+> original não dizia até que ponto contar os 3 s, e as duas leituras possíveis
+> davam resultados opostos. Adotada a leitura **"até o início da atuação"**: o
+> marco é o instante em que o semáforo visivelmente muda — o amarelo —, carimbado
+> como `t_atuacao` na chegada do `ACK` do atuador.
+>
+> A alternativa, medir até o **verde final** na fase alvo, faria o RF02 absorver
+> o **RF03** (garantir passagem contínua, que é justamente "o VE não para") e
+> ainda embutir o verde mínimo no número. Verde mínimo é o invariante de
+> segurança **I4**, não latência do sistema: sob essa leitura, um cruzamento que
+> acabou de abrir o verde para a transversal seria classificado como "lento" por
+> estar obedecendo a uma regra de segurança. Os dois requisitos medem coisas
+> diferentes e continuam separados — RF02 mede *reação*, RF03 mede *resultado*.
+>
+> Esta leitura precisa aparecer **explicitamente** na definição do RF02 no texto
+> do TCC. Deixá-la implícita é convidar a pergunta na arguição sem ter a resposta
+> preparada.
 
 ## 7. Requisitos não funcionais
 

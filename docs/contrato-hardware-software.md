@@ -334,7 +334,18 @@ t=0        t=2        t=4  t=5                              t=12
 
 **A coluna "Telemetria" nunca contém dois `G`.** São **5 s de transição** antes de o verde acender na fase alvo — o mesmo custo de antes, porque a transição não depende de quantas fases existem, só do verde mínimo pendente.
 
-> **`INFERÊNCIA` — relação com o RF02.** Os 5 s de transição excedem os 3 s do RF02 se o critério for medido até o *verde final*. A leitura adotada aqui é que o RF02 mede até o **início da atuação** (o amarelo já é a alteração do semáforo), e nesse caso há folga. O `context/00` §6 define o RF02 como "alterar semáforos em até 3 s a partir da detecção", sem especificar o ponto final da medição. **Decidir com a equipe e registrar** — se prevalecer a leitura estrita, o perfil de bancada precisa de tempos menores.
+> ### ✅ Relação com o RF02 — **decidida em 2026-08-25 (P14)**
+>
+> Os 5 s de transição excederiam os 3 s do RF02 **se** o critério fosse medido
+> até o *verde final*. A equipe adotou a leitura **"até o início da atuação"**: o
+> amarelo já é a alteração do semáforo, e o marco é o `ACK` do Arduino — o mesmo
+> instante que o §10 já define como `t_atuacao`. Nesse critério há folga
+> confortável, e **nada muda** no perfil de tempos nem no ciclo de 24 s de P13.
+>
+> A alternativa faria o RF02 absorver o RF03 e embutir o verde mínimo (que é o
+> invariante I4, não latência) no número. Registro completo, com a justificativa,
+> em `context/09`; a definição do RF02 em `context/00` §6 passou a declarar o
+> ponto final de medição explicitamente.
 
 ---
 
@@ -497,6 +508,8 @@ Sete pendências resolvidas em 2026-08-24, registradas com justificativa em `con
 | **P10** resistores nos LEDs | **Módulos já têm resistores integrados.** Pior caso ~80 mA para 4 LEDs. Sem restrição elétrica — §12 |
 | **P13** conjunto de fases | Protótipo é **um cruzamento de 4 aproximações em *split phasing*** — 4 fases, um verde por vez. `PRE` aceita `1..4`; acrescentados `TESTMODE` e `TEST`; matriz de conflito no motor **e** no firmware — §5, §6, §7 |
 
+| **P14** ponto final do RF02 | Mede da detecção **até o início da atuação** — o amarelo já é a alteração, marcada pelo `ACK`. Medir até o verde final faria o RF02 absorver o RF03 e embutir o verde mínimo (invariante I4) no número. Perfil de tempos e ciclo de 24 s **inalterados** — §7 |
+
 Continuam abertas: **P4, P6, P11, P12** (redação do texto do TCC) e **P8, P9** (§12).
 
 ---
@@ -534,7 +547,7 @@ Fechados na rodada de 2026-08-24: pinagem confirmada, P10 resolvida, e o conjunt
 | 2 | **P8** — testar boot do NodeMCU com o RC522 conectado (GPIO 0) | Hardware | pendente |
 | 3 | ~~Tempos de bancada~~ | Equipe | ✅ **fechado 24/08** — verde 3 s, ciclo de 24 s |
 | 4 | O **protocolo do §6** atende — falta algum comando ou telemetria? | Equipe | pendente |
-| 5 | A `INFERÊNCIA` do §7: **ponto final de medição do RF02** — até o início da atuação ou até o verde final? | Equipe + orientador | pendente |
+| 5 | ~~Ponto final de medição do RF02~~ | Equipe | ✅ **fechado 25/08** — P14: mede até o **início da atuação**; perfil de tempos inalterado |
 | 6 | Divisão: quem reescreve o firmware do UNO, quem faz o NodeMCU | Equipe | pendente |
 | 7 | **UIDs reais das tags**, para os seeds | Hardware | assim que o RC522 ler |
 | 8 | Decisão **P3** comunicada ao Prof. Marco Gomes | Equipe | pendente |
