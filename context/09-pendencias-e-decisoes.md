@@ -57,6 +57,41 @@ A metodologia menciona "dados de fluxo típicos de zonas arteriais" sem citar fo
 
 **Bloqueia:** a redação da metodologia, não o código. Mas precisa estar resolvido antes de a Sprint 1 (malha) ser considerada fechada — a calibração dos cenários `leve`/`moderado`/`intenso` referencia esses números.
 
+### Encaminhamento definido em 2026-08-25 · **item continua ABERTO**
+
+A justificativa passa a sustentar o **método**, não cada número solto. Os fluxos
+**300 / 700 / 1200 veíc./h permanecem inalterados** — vêm do pré-projeto e já
+estão no texto entregue; alterá-los custaria reescrever a metodologia. O que se
+acrescenta é a conversão deles em grau de saturação:
+
+```
+capacidade_por_faixa = fluxo_de_saturacao × (verde / ciclo)
+v/c = fluxo_do_cenario / capacidade_da_aproximacao
+```
+
+Implementado em `sim/calibracao_cenarios.py` (entrega 3.0 do plano), com
+verificação por medição no SUMO na entrega 3.4. A cadeia fica: referência →
+capacidade → v/c derivado → v/c medido. Cada elo é citação ou código versionado.
+
+**Alerta metodológico — fluxo interrompido × ininterrupto.** Os limiares de
+veíc./h/faixa que circulam para classificar trânsito (leve até ~700–800,
+moderado até ~1400, intenso acima disso) são de **fluxo ininterrupto**: rodovias
+e vias expressas, onde o HCM classifica por densidade e a capacidade fica em
+1800–2200 veíc./h/faixa. Este trabalho é **fluxo interrompido** — arterial urbana
+semaforizada —, tratado em capítulo separado do HCM, com nível de serviço medido
+por *atraso de controle* e capacidade reduzida pela razão de verde. Aplicar os
+limiares de rodovia aqui reclassificaria o cenário `intenso` como `moderado` e
+derrubaria a formulação de H1 (decisão P1, que condiciona a meta à saturação
+moderada a intensa).
+
+**O que ainda falta, e é `AÇÃO DA EQUIPE`:**
+
+1. O valor do **fluxo de saturação** (`fluxo_de_saturacao_veic_h`) com referência
+   verificável — autor, edição, ano e capítulo. Fica como parâmetro de entrada
+   documentado do script, nunca como constante no código.
+2. Confirmar com o **Prof. Marco Gomes** o enquadramento em fluxo interrompido —
+   convém levar junto com a decisão P3, que também espera conversa com ele.
+
 ---
 
 ## P12 — Ordem das sprints alterada · `REGISTRO`

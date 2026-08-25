@@ -90,10 +90,31 @@ Python puro. Zero import de `traci`, `pyserial`, `sqlalchemy` ou `fastapi`.
 
 | # | Entrega |
 |---|---|
+| 3.0 | `sim/calibracao_cenarios.py` — calcula a capacidade da aproximação semaforizada (`fluxo_de_saturacao × verde/ciclo`) e converte os fluxos de cada cenário em grau de saturação (v/c). Gera a tabela da metodologia. **Encaminha P11** |
 | 3.1 | `sim/rede/*.xml` — grade 2×4, arterial 60 km/h com ~500 m entre cruzamentos, 4 transversais a 40 km/h; `make rede` chamando `netconvert` |
 | 3.2 | Detectores E1/E2/E3 no `.add.xml` — sem eles H2 fica sem evidência |
 | 3.3 | `sim/demanda/` — tipos de veículo, 3 arquivos de fluxo, rotas de VE (1 a cada 10 min) |
-| 3.4 | **Validação da malha** (`context/04` §12): zero warning no netconvert, zero colisão, `--time-to-teleport -1` sem teleporte, v/c batendo com o cenário pretendido |
+| 3.4 | **Validação da malha** (`context/04` §12): zero warning no netconvert, zero colisão, `--time-to-teleport -1` sem teleporte, v/c **medido** batendo com o v/c **derivado** em 3.0, dentro de tolerância declarada |
+
+> **Por que 3.0 vem antes de tudo.** O plano original mandava conferir se o v/c
+> medido bate com "o cenário pretendido" — mas não dizia de onde sai o
+> pretendido. Os percentuais do `context/04` §5 (`<40%`, `40–75%`, `>75%`) estão
+> declarados, não calculados. Sem a derivação, uma divergência em 3.4 não teria o
+> que ajustar: viraria tentativa e erro até o número ficar bonito, que é
+> exatamente o que a regra de ouro do `CLAUDE.md` proíbe.
+>
+> Os fluxos **300 / 700 / 1200 veíc./h continuam como estão** — vêm do
+> pré-projeto e já estão no texto entregue. Eles são entrada da conta, não saída.
+> O que 3.0 produz é a **classificação** deles em grau de saturação, que é o que
+> permite afirmar "saturação moderada a intensa" (a condição de H1, decisão P1)
+> citando um método em vez de decretando.
+>
+> **Atenção metodológica:** os limiares de veíc./h/faixa que circulam para
+> rodovia (capacidade ~1800–2200) valem para **fluxo ininterrupto** e não se
+> aplicam aqui. Numa aproximação semaforizada a capacidade é o fluxo de saturação
+> multiplicado pela razão de verde — com ciclo de 70 s e 30 s de verde, cerca de
+> **metade**. Usar os limiares de rodovia reclassificaria o nosso `intenso` como
+> `moderado` e derrubaria a formulação de H1.
 | 3.5 | `sim/config/mapa_fases.yaml`, `cenarios.yaml`, `.sumocfg` |
 | 3.6 | `adapters/sumo/` — interface única abstraindo `traci` (dev/GUI) e `libsumo` (lote) |
 | 3.7 | `sim/controlador/executor.py` — 1 execução, seed explícita, grava `execucao_simulacao` |
