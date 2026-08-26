@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Rotas dos veículos de emergência — context/04 §3.
+
+  Só as ROTAS moram aqui. Os veículos que as percorrem são materializados por
+  `python -m sim.demanda.gerar_rotas`, uma vez por (cenário, seed), e reutilizados
+  nos três modos — é o pareamento por seed de context/04 §7, que a comparação
+  estatística exige.
+
+  ROTA_VE_CORREDOR — o "U" pelos oito cruzamentos
+
+      EXT_A1_O →[01]→[02]→[03]→[04]
+                                  ↓  (conversão à direita, T4_S1)
+      EXT_A2_O ←[05]←[06]←[07]←[08]
+
+  4.500 m, oito cruzamentos semaforizados, os ~5 km do pré-projeto. Duas
+  conversões à direita, ambas protegidas: em CRUZ_04 o VE sai da arterial 1 para
+  a transversal 4, e em CRUZ_08 entra na arterial 2. Repare que a fase demandada
+  muda de eixo no meio do percurso — em CRUZ_08 o VE precisa da fase
+  TRANSVERSAL, não da arterial. É de propósito: um corredor que só pedisse a
+  mesma fase em todo cruzamento não exercitaria E4 de verdade.
+
+  ROTA_VE_TRANSVERSAL — usada só no cenário `multiplas_emergencias`
+
+      EXT_T2_N ↓[02]↓[06]↓ EXT_T2_S
+
+  Existe para criar CONFLITO REAL em CRUZ_02: o VE do corredor chega pela
+  arterial e este chega pela transversal, e as duas fases são conflitantes. É
+  esse encontro que exercita E8 — sem ele, "dois VEs simultâneos" seria só dois
+  veículos rápidos em cantos opostos da malha, e a regra de desempate nunca
+  seria acionada. O atraso entre as duas partidas (`atraso_secundario_s` em
+  cenarios.yaml) é dimensionado para que os dois cheguem a CRUZ_02 juntos.
+-->
+<routes xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/routes_file.xsd">
+
+    <route id="ROTA_VE_CORREDOR"
+           edges="A1_L0 A1_L1 A1_L2 A1_L3 T4_S1 A2_O3 A2_O2 A2_O1 A2_O0"/>
+
+    <route id="ROTA_VE_TRANSVERSAL" edges="T2_S0 T2_S1 T2_S2"/>
+
+</routes>

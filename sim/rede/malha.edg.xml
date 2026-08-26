@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Vias da malha — context/04 §3.
+
+  CONVENÇÃO DE NOMES (a mesma usada em `sim/config/mapa_fases.yaml`, nas rotas e
+  nos detectores; decorar isto economiza tempo ao ler qualquer arquivo do Bloco 3):
+
+      A{linha}_{L|O}{segmento}   arterial: linha 1 (norte) ou 2 (sul),
+                                 sentido Leste ou Oeste, segmento 0..4
+      T{coluna}_{S|N}{segmento}  transversal: coluna 1..4,
+                                 sentido Sul ou Norte, segmento 0..2
+
+  O índice do segmento identifica o TRECHO FÍSICO, não a ordem de percurso: os
+  dois sentidos de um mesmo trecho compartilham o índice. Assim `A1_L2` e `A1_O2`
+  são as duas mãos do trecho entre CRUZ_02 e CRUZ_03, e comparar os dois sentidos
+  de um trecho vira uma questão de trocar uma letra.
+
+      arterial  · segmento 0 = fronteira oeste .. primeiro cruzamento
+                · segmentos 1..3 = entre cruzamentos consecutivos
+                · segmento 4 = último cruzamento .. fronteira leste
+      transversal · segmento 0 = fronteira norte .. arterial 1
+                  · segmento 1 = arterial 1 .. arterial 2
+                  · segmento 2 = arterial 2 .. fronteira sul
+
+  Cada via tem 500 m. A rota do VE (context/04 §3, decisão de 2026-08-25) é o
+  "U" que atravessa os oito cruzamentos:
+
+      A1_L0 A1_L1 A1_L2 A1_L3   T4_S1   A2_O3 A2_O2 A2_O1 A2_O0
+      └─ CRUZ_01..04 ─────────┘ └ 08 ┘ └─ CRUZ_07..05 ─────────┘
+
+  São 4.500 m de percurso — os ~5 km do pré-projeto — e oito cruzamentos
+  semaforizados, que é o que torna o efeito de coordenação mensurável.
+-->
+<edges xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/edges_file.xsd">
+
+    <!-- ===================== ARTERIAL 1 (norte, y=0) ====================== -->
+    <!-- sentido leste -->
+    <edge id="A1_L0" from="EXT_A1_O" to="CRUZ_01" type="arterial"/>
+    <edge id="A1_L1" from="CRUZ_01" to="CRUZ_02" type="arterial"/>
+    <edge id="A1_L2" from="CRUZ_02" to="CRUZ_03" type="arterial"/>
+    <edge id="A1_L3" from="CRUZ_03" to="CRUZ_04" type="arterial"/>
+    <edge id="A1_L4" from="CRUZ_04" to="EXT_A1_L" type="arterial"/>
+    <!-- sentido oeste -->
+    <edge id="A1_O4" from="EXT_A1_L" to="CRUZ_04" type="arterial"/>
+    <edge id="A1_O3" from="CRUZ_04" to="CRUZ_03" type="arterial"/>
+    <edge id="A1_O2" from="CRUZ_03" to="CRUZ_02" type="arterial"/>
+    <edge id="A1_O1" from="CRUZ_02" to="CRUZ_01" type="arterial"/>
+    <edge id="A1_O0" from="CRUZ_01" to="EXT_A1_O" type="arterial"/>
+
+    <!-- ===================== ARTERIAL 2 (sul, y=-500) ===================== -->
+    <!-- sentido leste -->
+    <edge id="A2_L0" from="EXT_A2_O" to="CRUZ_05" type="arterial"/>
+    <edge id="A2_L1" from="CRUZ_05" to="CRUZ_06" type="arterial"/>
+    <edge id="A2_L2" from="CRUZ_06" to="CRUZ_07" type="arterial"/>
+    <edge id="A2_L3" from="CRUZ_07" to="CRUZ_08" type="arterial"/>
+    <edge id="A2_L4" from="CRUZ_08" to="EXT_A2_L" type="arterial"/>
+    <!-- sentido oeste -->
+    <edge id="A2_O4" from="EXT_A2_L" to="CRUZ_08" type="arterial"/>
+    <edge id="A2_O3" from="CRUZ_08" to="CRUZ_07" type="arterial"/>
+    <edge id="A2_O2" from="CRUZ_07" to="CRUZ_06" type="arterial"/>
+    <edge id="A2_O1" from="CRUZ_06" to="CRUZ_05" type="arterial"/>
+    <edge id="A2_O0" from="CRUZ_05" to="EXT_A2_O" type="arterial"/>
+
+    <!-- ======================= TRANSVERSAL 1 (x=0) ======================== -->
+    <edge id="T1_S0" from="EXT_T1_N" to="CRUZ_01" type="transversal"/>
+    <edge id="T1_S1" from="CRUZ_01" to="CRUZ_05" type="transversal"/>
+    <edge id="T1_S2" from="CRUZ_05" to="EXT_T1_S" type="transversal"/>
+    <edge id="T1_N2" from="EXT_T1_S" to="CRUZ_05" type="transversal"/>
+    <edge id="T1_N1" from="CRUZ_05" to="CRUZ_01" type="transversal"/>
+    <edge id="T1_N0" from="CRUZ_01" to="EXT_T1_N" type="transversal"/>
+
+    <!-- ====================== TRANSVERSAL 2 (x=500) ======================= -->
+    <edge id="T2_S0" from="EXT_T2_N" to="CRUZ_02" type="transversal"/>
+    <edge id="T2_S1" from="CRUZ_02" to="CRUZ_06" type="transversal"/>
+    <edge id="T2_S2" from="CRUZ_06" to="EXT_T2_S" type="transversal"/>
+    <edge id="T2_N2" from="EXT_T2_S" to="CRUZ_06" type="transversal"/>
+    <edge id="T2_N1" from="CRUZ_06" to="CRUZ_02" type="transversal"/>
+    <edge id="T2_N0" from="CRUZ_02" to="EXT_T2_N" type="transversal"/>
+
+    <!-- ====================== TRANSVERSAL 3 (x=1000) ====================== -->
+    <edge id="T3_S0" from="EXT_T3_N" to="CRUZ_03" type="transversal"/>
+    <edge id="T3_S1" from="CRUZ_03" to="CRUZ_07" type="transversal"/>
+    <edge id="T3_S2" from="CRUZ_07" to="EXT_T3_S" type="transversal"/>
+    <edge id="T3_N2" from="EXT_T3_S" to="CRUZ_07" type="transversal"/>
+    <edge id="T3_N1" from="CRUZ_07" to="CRUZ_03" type="transversal"/>
+    <edge id="T3_N0" from="CRUZ_03" to="EXT_T3_N" type="transversal"/>
+
+    <!-- ====================== TRANSVERSAL 4 (x=1500) ====================== -->
+    <!-- T4_S1 é o trecho que o VE usa para passar da arterial 1 para a 2. -->
+    <edge id="T4_S0" from="EXT_T4_N" to="CRUZ_04" type="transversal"/>
+    <edge id="T4_S1" from="CRUZ_04" to="CRUZ_08" type="transversal"/>
+    <edge id="T4_S2" from="CRUZ_08" to="EXT_T4_S" type="transversal"/>
+    <edge id="T4_N2" from="EXT_T4_S" to="CRUZ_08" type="transversal"/>
+    <edge id="T4_N1" from="CRUZ_08" to="CRUZ_04" type="transversal"/>
+    <edge id="T4_N0" from="CRUZ_04" to="EXT_T4_N" type="transversal"/>
+
+</edges>

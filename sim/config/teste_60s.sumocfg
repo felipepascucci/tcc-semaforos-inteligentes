@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Cenário curto para testes de integração — context/06 §7.
+
+  Mesma malha e mesmas opções de processamento da configuração de experimento,
+  com 60 s de duração e a demanda fixa de `sim/demanda/teste_60s.rou.xml`. Roda
+  em segundos, o que é o requisito para estar numa suíte de testes.
+
+  Deliberadamente NÃO carrega os detectores: eles escrevem arquivo, e um teste
+  que suja o repositório a cada execução vira um teste que ninguém roda.
+-->
+<configuration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+               xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/sumoConfiguration.xsd">
+
+    <input>
+        <net-file value="../rede/malha.net.xml"/>
+        <route-files value="../demanda/veiculos.typ.xml,../demanda/teste_60s.rou.xml"/>
+    </input>
+
+    <time>
+        <begin value="0"/>
+        <end value="60"/>
+        <step-length value="0.1"/>
+    </time>
+
+    <processing>
+        <time-to-teleport value="-1"/>
+        <collision.action value="warn"/>
+        <collision.check-junctions value="true"/>
+        <max-depart-delay value="-1"/>
+    </processing>
+
+    <report>
+        <no-step-log value="true"/>
+    </report>
+
+</configuration>

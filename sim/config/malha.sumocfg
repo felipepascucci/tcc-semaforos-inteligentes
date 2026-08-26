@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Configuração base das execuções — context/04 §7 e §12.
+
+  O executor (`python -m sim.controlador.executor`) parte deste arquivo e
+  sobrescreve pela linha de comando o que varia por execução: o arquivo de rotas
+  da seed, a própria seed, a duração e o prefixo de saída. Assim as opções que
+  precisam ser IGUAIS nos três braços ficam em um lugar só, versionadas, em vez
+  de repetidas na linha de comando de cada modo — onde divergiriam.
+
+  DUAS OPÇÕES QUE NÃO SÃO DETALHE:
+
+  `time-to-teleport = -1` desliga o teleporte. O SUMO, por padrão, teleporta um
+  veículo travado há muito tempo, o que dissolve gridlock em silêncio. Num
+  experimento sobre congestionamento isso é o pior tipo de erro: o resultado sai
+  bonito justamente porque o problema foi escondido. Com o teleporte desligado,
+  gridlock vira execução inválida — que é o que `context/04` §12 manda.
+
+  `collision.action = warn` faz o SUMO registrar colisões em vez de remover o
+  veículo. O pré-projeto afirma zero colisões, e afirmar isso exige poder contar.
+-->
+<configuration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+               xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/sumoConfiguration.xsd">
+
+    <input>
+        <net-file value="../rede/malha.net.xml"/>
+        <additional-files value="../rede/malha.det.add.xml"/>
+        <!-- O executor acrescenta o arquivo de rotas da seed. Sozinho, este
+             valor só carrega os tipos de veículo — útil para abrir a malha
+             vazia na sumo-gui e conferir a geometria. -->
+        <route-files value="../demanda/veiculos.typ.xml"/>
+    </input>
+
+    <time>
+        <begin value="0"/>
+        <end value="3600"/>
+        <!-- 100 ms de tempo simulado por passo (context/01 §3). O motor é
+             chamado a cada passo, e é sobre esse passo que o orçamento de
+             latência do RNF01 (< 100 ms) faz sentido. -->
+        <step-length value="0.1"/>
+    </time>
+
+    <processing>
+        <time-to-teleport value="-1"/>
+        <collision.action value="warn"/>
+        <collision.check-junctions value="true"/>
+        <!-- Sem isto, um veículo que não consegue entrar é descartado após um
+             tempo e a demanda efetiva fica menor que a declarada — o v/c medido
+             não bateria com o derivado, e a causa seria difícil de achar. -->
+        <max-depart-delay value="-1"/>
+    </processing>
+
+    <report>
+        <no-step-log value="true"/>
+        <duration-log.statistics value="true"/>
+    </report>
+
+</configuration>

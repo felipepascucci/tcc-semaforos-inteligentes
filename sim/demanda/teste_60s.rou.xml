@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Cenário curto de integração — context/06 §7.
+
+  60 s, 1 VE, 2 cruzamentos. Existe para que os testes do adaptador TraCI rodem
+  em segundos: exercitar o loop completo (ler estado, decidir, aplicar, coletar)
+  contra o SUMO de verdade, sem esperar uma execução de 3.600 s.
+
+  Escrito à mão e versionado — ao contrário dos arquivos de `sim/saida/rotas/`,
+  que são materializados por seed. Aqui não há aleatoriedade nenhuma: os
+  instantes de partida são redondos e escolhidos para produzir uma situação
+  reconhecível, na linha do que `context/08` §4.2 pede de dado de teste
+  (obviamente artificial, nunca confundível com resultado).
+
+  O ROTEIRO:
+
+    t=0 s   quatro carros entram pela arterial e dois pela transversal,
+            formando alguma fila em CRUZ_01
+    t=10 s  a ambulância entra pela arterial e segue até depois de CRUZ_02
+
+  Com o ciclo de 70 s e o verde arterial nos primeiros 30 s, a ambulância pega
+  CRUZ_01 no verde e CRUZ_02 já em transição — que é justamente o caso em que a
+  preempção tem efeito visível.
+-->
+<routes xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/routes_file.xsd">
+
+    <route id="TESTE_ARTERIAL" edges="A1_L0 A1_L1 A1_L2"/>
+    <route id="TESTE_TRANSVERSAL" edges="T1_S0 T1_S1"/>
+
+    <!-- ORDENADO POR `depart`, e não por rota. O SUMO exige o arquivo em ordem
+         crescente de partida: fora de ordem ele **ignora** o veículo, com um
+         aviso fácil de perder no meio da saída. Foi o que aconteceu na primeira
+         versão deste arquivo — os dois carros da transversal estavam agrupados
+         no fim e nunca entraram na simulação, deixando o cenário de teste sem o
+         tráfego conflitante que ele existe para ter. -->
+    <vehicle id="teste_carro_0" type="carro" route="TESTE_ARTERIAL" depart="0.00"
+             departLane="free" departSpeed="max"/>
+    <vehicle id="teste_transversal_0" type="carro" route="TESTE_TRANSVERSAL" depart="0.00"
+             departLane="free" departSpeed="max"/>
+    <vehicle id="teste_carro_1" type="carro" route="TESTE_ARTERIAL" depart="2.00"
+             departLane="free" departSpeed="max"/>
+    <vehicle id="teste_transversal_1" type="carro" route="TESTE_TRANSVERSAL" depart="3.00"
+             departLane="free" departSpeed="max"/>
+    <vehicle id="teste_carro_2" type="carro" route="TESTE_ARTERIAL" depart="4.00"
+             departLane="free" departSpeed="max"/>
+    <vehicle id="teste_carro_3" type="carro" route="TESTE_ARTERIAL" depart="6.00"
+             departLane="free" departSpeed="max"/>
+
+    <vehicle id="teste_ve_0" type="ambulancia" route="TESTE_ARTERIAL" depart="10.00"
+             departLane="free" departSpeed="max"/>
+
+</routes>
