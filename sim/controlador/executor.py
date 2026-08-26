@@ -253,6 +253,7 @@ def executar(opcoes: Opcoes) -> ResultadoExecucao:
         tripinfo=saida / "tripinfo.xml",
         duracao_s=duracao_s,
         veiculos_planejados=_veiculos_planejados(rotas),
+        aquecimento_s=float(configuracao["execucao"]["aquecimento_s"]),
         avisos=[
             *adaptador.avisos,
             *(

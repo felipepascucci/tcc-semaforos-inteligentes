@@ -87,6 +87,7 @@ class ResultadoExecucao:
         modo: Braço de comparação.
         seed: Seed do ponto experimental.
         duracao_s: Duração simulada, em segundos.
+        aquecimento_s: Transiente descartado das médias, em segundos.
         viagens_ve: Uma entrada por VE que completou a rota.
         tempo_espera_medio_transversal_s: Evidência de H2.
         atraso_total_rede_s: Soma de `timeLoss` de todos os veículos.
@@ -105,6 +106,7 @@ class ResultadoExecucao:
     modo: str
     seed: int
     duracao_s: float
+    aquecimento_s: float = 0.0
     viagens_ve: tuple[ViagemVE, ...] = ()
     tempo_espera_medio_transversal_s: float = 0.0
     atraso_total_rede_s: float = 0.0
@@ -209,7 +211,12 @@ class ColetorMetricas:
         self.teleportes += teleportes
 
     def consolidar(
-        self, tripinfo: Path, duracao_s: float, veiculos_planejados: int, avisos: Sequence[str] = ()
+        self,
+        tripinfo: Path,
+        duracao_s: float,
+        veiculos_planejados: int,
+        avisos: Sequence[str] = (),
+        aquecimento_s: float = 0.0,
     ) -> ResultadoExecucao:
         """Fecha a execução, lendo o `tripinfo.xml` produzido pelo SUMO.
 
@@ -218,16 +225,21 @@ class ColetorMetricas:
             duracao_s: Duração simulada, em segundos.
             veiculos_planejados: Veículos declarados no arquivo de rotas.
             avisos: Avisos acumulados pelo adaptador.
+            aquecimento_s: Veículos que partiram antes disso ficam **fora** das
+                médias. Ver `_ler_tripinfo`.
 
         Returns:
             O resultado consolidado.
         """
-        viagens, espera_transversal, atraso_total, completos = _ler_tripinfo(tripinfo)
+        viagens, espera_transversal, atraso_total, completos = _ler_tripinfo(
+            tripinfo, aquecimento_s
+        )
         return ResultadoExecucao(
             cenario=self.cenario,
             modo=self.modo,
             seed=self.seed,
             duracao_s=duracao_s,
+            aquecimento_s=aquecimento_s,
             viagens_ve=viagens,
             tempo_espera_medio_transversal_s=espera_transversal,
             atraso_total_rede_s=atraso_total,
@@ -243,8 +255,26 @@ class ColetorMetricas:
         )
 
 
-def _ler_tripinfo(caminho: Path) -> tuple[tuple[ViagemVE, ...], float, float, int]:
+def _ler_tripinfo(
+    caminho: Path, aquecimento_s: float = 0.0
+) -> tuple[tuple[ViagemVE, ...], float, float, int]:
     """Extrai de `tripinfo.xml` as métricas de `context/04` §9.1 e §9.2.
+
+    **O aquecimento é descartado das médias.** A malha começa vazia: quem parte
+    nos primeiros minutos trafega numa via mais livre do que a que o cenário
+    descreve, e entra na conta puxando a espera para baixo. Como a métrica
+    transversal é justamente a evidência de H2, incluir o transiente de
+    enchimento subestimaria o custo que a compensação existe para mitigar — e
+    subestimaria igualmente nos três braços, o que esconde o efeito em vez de
+    medi-lo.
+
+    A janela é a mesma que `sim/validacao/malha.py` usa para medir o v/c, e o
+    mesmo `aquecimento_s` que `gerar_rotas.py` usa para decidir quando o primeiro
+    VE entra. Os VEs, portanto, nunca caem no descarte.
+
+    `veiculos_completos` continua contando **todos** os que chegaram ao destino:
+    ele não é métrica de desempenho, é conferência de que a execução escoou o que
+    prometeu (`context/06` §4).
 
     Os veículos de fundo em via transversal são identificados pelo prefixo do id,
     que `sim/demanda/gerar_rotas.py` monta a partir do nome da corrente. O
@@ -261,6 +291,9 @@ def _ler_tripinfo(caminho: Path) -> tuple[tuple[ViagemVE, ...], float, float, in
 
     for elemento in ET.parse(caminho).getroot().iter("tripinfo"):
         completos += 1
+        if float(elemento.get("depart", 0.0)) < aquecimento_s:
+            continue
+
         identificador = str(elemento.get("id"))
         vtype = str(elemento.get("vType", ""))
         duracao = float(elemento.get("duration", 0.0))
@@ -333,6 +366,7 @@ def gravar_csv(
             "seed",
             "versao_codigo",
             "duracao_s",
+            "aquecimento_s",
             "veiculos_planejados",
             "veiculos_completos",
             "ves_completos",
@@ -354,6 +388,7 @@ def gravar_csv(
                 *ponto,
                 versao_codigo,
                 f"{resultado.duracao_s:.0f}",
+                f"{resultado.aquecimento_s:.0f}",
                 resultado.veiculos_planejados,
                 resultado.veiculos_completos,
                 len(resultado.viagens_ve),
