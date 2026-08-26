@@ -168,7 +168,13 @@ def test_timeout_de_preempcao_limita_antes_de_verde_max(
     assert parametros.preempcao_timeout_s < parametros.verde_max_s
 
     estado = estado_inicial("CRUZ_TESTE_1", cruzamento)
-    exagero = Comando(TipoComando.ESTENDER_VERDE, "CRUZ_TESTE_1", duracao_s=9999.0, motivo="teste")
+    exagero = Comando(
+        TipoComando.ESTENDER_VERDE,
+        "CRUZ_TESTE_1",
+        duracao_s=9999.0,
+        id_veiculo="VE_TESTE",
+        motivo="teste",
+    )
     _, transicoes = _rodar(
         estado, cruzamento, parametros, ate_t=80.0, comandos_em={1.0: (exagero,)}
     )
@@ -298,9 +304,41 @@ def test_fallback_seguro_nunca_e_recusado(cruzamento: Cruzamento, parametros: Pa
 def test_preempcao_expira_no_timeout(cruzamento: Cruzamento, parametros: Parametros) -> None:
     """E6 — backend travado não bloqueia a transversal para sempre."""
     estado = estado_inicial("CRUZ_TESTE_1", cruzamento)
-    estender = Comando(TipoComando.ESTENDER_VERDE, "CRUZ_TESTE_1", duracao_s=9999.0, motivo="t")
+    estender = Comando(
+        TipoComando.ESTENDER_VERDE,
+        "CRUZ_TESTE_1",
+        duracao_s=9999.0,
+        id_veiculo="VE_TESTE",
+        motivo="t",
+    )
     estado, _ = _rodar(estado, cruzamento, parametros, ate_t=10.0, comandos_em={1.0: (estender,)})
     assert estado.em_preempcao is True
 
     estado, _ = _rodar(estado, cruzamento, parametros, ate_t=50.0, t_inicial=10.0)
     assert estado.em_preempcao is False
+
+
+def test_extensao_sem_veiculo_nao_e_preempcao(
+    cruzamento: Cruzamento, parametros: Parametros
+) -> None:
+    """E7 estende verde sem que isso seja preempção.
+
+    A compensação pós-evento também alonga o verde, mas o alonga para dissipar a
+    fila da transversal — o oposto de preempção. Quem distingue as duas é a
+    presença de um VE associado ao comando.
+
+    Sem essa distinção, os dois ciclos de compensação apareceriam em
+    `estado_semaforo_amostra` com `em_preempcao = true`, e o custo transversal
+    que H2 mede seria atribuído ao evento de preempção em vez de à recuperação.
+    Pior: a compensação passaria a disparar o timeout de E6.
+    """
+    estado = estado_inicial("CRUZ_TESTE_1", cruzamento)
+    compensar = Comando(
+        TipoComando.ESTENDER_VERDE, "CRUZ_TESTE_1", duracao_s=40.0, motivo="compensação E7"
+    )
+
+    estado, _ = _rodar(estado, cruzamento, parametros, ate_t=5.0, comandos_em={1.0: (compensar,)})
+
+    assert estado.em_preempcao is False
+    assert estado.t_inicio_preempcao is None
+    assert estado.verde_ate == pytest.approx(41.0, abs=0.11)  # 1,0 s + 40 s pedidos

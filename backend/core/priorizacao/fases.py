@@ -277,14 +277,35 @@ def _aplicar_comando(
             return estado, Recusa(comando, "MODO")
         fase = cruzamento.fase(estado.fase_corrente)
         pedido = comando.duracao_s if comando.duracao_s is not None else fase.duracao_base_s
-        # I4 tem um irmão do outro lado: verde_max. Estender sem teto seria
-        # starvation por construção nas demais fases (I5).
-        teto = estado.t_mudanca + min(pedido, fase.verde_max_s, parametros.verde_max_s)
+        # `duracao_s` conta A PARTIR DE AGORA, não do início do verde. É a mesma
+        # semântica de `PRE,<fase>,<dur_s>` no protocolo serial (contrato §5): o
+        # atuador segura a fase por tanto tempo a contar do recebimento.
+        #
+        # A leitura antiga ("duração total do verde") transformava o comando em
+        # seu oposto quando o verde já durava mais do que o pedido: o motor pede
+        # `eta + margem` para segurar o corredor, e o verde fechava na cara do VE.
+        # Só apareceu rodando a simulação — ver context/09, achado de 2026-08-25.
+        #
+        # I4 tem um irmão do outro lado: `verde_max`. Estender sem teto seria
+        # starvation por construção nas demais fases (I5). O teto continua
+        # ancorado no INÍCIO do verde, senão extensões sucessivas o empurrariam
+        # para sempre.
+        limite_de_verde = estado.t_mudanca + min(fase.verde_max_s, parametros.verde_max_s)
+        teto = min(t + pedido, limite_de_verde)
+        # Estender por causa de um VE é preempção; estender para compensar a
+        # fila da transversal (E7) não é. A diferença está em haver ou não um VE
+        # associado, e ela importa: `em_preempcao` viaja para
+        # `estado_semaforo_amostra` e é por esse campo que o relatório separa o
+        # custo do evento do custo da recuperação — que é justamente o que H2
+        # mede.
+        por_veiculo = comando.id_veiculo is not None
         return replace(
             estado,
             verde_ate=teto,
-            em_preempcao=True,
-            t_inicio_preempcao=estado.t_inicio_preempcao if estado.em_preempcao else t,
+            em_preempcao=estado.em_preempcao or por_veiculo,
+            t_inicio_preempcao=(
+                t if por_veiculo and not estado.em_preempcao else estado.t_inicio_preempcao
+            ),
             id_veiculo=comando.id_veiculo or estado.id_veiculo,
         ), None
 
