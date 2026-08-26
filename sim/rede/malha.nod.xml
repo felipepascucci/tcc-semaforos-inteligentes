@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Nós da malha — grade 2x4, context/04 §3.
+
+  GEOMETRIA (metros, origem em CRUZ_01):
+
+                x=0     x=500   x=1000  x=1500
+                 |        |        |        |
+    y= 500     EXT_T1_N EXT_T2_N EXT_T3_N EXT_T4_N
+                 |        |        |        |
+    y=   0  ═══CRUZ_01══CRUZ_02══CRUZ_03══CRUZ_04═══   arterial 1
+                 |        |        |        |
+    y=-500  ═══CRUZ_05══CRUZ_06══CRUZ_07══CRUZ_08═══   arterial 2
+                 |        |        |        |
+    y=-1000    EXT_T1_S EXT_T2_S EXT_T3_S EXT_T4_S
+
+  Espaçamento de 500 m em ambos os eixos. A numeração dos cruzamentos é
+  linha-a-linha (CRUZ_01..04 na arterial 1, CRUZ_05..08 na arterial 2), a mesma
+  de `db/seeds/dados.yaml` — lá as coordenadas geográficas são derivadas de
+  `linhas: 2, colunas: 4, espacamento_m: 500` e precisam corresponder a estes nós,
+  senão o marcador do dashboard cai no lugar errado.
+
+  Os nós EXT_* são a fronteira da malha: é neles que os veículos entram e saem.
+  Ficam a 500 m do primeiro cruzamento para que exista trecho de aproximação —
+  sem ele, um veículo inserido já em cima da linha de retenção não teria como
+  formar fila, e a fila é justamente o que os detectores E2 medem.
+-->
+<nodes xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/nodes_file.xsd">
+
+    <!-- Cruzamentos semaforizados — arterial 1 (norte) -->
+    <node id="CRUZ_01" x="0.00" y="0.00" type="traffic_light" tlType="static" tl="CRUZ_01"/>
+    <node id="CRUZ_02" x="500.00" y="0.00" type="traffic_light" tlType="static" tl="CRUZ_02"/>
+    <node id="CRUZ_03" x="1000.00" y="0.00" type="traffic_light" tlType="static" tl="CRUZ_03"/>
+    <node id="CRUZ_04" x="1500.00" y="0.00" type="traffic_light" tlType="static" tl="CRUZ_04"/>
+
+    <!-- Cruzamentos semaforizados — arterial 2 (sul) -->
+    <node id="CRUZ_05" x="0.00" y="-500.00" type="traffic_light" tlType="static" tl="CRUZ_05"/>
+    <node id="CRUZ_06" x="500.00" y="-500.00" type="traffic_light" tlType="static" tl="CRUZ_06"/>
+    <node id="CRUZ_07" x="1000.00" y="-500.00" type="traffic_light" tlType="static" tl="CRUZ_07"/>
+    <node id="CRUZ_08" x="1500.00" y="-500.00" type="traffic_light" tlType="static" tl="CRUZ_08"/>
+
+    <!-- Fronteira das arteriais -->
+    <node id="EXT_A1_O" x="-500.00" y="0.00" type="priority"/>
+    <node id="EXT_A1_L" x="2000.00" y="0.00" type="priority"/>
+    <node id="EXT_A2_O" x="-500.00" y="-500.00" type="priority"/>
+    <node id="EXT_A2_L" x="2000.00" y="-500.00" type="priority"/>
+
+    <!-- Fronteira das transversais -->
+    <node id="EXT_T1_N" x="0.00" y="500.00" type="priority"/>
+    <node id="EXT_T1_S" x="0.00" y="-1000.00" type="priority"/>
+    <node id="EXT_T2_N" x="500.00" y="500.00" type="priority"/>
+    <node id="EXT_T2_S" x="500.00" y="-1000.00" type="priority"/>
+    <node id="EXT_T3_N" x="1000.00" y="500.00" type="priority"/>
+    <node id="EXT_T3_S" x="1000.00" y="-1000.00" type="priority"/>
+    <node id="EXT_T4_N" x="1500.00" y="500.00" type="priority"/>
+    <node id="EXT_T4_S" x="1500.00" y="-1000.00" type="priority"/>
+
+</nodes>

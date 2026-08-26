@@ -1,0 +1,119 @@
+# Cenários experimentais — context/04 §5, §6 e §7.
+#
+# Este arquivo é a definição do EXPERIMENTO: o que varia, o que fica fixo e como
+# os quatro cenários são caracterizados. Os parâmetros do ALGORITMO ficam em
+# backend/config/parametros.yaml — são coisas diferentes e não devem se misturar.
+#
+# ─────────────────────────────────────────────────────────────────────────────
+# DE ONDE VEM CADA NÚMERO
+#
+#   fluxo_arterial_veic_h   do pré-projeto, já no texto entregue. É ENTRADA da
+#                           conta de saturação, não saída dela (P11).
+#   fluxo de saturação      MEDIDO na própria malha por
+#                           `sim/calibracao/fluxo_saturacao.py`. Não está neste
+#                           arquivo: vive em analysis/data/fluxo_saturacao.csv,
+#                           porque é resultado de execução, não configuração.
+#   fluxo transversal       DERIVADO: é o fluxo que põe a transversal no mesmo
+#                           grau de saturação da arterial (decisão de
+#                           2026-08-25). Ver `sim/calibracao/cenarios.py`.
+#   limiares 0,40 / 0,75    do context/04 §5. A referência bibliográfica que os
+#                           sustenta é item aberto de P11.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# --- Programa semafórico do baseline (espelha sim/rede/malha.tll.xml) --------
+# Repetido aqui porque a conta de capacidade precisa dele. Há teste conferindo
+# que os dois arquivos concordam — divergirem em silêncio produziria um v/c
+# calculado sobre um ciclo que não é o que roda.
+programa:
+  n_fases: 2
+  verde_s: 30
+  amarelo_s: 3
+  all_red_s: 2
+  # ciclo_s = n_fases * (verde + amarelo + all_red) = 70
+
+# --- Geometria das aproximações (espelha sim/rede/malha.typ.xml) ------------
+aproximacoes:
+  arterial:
+    faixas: 2
+    velocidade_kmh: 60
+  transversal:
+    faixas: 1
+    velocidade_kmh: 40
+
+# --- Classificação por grau de saturação (v/c) — context/04 §5 --------------
+#
+# NÃO ajuste estes cortes para "encaixar" um cenário. Eles são a régua, e a
+# régua é declarada antes da medição — mudá-la depois de ver o resultado é o
+# oposto de método. A medição de 2026-08-25 pôs `intenso` em v/c = 0,73, logo
+# abaixo do corte de 0,75; a decisão foi manter os cortes e descrever o cenário
+# pelo que ele mede ("saturação moderada-alta"), não mexer no 0,75. Ver a tabela
+# de decisões de context/09.
+limiares_saturacao:
+  leve_ate: 0.40
+  moderado_ate: 0.75
+
+# Faixa de plausibilidade do fluxo de saturação em via urbana, em veíc./h/faixa.
+# NÃO é a fonte do número — o número é medido. Serve de guarda: valor medido
+# fora desta faixa significa parâmetro errado em veiculos.typ.xml, e é isso que
+# se corrige (P11, encaminhamento de 2026-08-25). A referência bibliográfica
+# ainda é AÇÃO DA EQUIPE.
+faixa_plausivel_saturacao_veic_h_faixa: [1500, 2100]
+
+# --- Composição do tráfego de fundo -----------------------------------------
+# PREMISSA DECLARADA, não medida: 5% de ônibus. Entra na mesma pendência de
+# redação de P11 (fonte dos dados de fluxo típicos de zona arterial). O valor é
+# usado tanto na medição do fluxo de saturação quanto na geração da demanda —
+# medir a saturação com uma composição e simular com outra daria um v/c errado.
+composicao:
+  proporcao_onibus: 0.05
+
+# --- Veículos de emergência — context/04 §3 ---------------------------------
+emergencias:
+  intervalo_s: 600 # 1 VE a cada 10 min
+  # Rota "em U" pelos oito cruzamentos, definida em sim/demanda/emergencias.rou.xml.
+  rota: ROTA_VE_CORREDOR
+  # Ordem de rodízio dos tipos entre os VEs de uma execução. Fixa e explícita:
+  # sorteá-la faria o tipo do VE variar com a seed, e o tipo muda a prioridade
+  # em E8 — a comparação pareada exige que os três braços vejam o mesmo VE.
+  tipos: [AMBULANCIA, BOMBEIRO, POLICIA]
+
+# --- Protocolo experimental — context/04 §7 ---------------------------------
+execucao:
+  duracao_s: 3600
+  passo_s: 0.1 # --step-length; o motor é chamado a cada passo
+  # Aquecimento descartado no início da execução, em segundos. A malha começa
+  # vazia; medir os primeiros minutos misturaria o transiente de enchimento com
+  # o regime que se quer caracterizar.
+  aquecimento_s: 300
+
+modos: [FIXO, PREEMPCAO, PREEMPCAO_COMPENSADA]
+
+cenarios:
+  leve:
+    fluxo_arterial_veic_h: 300
+    objetivo: Validar resposta rápida
+    ves_simultaneos: 1
+  moderado:
+    fluxo_arterial_veic_h: 700
+    objetivo: Medir ganho operacional
+    ves_simultaneos: 1
+  intenso:
+    fluxo_arterial_veic_h: 1200
+    objetivo: Testar eficiência crítica
+    ves_simultaneos: 1
+    # O nome é rótulo do ponto experimental, não afirmação sobre o regime: a
+    # medição põe este cenário em v/c = 0,73, ou seja, saturação moderada-ALTA.
+    # O texto do TCC precisa descrevê-lo assim (decisão de 2026-08-25).
+  multiplas_emergencias:
+    fluxo_arterial_veic_h: 700
+    objetivo: Validar resolução de conflitos (2 VEs simultâneos)
+    ves_simultaneos: 2
+    # O segundo VE desce a transversal 2 e encontra o primeiro em CRUZ_02, onde
+    # as duas fases são conflitantes — é esse encontro que exercita E8.
+    rota_secundaria: ROTA_VE_TRANSVERSAL
+    # Atraso da segunda partida, em segundos. Dimensionado para os dois
+    # chegarem juntos a CRUZ_02: o primeiro percorre 1.000 m de arterial a
+    # ~21,7 m/s (~46 s) e o segundo 500 m de transversal a ~14,4 m/s (~35 s).
+    # É uma aproximação — atraso semafórico e fila deslocam os dois —, e é o
+    # bastante: ao longo de uma hora vários pares se encontram.
+    atraso_secundario_s: 10

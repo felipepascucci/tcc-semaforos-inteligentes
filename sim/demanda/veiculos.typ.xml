@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Tipos de veículo — context/04 §4.
+
+  Todo valor aqui influencia diretamente o fluxo de saturação MEDIDO em
+  `sim/calibracao/fluxo_saturacao.py`: `accel`, `decel`, `tau`, `minGap` e
+  `length` são exatamente os parâmetros de car-following que determinam o
+  headway de descarga da fila. Mexer neles obriga a remedir a saturação e a
+  regenerar a tabela de cenários — nessa ordem, senão o v/c passa a descrever
+  uma malha que não é a que roda.
+
+  SOBRE `jmIgnoreFoe*` NA AMBULÂNCIA (e nos demais VEs)
+
+  Modela a passagem cautelosa no vermelho, que é o que uma ambulância de fato
+  faz. Tem consequência direta na comparação: se o VE do baseline já cruza o
+  vermelho, o ganho medido da preempção CAI. Por isso o valor é o mesmo nos três
+  braços — é atributo do tipo de veículo, não do modo de controle, então a
+  igualdade é estrutural e não depende de disciplina. Isso precisa ser dito na
+  seção de metodologia: sem essa ressalva, a banca pode ler o ganho como
+  inflado; com ela, o baseline fica declaradamente mais forte do que seria com
+  um VE que respeita todo vermelho.
+
+  `vClass="emergency"` é o que faz o SUMO reconhecer o veículo como de emergência
+  e é também o que o adaptador TraCI usa para identificá-lo — a detecção do VE na
+  simulação não depende de convenção de nome de id.
+
+  SOBRE `tau` — O ÚNICO PARÂMETRO CALIBRADO (2026-08-25)
+
+  `accel`, `decel`, `sigma`, `length` e `maxSpeed` vêm do context/04 §4. `tau` (o
+  headway temporal desejado) NÃO era declarado em lugar nenhum, e o padrão do
+  SUMO é 1,0 s. Com ele, a primeira medição de `sim/calibracao/fluxo_saturacao.py`
+  deu ~2.400 veíc./h/faixa na arterial — acima da faixa de plausibilidade de via
+  urbana declarada em `sim/config/cenarios.yaml`.
+
+  O número não foi coincidência nem ruído: no modelo de car-following do SUMO o
+  headway em regime é `tau + (minGap + length) / v`, e com tau = 1,0 a 16,7 m/s
+  isso dá 1,42 s — exatamente o medido. Ou seja, o modelo estava reproduzindo
+  fielmente um parâmetro irreal.
+
+  `tau` foi então calibrado por um critério declarado ANTES do ajuste: levar o
+  headway do carro ao valor que corresponde ao centro da faixa de plausibilidade
+  (1.800 veíc./h/faixa, ou seja 2,0 s a 16,7 m/s), de onde
+
+      tau = 2,0 - (2,5 + 4,5) / 16,7 = 1,58 s   ->   adotado 1,6 s
+
+  O valor que vale para o TCC é o **medido depois do ajuste**, em
+  `analysis/data/fluxo_saturacao.csv` — não este 1.800, que é só o alvo do
+  critério. Fixar o critério antes é o que separa calibração de ajuste até o
+  número ficar bonito, que o CLAUDE.md proíbe.
+
+  Mexer em `tau`, `minGap`, `length`, `accel` ou `decel` obriga a rodar
+  `python -m sim.calibracao.fluxo_saturacao` e depois
+  `python -m sim.calibracao.cenarios` de novo, nessa ordem.
+
+  Velocidades em m/s (unidade do SUMO):
+      16.67 m/s = 60 km/h    13.89 m/s = 50 km/h    22.22 m/s = 80 km/h
+-->
+<routes xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/routes_file.xsd">
+
+    <!-- ===================== tráfego de fundo ============================= -->
+    <vType id="carro" vClass="passenger" accel="2.6" decel="4.5" sigma="0.5"
+           length="4.5" minGap="2.5" tau="1.6" maxSpeed="16.7" color="0.8,0.8,0.8"/>
+
+    <!-- Ônibus: maior tau que o carro pela massa e pelo tempo de reação do
+         conjunto. É o mesmo motivo de accel menor. -->
+    <vType id="onibus" vClass="bus" accel="1.2" decel="4.0" sigma="0.5"
+           length="12.0" minGap="3.0" tau="1.8" maxSpeed="13.9" color="0.2,0.4,0.9"/>
+
+    <!-- ==================== veículos de emergência ======================== -->
+    <!-- Os três compartilham a dinâmica; o que os distingue é a prioridade em
+         E8 (parametros.yaml: AMBULANCIA > BOMBEIRO > POLICIA) e a cor na GUI. -->
+    <vType id="ambulancia" vClass="emergency" guiShape="emergency"
+           accel="3.0" decel="5.0" sigma="0.1" length="5.5" minGap="2.5" tau="1.0"
+           maxSpeed="22.2" speedFactor="1.3" color="1,0,0"
+           jmIgnoreFoeProb="0.3" jmIgnoreFoeSpeed="5.0"/>
+
+    <vType id="bombeiro" vClass="emergency" guiShape="firebrigade"
+           accel="3.0" decel="5.0" sigma="0.1" length="7.5" minGap="2.5" tau="1.0"
+           maxSpeed="22.2" speedFactor="1.3" color="1,0.4,0"
+           jmIgnoreFoeProb="0.3" jmIgnoreFoeSpeed="5.0"/>
+
+    <vType id="policia" vClass="emergency" guiShape="police"
+           accel="3.0" decel="5.0" sigma="0.1" length="5.0" minGap="2.5" tau="1.0"
+           maxSpeed="22.2" speedFactor="1.3" color="0,0.3,1"
+           jmIgnoreFoeProb="0.3" jmIgnoreFoeSpeed="5.0"/>
+
+</routes>

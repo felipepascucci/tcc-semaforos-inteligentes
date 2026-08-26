@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Tipos de via da malha — context/04 §3.
+
+  A hierarquia viária é o que dá sentido ao trabalho: priorizar a arterial só
+  significa alguma coisa se a arterial for de fato a via de maior capacidade e
+  velocidade. Daí 2 faixas a 60 km/h contra 1 faixa a 40 km/h.
+
+  Velocidades em m/s, que é a unidade do SUMO. O texto do TCC fala em km/h; a
+  conversão acontece aqui e em nenhum outro lugar (context/08 §3):
+
+      60 km/h = 16.67 m/s        40 km/h = 11.11 m/s
+
+  `priority` é usado pelo netconvert para decidir a preferência nos cruzamentos
+  não semaforizados (os nós externos da fronteira) e a alocação de faixas.
+-->
+<types xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/types_file.xsd">
+
+    <type id="arterial" numLanes="2" speed="16.67" priority="2"/>
+    <type id="transversal" numLanes="1" speed="11.11" priority="1"/>
+
+</types>

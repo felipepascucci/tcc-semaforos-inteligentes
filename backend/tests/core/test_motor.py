@@ -116,6 +116,63 @@ def test_braco_com_compensacao_emite_compensar(topologia: TopologiaMalha) -> Non
     assert motor.plano_de_compensacao("CRUZ_TESTE_1") is not None
 
 
+def test_compensacao_estende_de_fato_o_verde_das_fases(topologia: TopologiaMalha) -> None:
+    """E7 precisa **agir**, não só calcular o plano.
+
+    Este teste existe por causa de um defeito encontrado na primeira execução do
+    Bloco 3: o motor calculava `PlanoCompensacao`, guardava, e nada nunca o
+    aplicava. Os braços `PREEMPCAO` e `PREEMPCAO_COMPENSADA` saíam com
+    resultados idênticos até o último dígito — E7 era um no-op e H2 não tinha
+    mecanismo nenhum por trás.
+
+    O que se verifica aqui é o efeito observável: enquanto a compensação vigora,
+    cada fase que abre recebe `ESTENDER_VERDE` com o restante da duração
+    planejada, e o comando sai **sem** `id_veiculo` — compensar não é preemptar.
+    """
+    motor = MotorDecisao(construir_parametros(n_ciclos_compensacao=2), topologia)
+    _preemptar_e_soltar(motor, topologia)
+
+    plano = motor.plano_de_compensacao("CRUZ_TESTE_1")
+    assert plano is not None
+    planejada = plano.duracao_por_fase_s[FASE_ARTERIAL]
+    assert planejada > 30.0, "sem fila em nenhuma fase, o teste não prova nada"
+
+    # Cruzamento servindo a fase arterial, 5 s de verde cumpridos.
+    estado = construir_estado(
+        topologia, t=30.0, veiculos=(), fase_atual=FASE_ARTERIAL, tempo_na_fase=5.0, fila=6
+    )
+    comando = next(c for c in motor.avaliar(estado) if c.id_semaforo == "CRUZ_TESTE_1")
+
+    assert comando.tipo is TipoComando.ESTENDER_VERDE
+    assert comando.duracao_s == pytest.approx(planejada - 5.0)
+    assert comando.id_veiculo is None
+    assert "compensação E7" in comando.motivo
+
+
+def test_compensacao_termina_apos_os_ciclos_previstos(topologia: TopologiaMalha) -> None:
+    """A compensação é transitória: `n_ciclos_compensacao` e acabou.
+
+    Sem o encerramento, o cruzamento ficaria para sempre com o verde inflado
+    pela fila de um evento que já passou — o que degradaria a via principal em
+    vez de recuperar a transversal.
+    """
+    motor = MotorDecisao(construir_parametros(n_ciclos_compensacao=1), topologia)
+    _preemptar_e_soltar(motor, topologia)
+
+    # Uma fase de cada vez, alternando: com 2 fases e 1 ciclo, o plano rege dois
+    # verdes e expira no terceiro.
+    instante = 30.0
+    for fase in (FASE_ARTERIAL, FASE_TRANSVERSAL, FASE_ARTERIAL):
+        estado = construir_estado(
+            topologia, t=instante, veiculos=(), fase_atual=fase, tempo_na_fase=1.0, fila=6
+        )
+        comandos = [c for c in motor.avaliar(estado) if c.id_semaforo == "CRUZ_TESTE_1"]
+        instante += 40.0
+
+    assert comandos == []
+    assert motor.plano_de_compensacao("CRUZ_TESTE_1") is None
+
+
 def test_braco_sem_compensacao_emite_apenas_liberar(topologia: TopologiaMalha) -> None:
     """`PREEMPCAO` — isola o efeito de E7 e sai do mesmo código.
 

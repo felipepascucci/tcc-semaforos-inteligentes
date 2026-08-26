@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Programas semafóricos do baseline de temporização fixa — context/04 §6.
+
+  Este é o braço `FIXO` do experimento: o controle contra o qual H1 e H2 são
+  medidas. Nele o TraCI não intervém em nada (context/04 §8), então o que está
+  aqui É o baseline.
+
+  CICLO DE 70 s, DUAS FASES, POR CRUZAMENTO:
+
+    | # | fase lógica | sinal   | duração |
+    | 0 | 1 arterial  | verde   |  30 s   |
+    | 1 | 1 arterial  | amarelo |   3 s   |
+    | 2 | -           | all-red |   2 s   |
+    | 3 | 2 transv.   | verde   |  30 s   |
+    | 4 | 2 transv.   | amarelo |   3 s   |
+    | 5 | -           | all-red |   2 s   |
+
+  Os 3 s de amarelo e os 2 s de all-red são exatamente `amarelo_s` e `all_red_s`
+  de `backend/config/parametros.yaml`, e os 30 s de verde são o `duracao_base_s`
+  de `sim/config/mapa_fases.yaml`. A coincidência é obrigatória, não decorativa:
+  nos modos com preempção quem conduz a sinalização é a máquina de estados de
+  `core/priorizacao/fases.py`, e se as durações divergissem os dois braços
+  teriam ciclos diferentes — a comparação deixaria de isolar o efeito da
+  preempção. Há teste garantindo a igualdade (`sim/tests/test_malha.py`).
+
+  O ALL-RED EXISTE POR CAUSA DE I3. O programa que o netconvert gera sozinho tem
+  só quatro fases (verde/amarelo por eixo) e vai do amarelo direto ao verde
+  seguinte, o que viola o invariante I3 do context/01 §6. Este arquivo substitui
+  aquele programa (mesmo `id`, mesmo `programID`), e é por isso que ele é fonte
+  versionada e não saída gerada.
+
+  Offset zero em todos os oito: o baseline é temporização fixa **sem**
+  coordenação. Uma progressão coordenada na arterial seria um baseline mais
+  forte, e vale registrar como limitação no texto — mas o pré-projeto define o
+  controle como temporização estática, e é isso que está implementado.
+
+  STATE STRINGS — 14 links por cruzamento, na ordem que o netconvert atribuiu:
+
+    índices  0..2   aproximação transversal (1 faixa): direita, frente, esquerda
+    índices  3..6   aproximação arterial   (2 faixas)
+    índices  7..9   aproximação transversal oposta
+    índices 10..13  aproximação arterial oposta
+
+  Logo `rrrGGGgrrrGGGg` é "arterial verde, transversal vermelha" e
+  `GGgrrrrGGgrrrr` é o inverso. O 'g' minúsculo é a conversão à esquerda
+  permissiva (cede ao fluxo oposto da mesma fase); as conversões à direita são
+  protegidas ('G'), inclusive as duas que a rota do VE usa.
+
+  Isto não é verificado por leitura: `sim/tests/test_malha.py` confere, contra a
+  rede construída, que em toda fase verde só há verde nos links da aproximação
+  daquele eixo — a mesma verificação que I1 faz no motor, aplicada à rede.
+-->
+<tlLogics xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/tllogic_file.xsd">
+
+    <tlLogic id="CRUZ_01" type="static" programID="0" offset="0">
+        <phase duration="30" state="rrrGGGgrrrGGGg" name="verde_arterial"/>
+        <phase duration="3" state="rrryyyyrrryyyy" name="amarelo_arterial"/>
+        <phase duration="2" state="rrrrrrrrrrrrrr" name="all_red"/>
+        <phase duration="30" state="GGgrrrrGGgrrrr" name="verde_transversal"/>
+        <phase duration="3" state="yyyrrrryyyrrrr" name="amarelo_transversal"/>
+        <phase duration="2" state="rrrrrrrrrrrrrr" name="all_red"/>
+    </tlLogic>
+
+    <tlLogic id="CRUZ_02" type="static" programID="0" offset="0">
+        <phase duration="30" state="rrrGGGgrrrGGGg" name="verde_arterial"/>
+        <phase duration="3" state="rrryyyyrrryyyy" name="amarelo_arterial"/>
+        <phase duration="2" state="rrrrrrrrrrrrrr" name="all_red"/>
+        <phase duration="30" state="GGgrrrrGGgrrrr" name="verde_transversal"/>
+        <phase duration="3" state="yyyrrrryyyrrrr" name="amarelo_transversal"/>
+        <phase duration="2" state="rrrrrrrrrrrrrr" name="all_red"/>
+    </tlLogic>
+
+    <tlLogic id="CRUZ_03" type="static" programID="0" offset="0">
+        <phase duration="30" state="rrrGGGgrrrGGGg" name="verde_arterial"/>
+        <phase duration="3" state="rrryyyyrrryyyy" name="amarelo_arterial"/>
+        <phase duration="2" state="rrrrrrrrrrrrrr" name="all_red"/>
+        <phase duration="30" state="GGgrrrrGGgrrrr" name="verde_transversal"/>
+        <phase duration="3" state="yyyrrrryyyrrrr" name="amarelo_transversal"/>
+        <phase duration="2" state="rrrrrrrrrrrrrr" name="all_red"/>
+    </tlLogic>
+
+    <tlLogic id="CRUZ_04" type="static" programID="0" offset="0">
+        <phase duration="30" state="rrrGGGgrrrGGGg" name="verde_arterial"/>
+        <phase duration="3" state="rrryyyyrrryyyy" name="amarelo_arterial"/>
+        <phase duration="2" state="rrrrrrrrrrrrrr" name="all_red"/>
+        <phase duration="30" state="GGgrrrrGGgrrrr" name="verde_transversal"/>
+        <phase duration="3" state="yyyrrrryyyrrrr" name="amarelo_transversal"/>
+        <phase duration="2" state="rrrrrrrrrrrrrr" name="all_red"/>
+    </tlLogic>
+
+    <tlLogic id="CRUZ_05" type="static" programID="0" offset="0">
+        <phase duration="30" state="rrrGGGgrrrGGGg" name="verde_arterial"/>
+        <phase duration="3" state="rrryyyyrrryyyy" name="amarelo_arterial"/>
+        <phase duration="2" state="rrrrrrrrrrrrrr" name="all_red"/>
+        <phase duration="30" state="GGgrrrrGGgrrrr" name="verde_transversal"/>
+        <phase duration="3" state="yyyrrrryyyrrrr" name="amarelo_transversal"/>
+        <phase duration="2" state="rrrrrrrrrrrrrr" name="all_red"/>
+    </tlLogic>
+
+    <tlLogic id="CRUZ_06" type="static" programID="0" offset="0">
+        <phase duration="30" state="rrrGGGgrrrGGGg" name="verde_arterial"/>
+        <phase duration="3" state="rrryyyyrrryyyy" name="amarelo_arterial"/>
+        <phase duration="2" state="rrrrrrrrrrrrrr" name="all_red"/>
+        <phase duration="30" state="GGgrrrrGGgrrrr" name="verde_transversal"/>
+        <phase duration="3" state="yyyrrrryyyrrrr" name="amarelo_transversal"/>
+        <phase duration="2" state="rrrrrrrrrrrrrr" name="all_red"/>
+    </tlLogic>
+
+    <tlLogic id="CRUZ_07" type="static" programID="0" offset="0">
+        <phase duration="30" state="rrrGGGgrrrGGGg" name="verde_arterial"/>
+        <phase duration="3" state="rrryyyyrrryyyy" name="amarelo_arterial"/>
+        <phase duration="2" state="rrrrrrrrrrrrrr" name="all_red"/>
+        <phase duration="30" state="GGgrrrrGGgrrrr" name="verde_transversal"/>
+        <phase duration="3" state="yyyrrrryyyrrrr" name="amarelo_transversal"/>
+        <phase duration="2" state="rrrrrrrrrrrrrr" name="all_red"/>
+    </tlLogic>
+
+    <tlLogic id="CRUZ_08" type="static" programID="0" offset="0">
+        <phase duration="30" state="rrrGGGgrrrGGGg" name="verde_arterial"/>
+        <phase duration="3" state="rrryyyyrrryyyy" name="amarelo_arterial"/>
+        <phase duration="2" state="rrrrrrrrrrrrrr" name="all_red"/>
+        <phase duration="30" state="GGgrrrrGGgrrrr" name="verde_transversal"/>
+        <phase duration="3" state="yyyrrrryyyrrrr" name="amarelo_transversal"/>
+        <phase duration="2" state="rrrrrrrrrrrrrr" name="all_red"/>
+    </tlLogic>
+
+</tlLogics>

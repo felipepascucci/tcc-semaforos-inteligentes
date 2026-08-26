@@ -143,6 +143,75 @@ Python puro. Zero import de `traci`, `pyserial`, `sqlalchemy` ou `fastapi`.
 
 **Pronto quando:** `python -m sim.controlador.executor --cenario leve --modo FIXO --seed 1` produz `tripinfo.xml` e uma linha em `execucao_simulacao`; corredor verde visível na `sumo-gui` no modo `PREEMPCAO`.
 
+**Estado: concluído em 2026-08-25.** Malha 2×4 construída por `make rede` sem
+avisos, 8 TLS, 44 vias, 108 detectores (48 E2, 48 E1, 12 E3). O executor roda os
+três braços e grava os CSV de `analysis/data/`; `sumo-gui` mostra o corredor.
+Suíte: **231 testes** na execução padrão e **21** sob o marcador `sumo`; `ruff`,
+`ruff format` e `mypy --strict` limpos.
+
+**Calibração (3.0), com números medidos.** Fluxo de saturação da malha:
+**1.752 veíc./h/faixa** na arterial e **1.573** na transversal, ambos dentro da
+faixa de plausibilidade declarada. Daí saem as capacidades (1.652 e 741 veíc./h) e
+os graus de saturação: `leve` 0,18 · `moderado` 0,42 · `intenso` **0,73**. A
+demanda transversal passa a ser **derivada** (135 / 314 / 539 veíc./h), e não
+escolhida. A validação da malha (3.4) aprovou: v/c medido 0,186 contra 0,182
+derivado, zero colisão, zero teleporte, zero violação de invariante no baseline.
+
+**Efeito medido no corredor** (cenário `leve`, seed 1, 1.500 s, dois VEs):
+
+| Modo | Travessia média do VE | Paradas |
+| --- | --- | --- |
+| `FIXO` | 490,6 s | 5,5 |
+| `PREEMPCAO` | 272,3 s | **0** |
+| `PREEMPCAO_COMPENSADA` | 274,1 s | **0** |
+
+Latência de decisão: p95 de **0,05 ms** contra o orçamento de 100 ms do RNF01.
+
+> **Dois defeitos do Bloco 2 só apareceram rodando**, e ambos foram corrigidos
+> com teste de regressão (`context/09`):
+>
+> 1. **`ESTENDER_VERDE` contava do início do verde**, não do instante do comando.
+>    O motor pede `eta + margem` para segurar o corredor, e o verde fechava na
+>    cara do VE. Efeito da correção, mesma seed: **6 paradas e 409 s → 0 parada e
+>    313 s**. Nenhum teste unitário pegava — todos exercitavam extensões a partir
+>    de verdes recém-abertos.
+> 2. **E7 era um no-op.** O motor calculava o `PlanoCompensacao`, guardava, e nada
+>    o aplicava: os braços `PREEMPCAO` e `PREEMPCAO_COMPENSADA` saíam idênticos
+>    até o último dígito, e H2 não tinha mecanismo por trás.
+>
+> **Um achado, já decidido:** o cenário `intenso` mede v/c = 0,73, **abaixo** do
+> limiar de 0,75 que o `context/04` §5 usa para essa faixa. Decisão da equipe em
+> 2026-08-25: **fluxos e nomes ficam como estão; a caracterização passa a ser a
+> medida**, e o cenário é descrito no texto como *saturação moderada-alta*. Os
+> limiares não foram tocados — mudar a régua depois de ver o resultado seria o
+> oposto de método. H1 continua de pé: os dois cenários em que a meta se aplica
+> medem 0,42 e 0,73, dois pontos distintos da faixa que P1 exige.
+>
+> Também registradas: a rota do VE em "U" pelos oito cruzamentos (o `04` §3 se
+> contradizia), a calibração de `tau` em `veiculos.typ.xml` — único parâmetro
+> ajustado, por critério declarado antes do ajuste — e a opção por tráfego de
+> fundo passante, sem conversões.
+
+**Verificações de fechamento (2026-08-26).** Além da suíte:
+
+| Item | Resultado |
+|---|---|
+| `executor --cenario leve --modo FIXO --seed 1` (3.600 s) | `tripinfo.xml` + linha em `execucao_simulacao`, fechada |
+| Corredor verde na `sumo-gui` (modo `PREEMPCAO`) | roda de ponta a ponta e encerra sem janela órfã |
+| Validação da malha nos três cenários de fundo | `leve` 0,186 × 0,182 · `moderado` 0,436 × 0,424 · `intenso` 0,702 × 0,726 — **todos aprovados** |
+| `multiplas_emergencias` exercita E8 | **525 passos** com dois VEs disputando CRUZ_02 |
+| `docker compose up` | `db` + `migracoes` + `backend` saudáveis, `/health` verde |
+
+> **Duas pendências abertas pelo Bloco 3, nenhuma bloqueante:**
+>
+> - **P15 — `libsumo` para Python não vem no instalador Windows.** A interface do
+>   adaptador abstrai os dois clientes conforme 3.6, mas o caminho `libsumo` não
+>   pôde ser exercitado. Decidir antes do Bloco 8; o lote roda com `traci` em
+>   paralelo enquanto isso.
+> - **`queue.xml` saiu do padrão de saída**: 77 MB por execução (~46 GB nas 600),
+>   redundante com os detectores E2. Agora está atrás de `--saida-detalhada`, e a
+>   saída bruta por execução caiu para ~1,5 MB.
+
 ---
 
 ### Bloco 4 — Piloto experimental · ~3 dias · **mitigação do risco nº 1**
@@ -218,6 +287,7 @@ Em paralelo: diagramas PlantUML do `context/08` §5, DER via eralchemy2, relató
 ## Pendências que continuam abertas
 
 - **P4, P6, P11, P12** — ações de redação no texto do TCC. O código já implementa a versão correta; falta a equipe atualizar o documento. **P6 é o maior risco acadêmico** e depende do Bloco 8.
+- **P11 deixou de bloquear execução e ganhou dois itens novos de redação** (Bloco 3): declarar que a demanda transversal é derivada do grau de saturação, e resolver o descompasso entre o nome do cenário `intenso` e sua classificação medida (v/c 0,73). A referência bibliográfica para a faixa de plausibilidade continua pendente — agora só para *conferir* um número que o experimento produz, não para *fornecê-lo*.
 - ~~**P14** — ponto final de medição do RF02.~~ ✅ **Decidida em 2026-08-25:** mede da detecção até o **início da atuação**. O perfil de tempos da bancada e o ciclo de 24 s de P13 ficam inalterados, e o firmware do Bloco 5 já tem contra o que ser escrito.
 - **P8, P9** — resolvidas por teste de bancada no Bloco 5.
 - **P3** — decidida (agente reativo determinístico), mas **comunicar ao orientador** antes de fechar a redação dos capítulos 2 e 6.

@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Demanda de fundo do cenário `moderado` — context/04 §5.
+
+  ARQUIVO GERADO por `python -m sim.demanda.gerar_fluxos`, versionado de
+  propósito. Não edite à mão.
+
+  Medir ganho operacional
+
+  fluxo arterial         700 veíc./h por aproximação (do pré-projeto)
+  capacidade            1652 veíc./h  (2 faixas)
+  grau de saturação     0.42  ->  moderado
+
+  fluxo transversal      314 veíc./h por aproximação (DERIVADO)
+  capacidade             741 veíc./h  (1 faixa)
+
+  O fluxo transversal não é escolhido: é o que põe a transversal no MESMO grau
+  de saturação da arterial, a partir do fluxo de saturação medido na própria
+  malha (`analysis/data/fluxo_saturacao.csv`). Ver sim/calibracao/cenarios.py.
+
+  Tráfego passante, sem conversões — simplificação declarada em
+  sim/demanda/fluxos.py. Os veículos concretos, com instantes de partida por
+  seed, saem de `python -m sim.demanda.gerar_rotas`.
+-->
+<routes xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/routes_file.xsd">
+
+
+    <route id="A1_LESTE" edges="A1_L0 A1_L1 A1_L2 A1_L3 A1_L4"/>
+    <flow id="A1_LESTE_carro" type="carro" route="A1_LESTE" begin="0.00" end="3600.00" vehsPerHour="665.00"/>
+    <flow id="A1_LESTE_onibus" type="onibus" route="A1_LESTE" begin="0.00" end="3600.00" vehsPerHour="35.00"/>
+
+    <route id="A1_OESTE" edges="A1_O4 A1_O3 A1_O2 A1_O1 A1_O0"/>
+    <flow id="A1_OESTE_carro" type="carro" route="A1_OESTE" begin="0.00" end="3600.00" vehsPerHour="665.00"/>
+    <flow id="A1_OESTE_onibus" type="onibus" route="A1_OESTE" begin="0.00" end="3600.00" vehsPerHour="35.00"/>
+
+    <route id="A2_LESTE" edges="A2_L0 A2_L1 A2_L2 A2_L3 A2_L4"/>
+    <flow id="A2_LESTE_carro" type="carro" route="A2_LESTE" begin="0.00" end="3600.00" vehsPerHour="665.00"/>
+    <flow id="A2_LESTE_onibus" type="onibus" route="A2_LESTE" begin="0.00" end="3600.00" vehsPerHour="35.00"/>
+
+    <route id="A2_OESTE" edges="A2_O4 A2_O3 A2_O2 A2_O1 A2_O0"/>
+    <flow id="A2_OESTE_carro" type="carro" route="A2_OESTE" begin="0.00" end="3600.00" vehsPerHour="665.00"/>
+    <flow id="A2_OESTE_onibus" type="onibus" route="A2_OESTE" begin="0.00" end="3600.00" vehsPerHour="35.00"/>
+
+    <route id="T1_SUL" edges="T1_S0 T1_S1 T1_S2"/>
+    <flow id="T1_SUL_carro" type="carro" route="T1_SUL" begin="0.00" end="3600.00" vehsPerHour="298.49"/>
+    <flow id="T1_SUL_onibus" type="onibus" route="T1_SUL" begin="0.00" end="3600.00" vehsPerHour="15.71"/>
+
+    <route id="T1_NORTE" edges="T1_N2 T1_N1 T1_N0"/>
+    <flow id="T1_NORTE_carro" type="carro" route="T1_NORTE" begin="0.00" end="3600.00" vehsPerHour="298.49"/>
+    <flow id="T1_NORTE_onibus" type="onibus" route="T1_NORTE" begin="0.00" end="3600.00" vehsPerHour="15.71"/>
+
+    <route id="T2_SUL" edges="T2_S0 T2_S1 T2_S2"/>
+    <flow id="T2_SUL_carro" type="carro" route="T2_SUL" begin="0.00" end="3600.00" vehsPerHour="298.49"/>
+    <flow id="T2_SUL_onibus" type="onibus" route="T2_SUL" begin="0.00" end="3600.00" vehsPerHour="15.71"/>
+
+    <route id="T2_NORTE" edges="T2_N2 T2_N1 T2_N0"/>
+    <flow id="T2_NORTE_carro" type="carro" route="T2_NORTE" begin="0.00" end="3600.00" vehsPerHour="298.49"/>
+    <flow id="T2_NORTE_onibus" type="onibus" route="T2_NORTE" begin="0.00" end="3600.00" vehsPerHour="15.71"/>
+
+    <route id="T3_SUL" edges="T3_S0 T3_S1 T3_S2"/>
+    <flow id="T3_SUL_carro" type="carro" route="T3_SUL" begin="0.00" end="3600.00" vehsPerHour="298.49"/>
+    <flow id="T3_SUL_onibus" type="onibus" route="T3_SUL" begin="0.00" end="3600.00" vehsPerHour="15.71"/>
+
+    <route id="T3_NORTE" edges="T3_N2 T3_N1 T3_N0"/>
+    <flow id="T3_NORTE_carro" type="carro" route="T3_NORTE" begin="0.00" end="3600.00" vehsPerHour="298.49"/>
+    <flow id="T3_NORTE_onibus" type="onibus" route="T3_NORTE" begin="0.00" end="3600.00" vehsPerHour="15.71"/>
+
+    <route id="T4_SUL" edges="T4_S0 T4_S1 T4_S2"/>
+    <flow id="T4_SUL_carro" type="carro" route="T4_SUL" begin="0.00" end="3600.00" vehsPerHour="298.49"/>
+    <flow id="T4_SUL_onibus" type="onibus" route="T4_SUL" begin="0.00" end="3600.00" vehsPerHour="15.71"/>
+
+    <route id="T4_NORTE" edges="T4_N2 T4_N1 T4_N0"/>
+    <flow id="T4_NORTE_carro" type="carro" route="T4_NORTE" begin="0.00" end="3600.00" vehsPerHour="298.49"/>
+    <flow id="T4_NORTE_onibus" type="onibus" route="T4_NORTE" begin="0.00" end="3600.00" vehsPerHour="15.71"/>
+
+</routes>

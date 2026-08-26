@@ -1,0 +1,83 @@
+# Mapa movimento -> fase, por cruzamento — context/01 §5.2 (etapa E4).
+#
+# É este arquivo que responde à pergunta central de E4: "o VE vai de A1_L3 para
+# T4_S1; qual fase precisa estar verde?". A resposta sai da aproximação de
+# ENTRADA — quem determina a fase é por onde o veículo chega, não para onde vai.
+#
+# ─────────────────────────────────────────────────────────────────────────────
+# O QUE ESTÁ AQUI E O QUE VEM DA REDE
+#
+# Aqui:  quais fases existem, que aproximações cada uma serve, quanto dura,
+#        quais conflitam entre si e a que fase do programa SUMO cada uma
+#        corresponde.
+# Da rede (`malha.net.xml`): os movimentos concretos. O carregador
+#        (`backend/adapters/sumo/topologia.py`) expande cada aproximação nos
+#        pares (entrada, saída) que a rede permite.
+#
+# A divisão evita duplicar a geometria: listar 125 movimentos à mão aqui seria
+# criar uma segunda fonte da verdade, que divergiria da rede na primeira
+# alteração. Há teste conferindo que toda conexão semaforizada da rede é servida
+# por exatamente uma fase deste arquivo.
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# As durações precisam bater com `sim/rede/malha.tll.xml` (o baseline) e com
+# `backend/config/parametros.yaml` (o motor). Nos modos com preempção quem
+# conduz a sinalização é a máquina de estados de `core/priorizacao/fases.py`, e
+# uma divergência faria os braços FIXO e PREEMPCAO rodarem ciclos diferentes —
+# a comparação deixaria de isolar o efeito da preempção. Teste garante.
+
+padrao:
+  fases:
+    - indice: 1
+      descricao: Arterial (eixo leste-oeste)
+      eixo: arterial
+      duracao_base_s: 30
+      verde_min_s: 7
+      verde_max_s: 60
+      # Índices das fases correspondentes no programa do .tll.xml. O adaptador
+      # usa isto para traduzir "fase lógica 1 em amarelo" na state string certa.
+      programa: { verde: 0, amarelo: 1, all_red: 2 }
+    - indice: 2
+      descricao: Transversal (eixo norte-sul)
+      eixo: transversal
+      duracao_base_s: 30
+      verde_min_s: 7
+      verde_max_s: 60
+      programa: { verde: 3, amarelo: 4, all_red: 5 }
+
+  # Matriz de conflito (I1). Com duas fases por eixo ela é total, como no
+  # protótipo sob split phasing (decisão P13) — mas declarada explicitamente,
+  # porque um padrão permissivo por omissão deixaria de acusar conflito num
+  # cruzamento mal configurado, e o erro só apareceria como dois verdes
+  # simultâneos na rua.
+  conflitos:
+    1: [2]
+    2: [1]
+
+# Aproximações de cada cruzamento, por eixo. Conferem com as vias de entrada da
+# rede construída — ver o teste `test_mapa_fases_cobre_a_rede`.
+semaforos:
+  CRUZ_01:
+    arterial: [A1_L0, A1_O1]
+    transversal: [T1_S0, T1_N1]
+  CRUZ_02:
+    arterial: [A1_L1, A1_O2]
+    transversal: [T2_S0, T2_N1]
+  CRUZ_03:
+    arterial: [A1_L2, A1_O3]
+    transversal: [T3_S0, T3_N1]
+  CRUZ_04:
+    arterial: [A1_L3, A1_O4]
+    transversal: [T4_S0, T4_N1]
+  CRUZ_05:
+    arterial: [A2_L0, A2_O1]
+    transversal: [T1_S1, T1_N2]
+  CRUZ_06:
+    arterial: [A2_L1, A2_O2]
+    transversal: [T2_S1, T2_N2]
+  CRUZ_07:
+    arterial: [A2_L2, A2_O3]
+    transversal: [T3_S1, T3_N2]
+  CRUZ_08:
+    arterial: [A2_L3, A2_O4]
+    transversal: [T4_S1, T4_N2]

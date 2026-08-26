@@ -37,14 +37,28 @@ Cada RF/RNF vira pelo menos um teste automatizado. Esta tabela é a rastreabilid
 
 `test_arquitetura.py` é barato e evita a erosão da regra principal do §1 de `01-arquitetura-sistema.md`. Vale a pena.
 
-> **Estado em 2026-08-25 (fim do Bloco 2).** Já implementados: **RF01**
+> **Estado em 2026-08-25 (fim do Bloco 3).** Já implementados: **RF01**
 > (`backend/tests/core/test_deteccao.py`), **RNF01** e **RNF03**
 > (`backend/tests/core/test_desempenho.py`), **RNF07**
 > (`backend/tests/test_arquitetura.py`) e os invariantes **I1 a I5**
 > (`test_seguranca.py` e `test_invariantes_property.py`).
 >
-> Os demais dependem de blocos ainda por fazer: RF02, RF03, RF07 e H3 exigem a
-> malha SUMO (Bloco 3); RF04, RF05, RF06 e RNF04 exigem a API e o WebSocket
+> **RF03 ganhou evidência no Bloco 3**, ainda que não como teste automatizado:
+> `waitingCount == 0` para o VE em execução de simulação real, contra 5,5 paradas
+> no baseline pareado (mesma seed, mesmo cenário). Falta transformar a medição em
+> `test_corredor_verde.py`, o que depende de definir quantas seeds o teste roda —
+> um teste que sobe o SUMO por 3.600 s não cabe numa suíte.
+>
+> **Integração `sim/` implementada** (`context/06` §1, linha "Adaptador TraCI em
+> cenário curto"): `sim/tests/test_adaptador.py` roda os 60 s de
+> `teste_60s.sumocfg` nos dois modos e verifica leitura de estado, detecção de VE
+> por `vClass`, emissão de comandos, transições e I1–I5 contra o SUMO de verdade.
+> Somam-se `test_malha.py` (geometria, mapa de fases, detectores),
+> `test_calibracao.py` e `test_demanda.py` (pareamento por seed) e
+> `test_validacao.py` (critérios de descarte).
+>
+> Os demais dependem de blocos ainda por fazer: RF02, RF07 e H3 exigem a camada
+> IoT e a API (Blocos 5 e 6); RF04, RF05, RF06 e RNF04 exigem a API e o WebSocket
 > (Bloco 6); RNF02 e RNF05 exigem execução longa e bancada (Blocos 8 e 5).
 >
 > `RNF03` foi realocado de `test_escala.py` para `test_desempenho.py`: as duas
@@ -82,6 +96,18 @@ def validar_execucao(execucao) -> list[str]:
 ```
 
 Execução que falhe qualquer item é **descartada e reexecutada com a mesma seed**, e o descarte é registrado. Descarte silencioso de execução ruim é má prática científica; descarte documentado com critério pré-definido é metodologia.
+
+> **Implementado em `sim/validacao/execucao.py`** (Bloco 3), com os seis itens e
+> mais um: a **cauda** da latência. O p99 acima do dobro do orçamento reprova
+> mesmo com o p95 dentro — sistema crítico se avalia pela cauda (`04` §9.3).
+>
+> A função é pura: recebe o `ResultadoExecucao` já consolidado e não toca em
+> SUMO, banco ou disco. Isso é o que permite testá-la na suíte padrão, e testar o
+> critério de descarte **antes** de os dados existirem é o que separa metodologia
+> de racionalização a posteriori (`sim/tests/test_validacao.py`).
+>
+> A verificação da **malha** (`04` §12), que roda uma vez antes de experimentar,
+> é outra coisa e mora em `sim/validacao/malha.py`.
 
 ## 5. Relatório de validação (entregável 6 do escopo)
 

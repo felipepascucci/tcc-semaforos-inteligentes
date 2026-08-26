@@ -108,6 +108,84 @@ silencioso e caro de achar.
 
 Verificação: `pytest -m sumo`.
 
+## Simulação
+
+A malha e a demanda são **construídas**, não versionadas prontas. A ordem importa
+e não é arbitrária — cada etapa consome o resultado da anterior:
+
+```powershell
+make rede         # netconvert + detectores        -> sim/rede/malha.net.xml
+make saturacao    # MEDE o fluxo de saturação      -> analysis/data/fluxo_saturacao.csv
+make cenarios     # deriva o v/c de cada cenário   -> analysis/data/calibracao_cenarios.csv
+make fluxos       # congela a demanda derivada     -> sim/demanda/fluxo_*.rou.xml
+make validar      # os quatro itens do context/04 §12
+```
+
+`make calibrar` faz as três do meio de uma vez. Sem `make` (o caso do Windows
+puro), cada alvo é um `python -m ...` — o Makefile serve de documentação da
+ordem, e as receitas estão à vista.
+
+Rodar uma execução:
+
+```powershell
+python -m sim.controlador.executor --cenario leve --modo FIXO --seed 1
+python -m sim.controlador.executor --cenario intenso --modo PREEMPCAO --seed 3 --gui
+make demo         # o corredor verde na sumo-gui
+```
+
+| Opção | Para quê |
+| --- | --- |
+| `--modo` | `FIXO` (baseline, sem intervenção), `PREEMPCAO`, `PREEMPCAO_COMPENSADA` |
+| `--seed` | escolhe o arquivo de rotas — **o mesmo nos três modos** (pareamento) |
+| `--gui` | roda na `sumo-gui`, para ver o corredor e gravar a demonstração |
+| `--libsumo` | ~10x mais rápido, sem GUI — o modo do lote do Bloco 8 |
+| `--exemplar` | persiste transições no banco e latências detalhadas (decisão P5) |
+| `--sem-banco` | não grava em `execucao_simulacao` |
+| `--saida-detalhada` | grava também `queue.xml` — 77 MB por execução, para depurar |
+
+`--libsumo` ainda **não funciona nesta instalação**: o instalador Windows do SUMO
+não traz o módulo Python do `libsumo`, só os bindings Java/C#/C++. É a pendência
+**P15**, para decidir antes do Bloco 8; o erro explica as alternativas.
+
+### Ver o corredor verde
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+python -m sim.controlador.executor --cenario leve --modo PREEMPCAO --seed 1 `
+    --duracao 900 --gui --sem-banco
+```
+
+A janela abre e já começa a rodar. Três coisas que ajudam a de fato **ver** o
+efeito:
+
+1. **O primeiro VE entra aos 300 s de simulação**, que é o aquecimento declarado
+   em `cenarios.yaml` — antes disso a malha só está enchendo. Com o atraso padrão
+   de 20 ms por passo, isso é cerca de um minuto de espera. Para pular o
+   aquecimento, rode com `--atraso-ms 0` e aumente o campo **Delay (ms)** da
+   barra de ferramentas para ~20–50 quando o relógio passar dos 290 s.
+2. **Troque o tema de `standard` para `real world`** na caixa da barra de
+   ferramentas — no padrão todo veículo é um triângulo e a ambulância fica igual
+   a um carro. A `sumo-gui` memoriza a escolha.
+3. **Para acompanhar o VE:** botão da lupa (*Locate Vehicle*) → escolha
+   `VE_ROTA_VE_CORREDOR_00`; depois botão direito nele → *Start Tracking*.
+   Ambulância é vermelha, bombeiro laranja, polícia azul.
+4. **O que observar:** o VE entra a oeste em CRUZ_01, e os semáforos vão abrindo
+   à frente dele até CRUZ_04; ali ele converte à direita para a transversal e, em
+   CRUZ_08, entra na arterial de baixo — repare que nesse cruzamento a fase
+   aberta para ele é a **transversal**, não a arterial. Compare rodando o mesmo
+   comando com `--modo FIXO`: o VE para 5 a 6 vezes.
+
+Três coisas que valem saber antes de mexer:
+
+- **O `.net.xml` e o `.det.add.xml` são gerados** e ficam fora do Git. Os
+  arquivos-fonte (`.nod`, `.edg`, `.con`, `.tll`, `.typ`) é que são versionados.
+  `python -m sim.rede.construir --verificar` diz se a rede no disco está em dia.
+- **Mexer em `veiculos.typ.xml` obriga a recalibrar.** `tau`, `minGap`, `length`,
+  `accel` e `decel` determinam o fluxo de saturação; mudá-los sem rodar
+  `make calibrar` faz o v/c descrever uma malha que não é a que roda.
+- **As rotas por seed são materializadas**, não sorteadas pelo SUMO. É o que
+  garante o pareamento do `context/04` §7, e é verificável com `diff`.
+
 ## Banco de dados
 
 O `docker compose up` já cuida disso pelo serviço `migracoes`. Os comandos abaixo

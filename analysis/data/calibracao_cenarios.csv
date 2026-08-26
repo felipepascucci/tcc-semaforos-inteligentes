@@ -1,0 +1,5 @@
+cenario,fluxo_arterial_veic_h,capacidade_arterial_veic_h,grau_saturacao,classificacao,fluxo_transversal_veic_h,capacidade_transversal_veic_h
+leve,300,1652,0.182,leve,135,741
+moderado,700,1652,0.424,moderado,314,741
+intenso,1200,1652,0.726,moderado,539,741
+multiplas_emergencias,700,1652,0.424,moderado,314,741

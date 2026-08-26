@@ -44,10 +44,20 @@ class PreempcaoAtiva:
 
 @dataclass
 class CompensacaoEmCurso:
-    """Compensação pós-evento ainda vigente em um cruzamento."""
+    """Compensação pós-evento ainda vigente em um cruzamento.
+
+    Attributes:
+        plano: Durações de verde calculadas por E7.
+        verdes_restantes: Quantas aberturas de verde o plano ainda rege. Conta-se
+            em verdes, e não em ciclos, porque a compensação começa no meio de um
+            ciclo — contar ciclos exigiria saber onde o ciclo "começa", que é uma
+            convenção sem consequência física.
+        ultima_fase: Última fase observada em verde, para detectar a virada.
+    """
 
     plano: e7.PlanoCompensacao
-    ciclos_restantes: int
+    verdes_restantes: int
+    ultima_fase: int | None = None
 
 
 @dataclass
@@ -187,7 +197,8 @@ class MotorDecisao:
 
         resolucao = resolver(id_semaforo, disputas, cruzamento, self.parametros)
 
-        # Nenhum VE à vista: encerra a preempção que porventura esteja ativa.
+        # Nenhum VE à vista: encerra a preempção que porventura esteja ativa e,
+        # se houver plano de compensação vigente, é hora de executá-lo (E7).
         if resolucao is None:
             if ativa is not None:
                 return self._liberar(
@@ -198,7 +209,7 @@ class MotorDecisao:
                     t,
                     motivo=f"VE {ativa.id_veiculo} já atravessou; retomando ciclo",
                 )
-            return None
+            return self._executar_compensacao(id_semaforo, estado_semaforo)
 
         vencedor = resolucao.vencedor
         fase_alvo = vencedor.fase_desejada
@@ -296,7 +307,9 @@ class MotorDecisao:
         plano = e7.compensar(
             cruzamento, e7.filas_por_fase(estado_semaforo, cruzamento), deficit, self.parametros
         )
-        self._compensacoes[id_semaforo] = CompensacaoEmCurso(plano, plano.n_ciclos)
+        self._compensacoes[id_semaforo] = CompensacaoEmCurso(
+            plano, verdes_restantes=plano.n_ciclos * len(cruzamento.fases)
+        )
 
         return Comando(
             tipo=TipoComando.COMPENSAR,
@@ -305,6 +318,57 @@ class MotorDecisao:
             duracao_s=plano.deficit_total_s,
             motivo=(
                 f"{motivo}; compensando déficit de {deficit:.1f}s por {plano.n_ciclos} ciclo(s)"
+            ),
+        )
+
+    def _executar_compensacao(
+        self, id_semaforo: str, estado_semaforo: EstadoSemaforo
+    ) -> Comando | None:
+        """Etapa **E7**, parte de execução — aplica o plano ao verde corrente.
+
+        Calcular o plano não muda semáforo nenhum. Quem o torna efetivo é este
+        método: enquanto a compensação vigora, cada fase que abre recebe um
+        `ESTENDER_VERDE` com o **restante** da duração planejada
+        (`planejada - tempo_na_fase`). Repetir o comando a cada passo é
+        idempotente — o alvo é sempre `t_mudanca + planejada` — e dispensa o
+        motor guardar o instante em que cada verde começou.
+
+        O comando sai **sem** `id_veiculo`, e isso é o que evita que a
+        compensação seja confundida com preempção: a máquina de estados só marca
+        `em_preempcao` quando a extensão é motivada por um VE. Sem essa
+        distinção, os dois minutos de compensação apareceriam em
+        `estado_semaforo_amostra` como preempção, e o custo transversal que H2
+        mede ficaria atribuído ao evento errado.
+        """
+        em_curso = self._compensacoes.get(id_semaforo)
+        if em_curso is None:
+            return None
+        if estado_semaforo.sinal is not Sinal.VERDE:
+            return None
+
+        if em_curso.ultima_fase != estado_semaforo.fase_atual:
+            em_curso.ultima_fase = estado_semaforo.fase_atual
+            em_curso.verdes_restantes -= 1
+        if em_curso.verdes_restantes < 0:
+            del self._compensacoes[id_semaforo]
+            return None
+
+        planejada = em_curso.plano.duracao_por_fase_s.get(estado_semaforo.fase_atual)
+        if planejada is None:
+            return None
+        restante = planejada - estado_semaforo.tempo_na_fase
+        if restante <= 0.0:
+            return None
+
+        return Comando(
+            tipo=TipoComando.ESTENDER_VERDE,
+            id_semaforo=id_semaforo,
+            fase_alvo=estado_semaforo.fase_atual,
+            duracao_s=restante,
+            motivo=(
+                f"compensação E7: fase {estado_semaforo.fase_atual} com "
+                f"{planejada:.1f}s de verde (base + fila), "
+                f"{em_curso.verdes_restantes} verde(s) restante(s)"
             ),
         )
 

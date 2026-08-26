@@ -100,10 +100,42 @@ moderado até ~1400, intenso acima disso) são de **fluxo ininterrupto**: rodovi
 e vias expressas, onde o HCM classifica por densidade e a capacidade fica em
 1800–2200 veíc./h/faixa. Este trabalho é **fluxo interrompido** — arterial urbana
 semaforizada —, tratado em capítulo separado do HCM, com nível de serviço medido
-por *atraso de controle* e capacidade reduzida pela razão de verde. Aplicar os
-limiares de rodovia aqui reclassificaria o cenário `intenso` como `moderado` e
-derrubaria a formulação de H1 (decisão P1, que condiciona a meta à saturação
-moderada a intensa).
+por *atraso de controle* e capacidade reduzida pela razão de verde.
+
+O tamanho do erro, agora que há medição: a capacidade da nossa aproximação
+arterial é **1.652 veíc./h** para duas faixas, contra os ~4.000 que os limiares
+de rodovia sugeririam. Sob a régua errada, os 1.200 veíc./h do cenário `intenso`
+pareceriam tráfego folgado, longe da capacidade — quando a medição mostra a
+aproximação operando a **73%** dela. Não é um ajuste de rótulo: é a diferença
+entre descrever uma via que escoa livremente e uma que está perto de saturar, e
+com ela vai junto a condição de saturação em que H1 é formulada (decisão P1).
+
+### Resultado da medição, em 2026-08-25 (Bloco 3)
+
+A cadeia foi executada. Os números abaixo saíram de código versionado e estão em
+`analysis/data/fluxo_saturacao.csv` e `analysis/data/calibracao_cenarios.csv`.
+
+| Aproximação | Faixas | Fluxo de saturação medido | Capacidade |
+| --- | --- | --- | --- |
+| arterial | 2 | 1.807 e 1.697 veíc./h/faixa (média 1.752) | 1.652 veíc./h |
+| transversal | 1 | 1.573 veíc./h/faixa | 741 veíc./h |
+
+| Cenário | Fluxo arterial | v/c | Classificação | Fluxo transversal **derivado** |
+| --- | --- | --- | --- | --- |
+| `leve` | 300 | 0,18 | leve | 135 |
+| `moderado` | 700 | 0,42 | moderado | 314 |
+| `intenso` | 1.200 | **0,73** | **moderado** | 539 |
+| `multiplas_emergencias` | 700 | 0,42 | moderado | 314 |
+
+**ACHADO — o cenário `intenso` opera no topo da faixa moderada.** Com a
+capacidade medida, 1.200 veíc./h numa aproximação de duas faixas dá v/c = 0,73,
+**abaixo do limiar de 0,75** que o `04` §5 usa para a faixa `intenso`.
+
+Isso não invalida H1: a decisão P1 condiciona a meta a "saturação moderada a
+intensa", e 0,42 e 0,73 são dois pontos distintos dentro dessa faixa. O que ficou
+descompassado foi o **nome** do cenário em relação à sua classificação medida.
+**Resolvido em 2026-08-25 (ver tabela de decisões): mantêm-se os fluxos e os
+nomes dos cenários; o que muda é a caracterização, que passa a ser a medida.**
 
 **O que ainda falta, e é `AÇÃO DA EQUIPE`:**
 
@@ -117,6 +149,18 @@ moderada a intensa).
    40% e 75% do `04` §5.
 3. Confirmar com o **Prof. Marco Gomes** o enquadramento em fluxo interrompido —
    convém levar junto com a decisão P3, que também espera conversa com ele.
+4. **Escrever a metodologia com a caracterização medida** (decisão de 2026-08-25):
+   a tabela dos cenários traz o v/c ao lado do nome, a demanda transversal é
+   declarada como derivada, e o texto evita dizer "tráfego intenso" onde o dado
+   diz 0,73 — o cenário `intenso` é descrito como *saturação moderada-alta*.
+5. **Declarar as duas simplificações do modelo de demanda**: tráfego de fundo
+   passante (sem conversões, logo as conversões permissivas à esquerda não são
+   exercitadas) e composição de 5% de ônibus, que é premissa declarada e não
+   medida.
+6. **Declarar a calibração de `tau`** em `veiculos.typ.xml`: qual era o problema,
+   qual foi o critério fixado antes do ajuste e qual o valor medido depois. É o
+   ponto do trabalho mais exposto à crítica de circularidade, e a defesa é a
+   transparência do procedimento.
 
 > **O que mudou com a decisão de medir.** Antes, P11 exigia um número da
 > literatura para *entrar* no cálculo, e sem ele o Bloco 3 não fechava. Agora
@@ -124,6 +168,48 @@ moderada a intensa).
 > produz. O Bloco 3 deixa de estar bloqueado por bibliografia: a calibração roda,
 > a tabela sai, e a citação entra depois como validação. **P11 continua aberta**,
 > mas passou de bloqueio de execução a pendência de redação.
+
+---
+
+## P15 — `libsumo` para Python não vem com o SUMO no Windows · `DECISÃO DO GRUPO — Bloco 8`
+
+Descoberto no Bloco 3, ao exercitar a opção `--libsumo` do executor.
+
+O `context/02` §2 prevê a estratégia: `traci` no desenvolvimento (com GUI, para
+gravar a demonstração) e **`libsumo` nas 600 execuções em lote**, por ser ~10x
+mais rápido. O adaptador implementa as duas atrás da mesma interface, como o
+plano pede em 3.6 — mas o **instalador Windows do SUMO 1.27.1 não traz o módulo
+Python do `libsumo`**. Ele entrega os bindings Java, C# e C++
+(`libsumo-1.27.1.jar`, `libsumocpp.dll`), e `%SUMO_HOME%/tools` contém apenas
+`traci`.
+
+O módulo Python existe, mas vem do **pip** — e é aí que está a decisão: a regra
+registrada em 2026-08-24 é justamente **não instalar cliente do SUMO pelo pip**,
+porque uma segunda cópia pode divergir da versão do binário e a divergência
+aparece como comportamento sutilmente diferente, que é a classe de bug mais cara
+deste projeto.
+
+**As três saídas, para decidir antes do Bloco 8:**
+
+1. **`pip install libsumo==1.27.1`**, fixado na mesma versão do binário. O risco
+   da regra original fica mitigado pela fixação exata, e é preciso refixar sempre
+   que o SUMO for atualizado. É a opção que preserva o ganho de desempenho.
+2. **Rodar o lote com `traci` e paralelismo de processos.** Funciona hoje, sem
+   dependência nova. O ganho perdido é menor do que os "10x" nominais sugerem:
+   o adaptador lê o estado por **assinaturas**, então são ~4 chamadas por passo,
+   e não dezenas — o custo de IPC que o `libsumo` elimina é justamente o das
+   chamadas.
+3. **Medir antes de decidir:** cronometrar uma execução de 3.600 s nos dois
+   clientes e escolher com o número na mão. Custa uma hora e transforma a escolha
+   em evidência.
+
+**Recomendação: 3, depois 2 ou 1 conforme o resultado.** O lote são 600 execuções
+— se `traci` der conta na janela de tempo disponível, não há por que abrir
+exceção à regra de não instalar cliente pelo pip.
+
+**Não bloqueia o Bloco 3:** a interface está implementada e testada no caminho
+`traci`; o caminho `libsumo` está implementado e falha com mensagem que explica
+exatamente isto.
 
 ---
 
@@ -152,4 +238,13 @@ moderada a intensa).
 | 2026-08-24 | **I5 é responsabilidade do motor** (Bloco 2) | O motor passa a acompanhar, por cruzamento, quando cada fase teve verde pela última vez, e **recusa preemptar** para longe de uma fase perto do teto de `vermelho_max_s`. A guarda não dispara quando a fase pedida é a própria faminta — nesse caso preemptar resolve a starvation. | A tabela de invariantes do `contrato` §9 já atribuía I5 ao motor, mas nada no código a garantia. A máquina de estados sozinha **pode** matar de fome uma aproximação sob uma sequência adversária de extensões de verde; é por isso que a decisão de preemptar precisa consultar o histórico de verdes. Verificado em `test_motor.py`. |
 | 2026-08-24 | **I4 verificado por transição, não por par** (Bloco 2) | `core/seguranca.verificar_transicao()` passa a checar I4 sobre uma transição isolada. Um amarelo só pode suceder um verde, então `duracao_fase_anterior_s` de uma transição para `AMARELO` **é** a duração daquele verde. | Furo encontrado por **teste de mutação**: com o verde mínimo sabotado, a violação não era acusada. A checagem antiga só rodava sobre pares consecutivos, e a **primeira** transição de cada execução ficava sem predecessor — justamente a mais exposta a um comando prematuro, logo após a partida do controlador. Registrado como teste de regressão. |
 | 2026-08-24 | **python-dotenv** (Bloco 1, regra do §4.8 de `08`) | Acrescentada ao `pyproject.toml`. Usada por `db/migrations/env.py` e, adiante, por `sim/` e `bridge/` — os três rodam **no host**, fora do compose, e portanto não recebem as variáveis pelo `environment:` do Docker. | Sem ela, `alembic upgrade head` só funcionaria com as variáveis exportadas à mão a cada terminal novo, o que contraria a Definition of Done do `CLAUDE.md` ("sem passo manual não documentado"). A alternativa era escrever um parser de `.env` próprio: ~10 linhas que parecem triviais até aparecerem aspas, comentários e valores com `=`. |
+| 2026-08-25 | **Caracterização dos cenários passa a ser a medida** (Bloco 3, decorrente de P11) | Os fluxos (300/700/1.200) e os **nomes** dos cenários (`leve`, `moderado`, `intenso`) ficam como estão. O que muda é a **caracterização**: cada cenário passa a ser descrito pelo v/c medido, e não pela faixa que se supunha. O cenário `intenso` é declarado como **"saturação moderada-alta, v/c ≈ 0,73"**. Os limiares de 0,40 e 0,75 permanecem intocados, e a função de classificação continua devolvendo `moderado` para ele — o que é o resultado correto e é o que vai no texto. | Era a única das três saídas que não mexe em nada já entregue **e** descreve o experimento pelo que ele mede. Aumentar o fluxo para ~1.300 contrariaria a regra explícita de manter 300/700/1.200, que já estão no texto; reduzir a razão de verde para inflar o v/c seria ajustar o experimento até o número caber, exatamente o que o `CLAUDE.md` proíbe. **O nome do cenário passa a ser rótulo de identificação do ponto experimental, não afirmação sobre o regime.** Isso precisa aparecer no texto: a tabela da metodologia traz o v/c medido ao lado do nome, e a redação evita dizer "tráfego intenso" onde o dado diz 0,73. H1 continua de pé — P1 pede "moderada a intensa", e os dois cenários em que a meta se aplica medem 0,42 e 0,73. |
+| 2026-08-25 | **Rota do VE atravessa os oito cruzamentos** (Bloco 3) | O `04` §3 se contradizia: "grade 2×4 com 4 transversais" (em que cada arterial cruza 4) e "o VE atravessa os 8 cruzamentos". Adotada a leitura que preserva as duas afirmações: a rota é um **"U"** — arterial 1 de oeste a leste (CRUZ_01..04), desce a transversal 4 e volta pela arterial 2 (CRUZ_08..05). 4.500 m, oito cruzamentos, duas conversões à direita. | É a única leitura que fecha com "os 8 cruzamentos" **e** com os ~5 km do pré-projeto, sem mexer na geometria 2×4 que o plano fixa em 3.1. Tem um ganho metodológico de brinde: o corredor **muda de eixo** no meio do percurso (em CRUZ_08 o VE pede a fase transversal, não a arterial), o que exercita E4 de verdade — um corredor que pedisse sempre a mesma fase não provaria que a seleção de fase funciona. Escolha confirmada com a equipe. |
+| 2026-08-25 | **Demanda transversal é derivada, não escolhida** (Bloco 3) | Cada aproximação transversal recebe o fluxo que a coloca no **mesmo grau de saturação** da arterial, calculado a partir do fluxo de saturação medido: 135 / 314 / 539 veíc./h nos três cenários. | As alternativas eram piores. Repetir o fluxo nominal da arterial (1.200) numa via de uma faixa daria v/c > 1,5: fila que não dissipa, gridlock e execução inválida por `04` §12. Uma fração fixa declarada ("metade da arterial") seria exatamente o número sem lastro que o encaminhamento de P11 existe para eliminar. Derivar mantém a malha inteira no regime que caracteriza o cenário, que é o que a condição de H1 exige. Escolha confirmada com a equipe. |
+| 2026-08-25 | **`tau` calibrado em `veiculos.typ.xml`** (Bloco 3) | `tau` do carro passa de 1,0 s (padrão do SUMO) para **1,6 s**, e o do ônibus para 1,8 s. Critério **declarado antes do ajuste**: levar o headway do carro ao valor correspondente ao centro da faixa de plausibilidade (1.800 veíc./h/faixa a 16,7 m/s ⇒ 2,0 s ⇒ `tau` = 2,0 − 7/16,7 = 1,58). O valor que vale para o TCC é o **medido depois**, não o alvo. | Com `tau = 1,0` a primeira medição deu ~2.400 veíc./h/faixa, fora da faixa de plausibilidade — e não por ruído: no modelo de car-following do SUMO o headway em regime é `tau + (minGap + length)/v`, que com aqueles valores dá exatamente 1,42 s. O modelo reproduzia fielmente um parâmetro irreal. `tau` não era declarado em lugar nenhum do `context/` (o `04` §4 fixa `accel`, `decel`, `sigma`, `length` e `maxSpeed`, não ele), então não houve contradição com o escopo — houve o preenchimento de uma lacuna, pelo procedimento que o próprio plano prescreve para valor fora de esquadro. **Consequência:** mexer em `tau`, `minGap`, `length`, `accel` ou `decel` obriga a remedir a saturação e regerar a tabela de cenários e os arquivos de fluxo, nessa ordem. |
+| 2026-08-25 | **`ESTENDER_VERDE` conta a partir de agora** (defeito do Bloco 2, achado no Bloco 3) | `core/priorizacao/fases.py` interpretava `duracao_s` como duração **total** do verde, contada do início dele; passa a contar **a partir do instante do comando**, com o teto de `verde_max` ainda ancorado no início (I5 preservado). | O motor calcula `duracao_s = eta + margem`, que é tempo a partir de agora. Sob a leitura antiga, o comando virava seu oposto assim que o verde já durava mais que o pedido: pedir "segure mais 9 s para o VE passar" fechava o verde imediatamente. Efeito medido antes e depois, mesma seed e mesmo cenário: **6 paradas e 409 s de travessia → 0 parada e 313 s**. Nenhum teste unitário pegava — todos exercitavam extensões a partir de verdes recém-abertos. É a semântica de `PRE,<fase>,<dur_s>` do protocolo serial, então firmware e simulação voltam a concordar. |
+| 2026-08-25 | **E7 passa a ser executada, e não só calculada** (defeito do Bloco 2, achado no Bloco 3) | O motor calculava `PlanoCompensacao`, guardava e **nada nunca o aplicava**. Passa a emitir `ESTENDER_VERDE` com o restante da duração planejada a cada fase que abre, enquanto a compensação vigora. O comando sai **sem** `id_veiculo`, e a máquina de estados só marca `em_preempcao` quando há VE associado. | Os braços `PREEMPCAO` e `PREEMPCAO_COMPENSADA` saíam com resultados **idênticos até o último dígito** — E7 era um no-op e H2 não tinha mecanismo nenhum por trás. O `08` §2 é explícito: cortar E7 obriga a tirar H2 do trabalho, não a deixá-la sem sustentação. A distinção por `id_veiculo` importa porque `em_preempcao` viaja para `estado_semaforo_amostra`: sem ela, os dois ciclos de compensação seriam contabilizados como preempção e o custo transversal que H2 mede seria atribuído ao evento errado. Coberto por `test_compensacao_estende_de_fato_o_verde_das_fases`. |
+| 2026-08-25 | **Tráfego de fundo é passante, sem conversões** (Bloco 3) | Todo veículo de fundo entra por uma fronteira e sai pela oposta, em linha reta. As únicas conversões do experimento são as duas do VE. | Além da simplicidade, há razão metodológica: sem conversões o fluxo de cada aproximação é exatamente o fluxo declarado do cenário, e o v/c **derivado** e o **medido** passam a medir a mesma coisa — que é o que a verificação de `04` §12 item 4 confronta. Com conversões, a demanda se redistribuiria segundo uma matriz origem-destino que o pré-projeto não fornece, e inventá-la cairia na armadilha que P11 existe para evitar. **Limitação a declarar no texto:** as conversões permissivas à esquerda existem na rede mas não são exercitadas pelo tráfego de fundo. |
+| 2026-08-25 | **`queue.xml` sai do padrão; `summary` agregado a 60 s** (Bloco 3) | O SUMO grava `queue` e `summary` a cada passo. Com passo de 0,1 s, a primeira execução completa (3.600 s) produziu **77 MB de `queue.xml`** e 10 MB de `summary.xml`. `queue-output` passa a ser opcional (`--saida-detalhada`) e `summary` passa a agregar a cada 60 s. | Nas 600 execuções do Bloco 8 seriam ~46 GB só de fila, num disco de estudante — e para um dado **redundante**: os detectores E2 já medem fila com agregação de 300 s, e o coletor já acumula a fila máxima por aproximação em memória. É a mesma aritmética de P5 e da latência detalhada: volume bruto não é gratuito, e o que sustenta as hipóteses são os agregados. A saída bruta por execução caiu de ~88 MB para ~1,5 MB. Só apareceu ao rodar a primeira execução de 3.600 s de ponta a ponta — as de verificação, mais curtas, não davam a escala do problema. |
+| 2026-08-25 | **`latencias.csv` detalhado só em execução exemplar** (Bloco 3) | Uma linha por decisão apenas nas execuções marcadas como exemplares; as demais gravam só os percentis, em `execucoes.csv`. | Mesma aritmética que levou à decisão P5: são 36.000 decisões por execução, o que daria mais de 20 milhões de linhas nas 600 do Bloco 8. Os percentis — que são o que RNF01 e H3 exigem (`04` §9.3) — vão em toda execução. |
 | 2026-08-24 | **Cliente TraCI não vem do pip** (Bloco 0) | O `pyproject.toml` **não** declara extra `sim`. `traci` e `libsumo` são importados de `%SUMO_HOME%/tools`, acrescentado ao `sys.path` pelo `conftest.py` da raiz. | Instalar `traci` pelo pip cria uma segunda cópia do cliente, que pode divergir da versão do binário instalado. A divergência não falha alto: ela aparece como comportamento sutilmente diferente do TraCI, que é a classe de bug mais cara de diagnosticar neste projeto. Usar o cliente que acompanha o binário elimina a classe inteira. |

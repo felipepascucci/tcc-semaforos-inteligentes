@@ -27,6 +27,9 @@ frontend/.vite/
 # A malha .net.xml é GERADA por `netconvert` a partir dos .xml de entrada.
 # Versionar a entrada, não a saída (context/04 §12).
 sim/rede/*.net.xml
+# Os detectores também são gerados, a partir da rede (`make rede`).
+sim/rede/*.det.add.xml
+# Saída bruta das execuções e rotas materializadas por (cenário, seed).
 sim/saida/
 
 # --- Dados experimentais ---------------------------------------------------
