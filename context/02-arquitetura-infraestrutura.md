@@ -54,6 +54,17 @@ Não introduzir dependência fora desta lista sem registrar em `09-pendencias-e-
 
 **Sobre `libsumo`:** é ~10x mais rápido que `traci` porque roda no mesmo processo, mas não permite múltiplos clientes nem GUI. Estratégia: usar `traci` no desenvolvimento (com `sumo-gui`, para gravar vídeo da demonstração) e `libsumo` nas 50 execuções em lote. A camada de adaptador deve abstrair os dois atrás da mesma interface.
 
+> **Implementado em `backend/adapters/sumo/cliente.py`** (Bloco 3), com uma
+> ressalva descoberta ao exercitá-lo: o **instalador Windows do SUMO não traz o
+> módulo Python do `libsumo`** — só os bindings Java/C#/C++. O módulo vem do pip,
+> o que esbarra na regra de não instalar cliente do SUMO por lá. Registrado como
+> **P15**, para decidir antes do Bloco 8; o caminho `traci` funciona hoje e
+> paraleliza por processo.
+>
+> **`sumolib`** também é usado (leitura do `.net.xml` em `adapters/sumo/topologia.py`
+> e `sim/rede/detectores.py`). Vem de `%SUMO_HOME%/tools`, como o `traci`, então
+> não é dependência nova nem exceção à lista acima.
+
 ## 3. Serviços (docker-compose)
 
 ```yaml

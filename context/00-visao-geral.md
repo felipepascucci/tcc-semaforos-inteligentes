@@ -51,6 +51,13 @@ Ambas são controladas pelo **mesmo motor de decisão** (`backend/core/priorizac
 > **Decisões P1 e P2 tomadas em 2026-08-24** (ver `09-pendencias-e-decisoes.md`):
 >
 > - **H1 é condicionada à saturação.** A Tabela 1 do próprio pré-projeto mostra 8,3% em fluxo leve; nenhuma meta única sobrevive aos quatro cenários. Meta: ≥ 25% em `moderado` e `intenso`.
+>
+> **Saturação medida, a partir do Bloco 3** (2026-08-25, ver `04` §5 e `09`): os
+> cenários operam a v/c de **0,18** (`leve`), **0,42** (`moderado`) e **0,73**
+> (`intenso`). Os dois cenários em que a meta de H1 se aplica ficam, portanto, em
+> saturação moderada e moderada-alta. Os nomes dos cenários são rótulos do ponto
+> experimental; a caracterização do regime é o v/c medido, e é ele que vai no
+> texto.
 > - **RNF01 e H3 medem coisas diferentes e coexistem.** RNF01 (< 100 ms) é a latência de *decisão* — do estado recebido à emissão do comando, software puro. H3 (< 200 ms) é a latência *fim-a-fim* — da detecção física à atuação, incluindo rede. Instrumentar as duas separadamente em `metrica_latencia`, reportando p95 e p99 de ambas.
 
 ## 6. Requisitos funcionais (do pré-projeto)
