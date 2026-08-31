@@ -268,6 +268,20 @@ Duas entregas de código, ambas antecipadas do Bloco 8:
 >   calibrar, verificar se a **métrica** não está diluindo o efeito: a média sobre
 >   a hora inteira mede uma compensação que dura ~140 s por evento.
 
+**Encaminhamento das duas, em 2026-08-31.** Registrado em `context/09`; nenhuma
+das duas está fechada.
+
+| Pendência | O que ficou decidido | O que continua aberto |
+|---|---|---|
+| **P16** | Corrigir o mecanismo **antes** de mexer em H1 — `tempo_antecipacao_margem_s` passa a consultar a fila que o motor já recebe. Reformular H1 vira contingência, com o orientador. Guardas: critério declarado antes do ajuste, parâmetros congelados antes da remedição, e **calibração em seeds fora de 1..50** | O ajuste em si e a remedição da matriz do piloto |
+| **P17** | O enunciado de H2 passa de "em até 15%" para **"em no mínimo 15%"** — a redação antiga era um teto, e sob ela a mitigação medida **cumpriria** a hipótese | **Qual é o denominador** (espera transversal × acréscimo), se a métrica dilui o efeito, e a calibração de `K` e `n_ciclos_compensacao` |
+
+> **A guarda das seeds vale explicação.** As 5 seeds do piloto são um subconjunto
+> das 50 do Bloco 8. Afinar o mecanismo olhando para elas e depois reportar o
+> resultado final sobre 1..50 contaminaria 5 das 50 execuções que validam o
+> trabalho — o modelo teria sido calibrado sobre parte da amostra que o valida.
+> Calibrar em 101..105 custa nada e mantém o Bloco 8 inteiramente fora-da-amostra.
+
 **Um defeito do próprio lote, achado e corrigido no piloto.** O `execucoes.csv`
 consolidado saiu com **64 linhas para 60 execuções**: quatro pontos exercitados
 antes num teste curto tinham deixado CSV na pasta da execução, e `gravar_csv()`
@@ -344,16 +358,37 @@ Em paralelo: diagramas PlantUML do `context/08` §5, DER via eralchemy2, relató
 
 ## Pendências que continuam abertas
 
-- **P16 e P17** (abertas pelo piloto, 2026-08-26) — **as duas bloqueiam o Bloco 8**
-  e são `DECISÃO DO GRUPO`: H1 abaixo da meta em `intenso`, e E7 sem mitigação
-  mensurável para H2. Detalhes e encaminhamentos sugeridos em `context/09`.
+> **Atualizado em 2026-08-31**, na preparação da orientação. Quatro itens ganharam
+> decisão da equipe (P16 ordem de ataque, P17 enunciado, P6 formato, H3 n = 5) e
+> quatro seguem dependendo do **orientador** — ver a tabela no topo de
+> `context/09`: **P3** (o que a banca espera por "IA") e os três itens
+> bibliográficos/metodológicos de **P11**.
+
+- **P16 e P17** (abertas pelo piloto, 2026-08-26) — **as duas seguem bloqueando o
+  Bloco 8** e continuam `DECISÃO DO GRUPO`. Em 2026-08-31 ficou decidido **tentar
+  corrigir o mecanismo antes de mexer em H1** (P16) e corrigir o **enunciado de H2
+  para `≥ 15%`** (P17); o ajuste, a remedição, o denominador de H2 e a calibração
+  de `K` continuam por fazer. Ver o quadro no Bloco 4 e `context/09`.
+- **P3** — decidida internamente (agente reativo determinístico), mas **pendente de
+  confirmação com o orientador**: a pergunta é se a banca espera aprendizado de
+  máquina. É o item de expectativa, não de engenharia.
+- **P6** — **formato fechado em 2026-08-31**: as tabelas do capítulo 5 do
+  pré-projeto migram para uma seção "Resultados esperados" na metodologia,
+  rotulada como estimativa preliminar, e o capítulo 5 passa a vir só de
+  `analysis/gerar_resultados_tcc.py`. A migração não depende do Bloco 8 e pode ser
+  feita já; o conteúdo final depende.
+- **H3** — **n definido em 2026-08-31: 5 repetições de bancada.** A evidência só
+  existe no protótipo (na simulação `t_atuacao` é o mesmo passo de `t_decisao`).
+  Com n = 5 o p95 não é estimável: reportar mín/mediana/máx com o n declarado e
+  verificar os 200 ms sobre o máximo. Fica registrada em `context/06` §6 a opção
+  de instrumentar as **100 leituras que o RNF05 já exige**, o que daria a H3 um
+  p95 real sem repetição extra.
 - **P15** — deixou de ser urgente. O piloto mediu: com `traci` e 6 processos, as
   600 execuções do Bloco 8 levariam ~6 h. Cabe na janela sem instalar `libsumo`
   pelo pip, o que enfraquece o motivo para abrir exceção à regra do `context/09`.
   Continua aberta como decisão formal, agora com o número na mão.
-- **P4, P6, P11, P12** — ações de redação no texto do TCC. O código já implementa a versão correta; falta a equipe atualizar o documento. **P6 é o maior risco acadêmico** e depende do Bloco 8.
-- **P11 deixou de bloquear execução e ganhou dois itens novos de redação** (Bloco 3): declarar que a demanda transversal é derivada do grau de saturação, e resolver o descompasso entre o nome do cenário `intenso` e sua classificação medida (v/c 0,73). A referência bibliográfica para a faixa de plausibilidade continua pendente — agora só para *conferir* um número que o experimento produz, não para *fornecê-lo*.
+- **P4, P11, P12** — ações de redação no texto do TCC. O código já implementa a versão correta; falta a equipe atualizar o documento.
+- **P11 deixou de bloquear execução e ganhou dois itens novos de redação** (Bloco 3): declarar que a demanda transversal é derivada do grau de saturação, e resolver o descompasso entre o nome do cenário `intenso` e sua classificação medida (v/c 0,73). **Este segundo ficou confirmado em 2026-08-31**: o cenário é descrito como *saturação moderada-alta (v/c ≈ 0,73)*, os fluxos e os nomes não mudam, e a tabela da metodologia traz o v/c ao lado do nome. **As três referências continuam pendentes e são pergunta para o orientador**: a faixa de plausibilidade do fluxo de saturação em via urbana, o enquadramento por grau de saturação (os cortes de 0,40 e 0,75), e a confirmação do enquadramento em fluxo interrompido.
 - ~~**P14** — ponto final de medição do RF02.~~ ✅ **Decidida em 2026-08-25:** mede da detecção até o **início da atuação**. O perfil de tempos da bancada e o ciclo de 24 s de P13 ficam inalterados, e o firmware do Bloco 5 já tem contra o que ser escrito.
 - ~~**P15** — `libsumo` no lote.~~ Ver acima: deixou de bloquear o Bloco 8.
 - **P8, P9** — resolvidas por teste de bancada no Bloco 5.
-- **P3** — decidida (agente reativo determinístico), mas **comunicar ao orientador** antes de fechar a redação dos capítulos 2 e 6.

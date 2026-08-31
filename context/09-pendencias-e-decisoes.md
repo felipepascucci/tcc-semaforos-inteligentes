@@ -6,6 +6,22 @@ Ao resolver um item, mover para a seção "Decisões tomadas" no fim do arquivo,
 
 ---
 
+## Itens que dependem do orientador · orientação de **2026-08-31**
+
+Levantados na preparação da orientação de 31/08/2026. São os únicos itens abertos
+que a equipe **não** pode fechar sozinha — os demais são trabalho de engenharia ou
+de redação.
+
+| Item | O que perguntar | Estado |
+| --- | --- | --- |
+| **P3** | A banca espera aprendizado de máquina? A caracterização como *agente reativo com otimização determinística* (Russell & Norvig) é suficiente? | **A confirmar** — decisão da equipe tomada em 2026-08-24, nunca comunicada ao orientador |
+| **P11 (1)** | Qual referência usar para a **faixa de plausibilidade** do fluxo de saturação em via urbana (autor, edição, ano, capítulo) | **A confirmar** — candidatas: Boletins Técnicos da CET-SP, Manual de Estudos de Tráfego do DNIT, HCM |
+| **P11 (2)** | Qual referência sustenta o **enquadramento por grau de saturação** — os cortes de v/c em 0,40 e 0,75 | **A confirmar** |
+| **P11 (3)** | Confirmar o enquadramento em **fluxo interrompido** (arterial semaforizada), e não ininterrupto (rodovia) | **A confirmar** — o erro de régua reclassificaria o `intenso` e derrubaria a formulação de H1 |
+| **P16** | *Só se a correção do mecanismo não levantar o número:* reformular H1 declarando a faixa de v/c em que a meta vale, ou reportar resultado parcial negativo | **Contingência** — a equipe tenta corrigir o mecanismo primeiro (ver P16) |
+
+---
+
 ## P4 — Tabelas novas no banco precisam entrar no texto · `AÇÃO DA EQUIPE`
 
 `03-banco-de-dados.md` adiciona: `fase_semaforo`, `tag_rfid`, `dispositivo_iot`, `deteccao`, `execucao_simulacao`, `estado_semaforo_amostra`, `metrica_latencia`, `metrica_via_transversal`.
@@ -28,6 +44,21 @@ Ver `07-resultados-e-analise.md` §1. As tabelas 1 e 2, as 1.250 intervenções,
 **Encaminhamento:** enquanto os dados reais não existirem, mover essas tabelas para uma seção "Resultados esperados" dentro da metodologia, claramente rotulada como estimativa. O capítulo 5 passa a ser preenchido pela saída de `analysis/gerar_resultados_tcc.py`.
 
 **Este é o item de maior risco acadêmico do projeto.** Resolver cedo.
+
+### Decisão da equipe, 2026-08-31 · **formato fechado; a redação continua ABERTA**
+
+**O encaminhamento acima fica confirmado como o formato oficial.** As tabelas do
+capítulo 5 do pré-projeto (420/385 s, 680/510 s, 950/665 s, latências de 42/68/94
+ms, 1.250 intervenções em 120 h, "100% de uptime") migram para uma seção
+**"Resultados esperados"** dentro da metodologia, rotulada explicitamente como
+**estimativa preliminar do pré-projeto**, e o capítulo 5 passa a ser inteiramente
+preenchido pela saída de `analysis/gerar_resultados_tcc.py`.
+
+O que resta é execução de redação, e ela **depende do Bloco 8** para o conteúdo
+final — mas a migração das tabelas para a metodologia **não depende**, e pode ser
+feita já. Fazê-la agora elimina o risco de um número não medido sobreviver por
+esquecimento até a versão entregue, que é exatamente como esse tipo de erro chega
+à banca.
 
 ---
 
@@ -169,6 +200,22 @@ nomes dos cenários; o que muda é a caracterização, que passa a ser a medida.
 > a tabela sai, e a citação entra depois como validação. **P11 continua aberta**,
 > mas passou de bloqueio de execução a pendência de redação.
 
+### Estado em 2026-08-31 · **item continua ABERTO**
+
+Os itens **1, 2 e 3** foram levados à orientação de 31/08/2026 e estão na tabela
+de itens que dependem do orientador, no topo deste arquivo: a referência para a
+faixa de plausibilidade, a referência para o enquadramento por grau de saturação,
+e a confirmação do enquadramento em fluxo interrompido. São os três que a equipe
+não fecha sozinha.
+
+O item **4 fica confirmado pela equipe**: o cenário `intenso` é descrito no texto
+como **saturação moderada-alta (v/c ≈ 0,73)**, os fluxos e os nomes dos cenários
+não mudam, e a tabela da metodologia traz o v/c medido ao lado do nome. Isso
+reafirma, sem alterar, a decisão de 2026-08-25.
+
+Os itens **5 e 6** seguem como redação pendente da equipe, sem dependência
+externa.
+
 ---
 
 ## P15 — `libsumo` para Python não vem com o SUMO no Windows · `DECISÃO DO GRUPO — Bloco 8`
@@ -286,6 +333,42 @@ primeiro, e reformular só se o teto for real, é a ordem defensável na arguiç
 bloqueante para o **Bloco 8**: rodar as 600 execuções antes de decidir significa
 rodá-las de novo depois.
 
+### Decisão da equipe, 2026-08-31 · **item continua ABERTO até a remedição**
+
+**Adotada a opção 3, começando pela 1: corrigir o mecanismo primeiro.** A
+reformulação de H1 fica como contingência, acionada só se a correção não levantar
+o número — e, nesse caso, com conversa com o orientador (ver a tabela de itens que
+dependem dele, no topo deste arquivo).
+
+**A hipótese de trabalho a atacar** é a que o piloto sustenta:
+`tempo_antecipacao_margem_s` é fixo em 5 s e não consulta a fila, que o motor já
+recebe em `EstadoSemaforo.fila_por_acesso`. Em regime saturado o corredor abre a
+tempo mas não **esvazia** a tempo, e o VE chega ao verde com veículos parados
+adiante — é o que as paradas residuais mostram (2,76 no `intenso` contra 0,76 no
+`moderado`).
+
+**Três guardas metodológicas, fixadas antes de mexer no código:**
+
+1. **Critério declarado antes do ajuste**, como no precedente do `tau`
+   (2026-08-25): escrever qual é o problema, qual é a mudança e qual o resultado
+   esperado **antes** de medir o resultado. O valor que vale para o TCC é o medido
+   depois, nunca o alvo.
+2. **Regra de parada.** O conjunto de parâmetros é congelado antes da remedição, e
+   a remedição roda a matriz inteira do piloto. Varrer parâmetros até um deles
+   passar de 25% é ajustar a régua com passos pequenos — é o mesmo defeito, só
+   mais difícil de enxergar.
+3. **Calibrar fora das seeds do Bloco 8.** As seeds do piloto (1..5) são um
+   subconjunto das 50 do Bloco 8. Ajustar o mecanismo olhando para elas e depois
+   reportar o resultado final sobre 1..50 contamina 5 das 50 — o modelo teria sido
+   afinado sobre parte da amostra que o valida. **A calibração deve usar seeds
+   fora do intervalo 1..50** (por exemplo 101..105), e a remedição de aceitação,
+   as seeds do piloto. Custa nada e torna as 600 execuções inteiramente
+   fora-da-amostra. `AÇÃO DA EQUIPE — confirmar antes de começar.`
+
+**Se, depois da correção, o `intenso` continuar abaixo de 25%:** vale a opção 2
+(reformular H1 declarando a faixa), e aí a tentativa registrada é o que torna a
+reformulação defensável em vez de oportunista.
+
 ---
 
 ## P17 — E7 não entrega a mitigação de H2 · `DECISÃO DO GRUPO — ANTES DO BLOCO 8`
@@ -301,7 +384,9 @@ transversais é indistinguível de zero, e negativo em dois cenários:
 | `intenso` | 16,35 s | 20,37 s | 20,57 s | +24,6% | **-1,0%** |
 | `multiplas_emergencias` | 15,23 s | 17,63 s | 17,61 s | +15,7% | +0,1% |
 
-Meta de H2: mitigar **em até 15%**. Medido: entre −1,0% e +0,6%.
+Meta de H2: mitigar **em no mínimo 15%** (enunciado corrigido em 2026-08-31, ver
+abaixo; o piloto foi gerado sob a redação antiga, "em até 15%"). Medido: entre
+−1,0% e +0,6%.
 
 **O custo que H2 existe para mitigar é real e está medido** (+18,6% no
 `moderado`, +24,6% no `intenso`) — o que falta é a mitigação.
@@ -331,6 +416,49 @@ duas leituras, e elas divergem: fração da **espera transversal** (o que a colu
 *Mitigação do acréscimo*). O relatório do piloto imprime as duas de propósito.
 **Qual vale precisa ser declarado no texto antes do Bloco 8** — escolher depois
 de ver qual dá o número melhor é o oposto de método.
+
+### Decisão parcial da equipe, 2026-08-31 · **item continua ABERTO**
+
+**Resolvido: o enunciado de H2 passa de "em até 15%" para "em no mínimo 15%"
+(≥ 15%).** A redação antiga não enunciava meta nenhuma: "mitigar em **até** 15%" é
+um teto, e sob ele os −1,0% a +0,6% medidos no piloto **cumpririam** a hipótese
+literalmente, o que a esvazia. `≥ 15%` é a leitura que a equipe sempre teve em
+mente, é simétrica com a de H1 (`≥ 25%`) e é a única sob a qual H2 pode ser
+rejeitada — hipótese que não pode falhar não é hipótese. Propagado para
+`00-visao-geral.md` §5, `07-resultados-e-analise.md` T6 (que trazia `≤ 15%`, o
+inverso do pretendido) e a docstring de `core/priorizacao/compensacao.py`.
+
+**Continua aberto: qual é o denominador.** Trocar "até" por "no mínimo" fixa o
+sentido da desigualdade, não a grandeza sobre a qual os 15% incidem. As duas
+leituras seguem de pé e continuam divergindo:
+
+| Leitura | Fórmula | Medido no piloto (`moderado`) |
+| --- | --- | ---: |
+| Fração da **espera transversal** | `(preempcao − compensada) / preempcao` | +0,6% |
+| Fração do **acréscimo** causado pela preempção | `(preempcao − compensada) / (preempcao − fixo)` | +3,7% |
+
+**Recomendação da leitura, para a equipe confirmar: a segunda.** O enunciado diz
+"mitigar o **impacto negativo** nas vias transversais", e o impacto negativo *é* o
+acréscimo — a espera que existiria sem preempção nenhuma não é impacto do sistema
+e não cabe a E7 mitigar. Sob a primeira leitura, um cenário com espera de base
+alta tornaria a meta aritmeticamente inalcançável mesmo com E7 devolvendo o
+acréscimo inteiro.
+
+**Declarar agora não é escolher pelo resultado**, e é importante que isso fique
+registrado: **nenhuma das duas leituras atinge os 15%** no piloto (+0,6% contra
++3,7% no `moderado`; ambas negativas no `intenso`). A escolha não salva o número,
+então fazê-la antes de calibrar `K` é gratuito do ponto de vista metodológico — e
+depois da calibração deixaria de ser.
+
+**Ressalva sobre o `leve`.** A leitura pelo acréscimo é instável quando o
+acréscimo é próximo de zero ou negativo: no `leve` o custo medido é −1,6% e a
+"mitigação do acréscimo" sai como +44,2%, número sem significado. O texto precisa
+declarar que a métrica de H2 só se aplica onde a preempção **de fato** custa
+alguma coisa — o que é coerente com H2 existir para mitigar um custo.
+
+**Continua aberto também: a métrica pode estar diluindo o efeito** (causa 2 acima)
+e `K`/`n_ciclos_compensacao` seguem sem calibração. Verificar a métrica **antes**
+de calibrar, pela razão já registrada.
 
 > O `08` §2 é explícito: cortar E7 obriga a **tirar H2 do trabalho**, não a
 > deixá-la sem sustentação. Se a calibração não levantar o número, a decisão
@@ -383,3 +511,7 @@ de ver qual dá o número melhor é o oposto de método.
 | 2026-08-26 | **O lote recusa consolidar um ponto que já tem linhas no CSV** | Antes de rodar qualquer coisa, `rodar()` confere se algum ponto da matriz já aparece em `execucoes.csv` e falha com `PontoJaConsolidadoError`. `--repetir MOTIVO` é a autorização explícita: apaga a evidência anterior do CSV **e** do banco, e registra a remoção. | O banco já tinha essa proteção (restrição única em cenário/modo/seed); o CSV não tinha nenhuma — ele simplesmente acrescenta. A assimetria é perigosa porque o CSV é o que alimenta o capítulo 5: uma linha duplicada não falha alto, ela vira **uma seed com peso dobrado na média**. A checagem vem antes das execuções porque descobrir a duplicata na consolidação significaria descobri-la depois de horas de máquina gastas. |
 | 2026-08-26 | **Cada execução do lote limpa os CSV da própria pasta antes de rodar** (defeito achado no piloto) | `_limpar_csv_da_pasta()` apaga os quatro CSV da pasta da execução antes de executá-la. | **Não é hipótese: aconteceu.** Quatro pontos tinham sido exercitados num teste curto (400 s) antes do piloto, e `gravar_csv()` **acrescenta** — comportamento certo para o arquivo consolidado, errado para a pasta de uma execução. O `execucoes.csv` do piloto saiu com **64 linhas para 60 execuções**, com as quatro sobras carregando a duração errada. Só apareceu porque a contagem foi conferida; a média não teria denunciado nada. Os quatro pontos foram reexecutados com `--repetir` e o descarte está em `descartes.csv`. Coberto por teste de regressão. |
 | 2026-08-24 | **Cliente TraCI não vem do pip** (Bloco 0) | O `pyproject.toml` **não** declara extra `sim`. `traci` e `libsumo` são importados de `%SUMO_HOME%/tools`, acrescentado ao `sys.path` pelo `conftest.py` da raiz. | Instalar `traci` pelo pip cria uma segunda cópia do cliente, que pode divergir da versão do binário instalado. A divergência não falha alto: ela aparece como comportamento sutilmente diferente do TraCI, que é a classe de bug mais cara de diagnosticar neste projeto. Usar o cliente que acompanha o binário elimina a classe inteira. |
+| 2026-08-31 | **Enunciado de H2 passa a ser `≥ 15%`** (encaminhamento parcial de **P17**) | "Mitigar em **até** 15% o impacto negativo" vira "mitigar em **no mínimo** 15%". Propagado para `00` §5, `07` T6 (que trazia `≤ 15%`) e a docstring de `core/priorizacao/compensacao.py`. **O denominador continua aberto** — ver P17. | A redação antiga era um teto, não uma meta: sob ela, os −1,0% a +0,6% medidos no piloto **cumpririam** H2 literalmente. Hipótese que não pode falhar não é hipótese, e a banca não precisaria de muito para achar isso. `≥ 15%` é o que a equipe sempre quis dizer, é simétrico com H1 (`≥ 25%`) e é a única forma sob a qual H2 pode ser rejeitada. |
+| 2026-08-31 | **P16 — corrigir o mecanismo antes de mexer em H1** | Adotada a opção 3 começando pela 1: ajustar `tempo_antecipacao_margem_s` para consultar a fila que o motor já recebe, remedir a matriz do piloto e só então avaliar se H1 precisa ser reformulada. Reformulação vira contingência, com o orientador. Três guardas fixadas antes do código: critério declarado antes do ajuste, congelamento dos parâmetros antes da remedição, e **calibração em seeds fora de 1..50**. | Reformular a hipótese sem tentar corrigir o mecanismo é ajustar a régua ao resultado, o que o `CLAUDE.md` proíbe; tentar primeiro e reformular só se o teto for real é a ordem defensável na arguição. A guarda das seeds resolve um problema que passaria despercebido: 1..5 é subconjunto de 1..50, e afinar o modelo sobre elas contaminaria 5 das 50 execuções que validam o resultado final. Calibrar em 101..105 custa nada e torna o Bloco 8 inteiramente fora-da-amostra. |
+| 2026-08-31 | **P6 — formato dos números do capítulo 5 confirmado** | As tabelas do capítulo 5 do pré-projeto migram para uma seção **"Resultados esperados"** dentro da metodologia, rotulada como estimativa preliminar; o capítulo 5 passa a ser preenchido só pela saída de `analysis/gerar_resultados_tcc.py`. A migração **não** depende do Bloco 8 e pode ser feita já. | É o item de maior risco acadêmico do projeto (`07` §1). Separar fisicamente estimativa de medição, no documento, é o que impede um número não medido de sobreviver por esquecimento até a versão entregue — que é exatamente como esse erro chega à banca. |
+| 2026-08-31 | **H3 — 5 repetições de bancada** | A evidência de H3 (latência fim-a-fim < 200 ms) vem do protótipo, com **5 repetições** roteirizadas no checklist de aceitação. **Com n = 5 o p95 não é estimável** — o critério passa a ser reportado como **mín / mediana / máx das 5, com o n declarado**, e o limiar de 200 ms verificado sobre o **máximo observado**. | A simulação não tem atuação física: `t_atuacao` é o mesmo passo de `t_decisao`, então o número de H3 só existe na bancada. 5 repetições é o que cabe no roteiro manual. A ressalva do n é obrigatória: chamar de "p95" o percentil de 5 amostras é, na prática, reportar o máximo com nome de percentil, e é o tipo de imprecisão que a banca pega. **Ver a observação sobre aproveitar as 100 leituras do RNF05** (`06` §2) — se a instrumentação de latência entrar nelas, H3 ganha um p95 de verdade sem repetição extra. |

@@ -28,7 +28,7 @@ Cada RF/RNF vira pelo menos um teste automatizado. Esta tabela é a rastreabilid
 | RF06 | Posição do VE é publicada a ≥ 1 Hz | Intervalo entre eventos ≤ 1 s | `test_ws.py` |
 | RF07 | Mudança de rota do VE recalcula os TLS-alvo | Novo conjunto de TLS após reroute | `test_recalculo.py` |
 | RNF01 | p95 de `latencia_decisao_ms` < 100 ms em 10.000 chamadas | Percentil, não média. **Latência de decisão** — só `motor.avaliar()`, sem I/O (decisão P2) | `test_desempenho.py` |
-| H3 | p95 de `latencia_total_ms` (t_deteccao→t_atuacao) < 200 ms | **Latência fim-a-fim**, inclui rede e atuação. Medida no fluxo de hardware e no e2e | `test_e2e_preempcao.py` |
+| H3 | `latencia_total_ms` (t_deteccao→t_atuacao) < 200 ms em **5 repetições de bancada** | **Latência fim-a-fim**, inclui rede e atuação. Medida no fluxo de hardware e no e2e. Com n = 5 o p95 **não é estimável**: reportar mín/mediana/máx com o n declarado e verificar o limiar sobre o **máximo observado** (decisão de 2026-08-31) | `test_e2e_preempcao.py` + checklist HW |
 | RNF02 | Sistema opera 60 min contínuos sem vazamento de memória | RSS estável ± 10% | `test_soak.py` |
 | RNF03 | Motor processa malha de 32 TLS mantendo p95 < 100 ms | Escala linear ou melhor | `test_desempenho.py` |
 | RNF04 | POST sem `X-Device-Token` válido → 401; UID não cadastrado → 403 | Códigos corretos | `test_seguranca.py` |
@@ -147,13 +147,14 @@ Executar e registrar antes da apresentação. Marcar data, executor e resultado.
 
 | # | Verificação | OK |
 | --- | --- | --- |
-| 1 | Ciclo fixo alterna corretamente as 2 fases por 5 min sem travar | ☐ |
-| 2 | Nenhuma combinação com verdes conflitantes em 5 min de observação | ☐ |
+| 1 | Ciclo fixo alterna corretamente as **4 fases** (ciclo de 24 s, decisão P13) por 5 min sem travar | ☐ |
+| 2 | Nenhuma combinação com verdes conflitantes em 5 min de observação — sob *split phasing* I1 é `contar_verdes() <= 1` | ☐ |
 | 3 | Toda transição verde→vermelho passa por amarelo | ☐ |
 | 4 | Tag da ambulância reconhecida em 100 aproximações (≥ 95 sucessos) | ☐ |
 | 5 | Tag não cadastrada gera negação e não preempta | ☐ |
 | 6 | LCD atualiza em < 1 s após a leitura | ☐ |
 | 7 | Preempção ocorre em < 3 s da leitura da tag | ☐ |
+| 7b | **H3** — `latencia_total_ms` < 200 ms em **5 repetições**, com mín/mediana/máx registrados | ☐ |
 | 8 | Dashboard mostra o evento em tempo real | ☐ |
 | 9 | Log gravado no PostgreSQL com `id_correlacao` completo | ☐ |
 | 10 | Desconexão do USB → retorno ao ciclo fixo em < 3 s | ☐ |
@@ -162,6 +163,16 @@ Executar e registrar antes da apresentação. Marcar data, executor e resultado.
 | 13 | Nenhum LED com brilho anômalo ou aquecimento perceptível | ☐ |
 
 Item 12 é o que pega: sketches com `String` travam depois de ~20 min. Rodar esse teste **antes** do dia da apresentação, não no dia.
+
+> **Observação sobre o n de H3 (2026-08-31), a decidir no Bloco 5.** O item 7b
+> pede 5 repetições, e 5 amostras não sustentam um percentil — o "p95" de cinco
+> valores é o máximo com nome de percentil. Mas o **item 4 já exige 100
+> aproximações de tag** para o RNF05. Se o firmware carimbar `t_deteccao` e
+> `t_atuacao` nessas mesmas 100 leituras, H3 ganha um **p95 de verdade sem uma
+> única repetição extra** — é instrumentação, não experimento novo. As 5
+> repetições do item 7b ficam então como verificação roteirizada, e as 100 como a
+> amostra que vai para T2 e F2. `DECISÃO DO GRUPO — avaliar ao escrever o firmware
+> do Bloco 5.`
 
 ## 7. Estratégia de dados de teste
 

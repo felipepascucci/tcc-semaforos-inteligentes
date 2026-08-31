@@ -45,8 +45,8 @@ Ambas são controladas pelo **mesmo motor de decisão** (`backend/core/priorizac
 | ID | Hipótese | Como será testada |
 | --- | --- | --- |
 | H1 | A fusão radar + V2I reduz em **no mínimo 25%** o tempo total de travessia do VE, em cenários de saturação **moderada a intensa**, em relação à temporização estática | Comparação pareada por seed, baseline vs. proposto. O cenário `leve` é medido e discutido, mas **sem meta numérica** |
-| H2 | É possível mitigar em até **15%** o impacto negativo nas vias transversais com compensação dinâmica de ciclo pós-evento | Três braços: baseline / preempção sem compensação / preempção com compensação |
-| H3 | A infraestrutura em borda sustenta latência operacional **fim-a-fim inferior a 200 ms** | Instrumentação `t_deteccao → t_decisao → t_atuacao` na simulação e no protótipo |
+| H2 | É possível mitigar em **no mínimo 15%** o impacto negativo nas vias transversais com compensação dinâmica de ciclo pós-evento | Três braços: baseline / preempção sem compensação / preempção com compensação |
+| H3 | A infraestrutura em borda sustenta latência operacional **fim-a-fim inferior a 200 ms** | Instrumentação `t_deteccao → t_decisao → t_atuacao`, medida no **protótipo**, com **5 repetições** roteirizadas no checklist |
 
 > **Decisões P1 e P2 tomadas em 2026-08-24** (ver `09-pendencias-e-decisoes.md`):
 >
@@ -59,6 +59,23 @@ Ambas são controladas pelo **mesmo motor de decisão** (`backend/core/priorizac
 > experimental; a caracterização do regime é o v/c medido, e é ele que vai no
 > texto.
 > - **RNF01 e H3 medem coisas diferentes e coexistem.** RNF01 (< 100 ms) é a latência de *decisão* — do estado recebido à emissão do comando, software puro. H3 (< 200 ms) é a latência *fim-a-fim* — da detecção física à atuação, incluindo rede. Instrumentar as duas separadamente em `metrica_latencia`, reportando p95 e p99 de ambas.
+
+> **Decisões de 2026-08-31** (ver `09-pendencias-e-decisoes.md`):
+>
+> - **H2 passa de "em até 15%" para "em no mínimo 15%".** A redação antiga era um
+>   teto, não uma meta: sob ela, a mitigação de −1,0% a +0,6% medida no piloto do
+>   Bloco 4 **cumpriria** a hipótese literalmente. `≥ 15%` é simétrico com H1 e é a
+>   única leitura sob a qual H2 pode ser rejeitada. **Continua em aberto o
+>   denominador** — se os 15% incidem sobre a espera transversal ou sobre o
+>   *acréscimo* que a preempção causou (pendência P17, com recomendação registrada).
+> - **A evidência de H3 vem do protótipo, com 5 repetições.** Na simulação
+>   `t_atuacao` é o mesmo passo de `t_decisao` — não há atuação física a
+>   cronometrar —, então o número de H3 só existe na bancada. Com **n = 5 o p95
+>   não é estimável**: reportar mín/mediana/máx com o n declarado, e verificar os
+>   200 ms sobre o máximo observado.
+> - **A meta de H1 no cenário `intenso` não foi atingida no piloto** (18,1% contra
+>   25%). A equipe decidiu **corrigir o mecanismo antes de mexer na hipótese**;
+>   reformular H1 é contingência, e passa pelo orientador. Ver P16.
 
 ## 6. Requisitos funcionais (do pré-projeto)
 

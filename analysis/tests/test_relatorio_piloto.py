@@ -172,11 +172,13 @@ def test_atinge_meta_no_limiar_dos_25_por_cento() -> None:
 
 
 def test_h2_separa_custo_de_mitigacao() -> None:
-    """As duas leituras de "mitigar em até 15%" dão números diferentes.
+    """As duas leituras de "mitigar em no mínimo 15%" dão números diferentes.
 
     Sobre a espera transversal: (20 - 17) / 20 = 15%. Sobre o **acréscimo** que a
-    preempção causou: (20 - 17) / (20 - 10) = 30%. Qual vale é ação de redação, e
-    o relatório imprime as duas justamente para que a escolha seja consciente.
+    preempção causou: (20 - 17) / (20 - 10) = 30%. Qual vale é ação de redação
+    (P17), e o relatório imprime as duas justamente para que a escolha seja
+    consciente. A correção de 2026-08-31 fixou o sentido da desigualdade
+    (`≥ 15%`, não `até 15%`); o denominador continua em aberto.
     """
     execucoes = [
         _execucao("FIXO", tempo_espera_medio_transversal_s=10.0),
