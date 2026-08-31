@@ -211,6 +211,133 @@ exceção à regra de não instalar cliente pelo pip.
 `traci`; o caminho `libsumo` está implementado e falha com mensagem que explica
 exatamente isto.
 
+### Medição do Bloco 4 (2026-08-26) · **item continua ABERTO, mas sem urgência**
+
+A opção 3 ("medir antes de decidir") saiu de graça: o piloto do Bloco 4 são 60
+execuções de 3.600 s, e rodá-las **é** a medição.
+
+| Cenário | Tempo de parede por execução (`traci`, 1 processo) |
+| --- | --- |
+| `leve` | ~1 min |
+| `moderado` | ~2 min |
+| `intenso` | ~4 min |
+
+Com `--paralelo 6` em 8 núcleos físicos, as **60 execuções levaram ~35 min**.
+Extrapolando para a matriz do Bloco 8 — que tem a mesma proporção de cenários —,
+as **600 levariam ~6 h**: uma noite de máquina.
+
+**Consequência para a decisão.** A opção 2 (rodar com `traci` e paralelismo de
+processos) **cabe na janela de tempo disponível**. O ganho que o `libsumo`
+traria deixa de ser a diferença entre viável e inviável, e passa a ser
+conveniência — o que enfraquece bastante o argumento para abrir exceção à regra
+de não instalar cliente do SUMO pelo pip. Some-se a razão já registrada: o
+adaptador lê o estado por assinaturas, ~4 chamadas de IPC por passo, e é
+justamente o IPC que o `libsumo` elimina.
+
+**Recomendação atualizada: opção 2.** Manter `--libsumo` implementado e
+exercitável, para o caso de a máquina de execução mudar, e não instalar o pacote.
+Formalizar a escolha antes do Bloco 8.
+
+---
+
+## P16 — H1 não atinge a meta em `intenso` · `DECISÃO DO GRUPO — ANTES DO BLOCO 8`
+
+Achado do **piloto do Bloco 4** (2026-08-26, 60 execuções de 3.600 s, 5 seeds ×
+4 cenários × 3 modos). Números em `docs/relatorios/piloto_20260826.md`, gerados
+por `python -m analysis.relatorio_piloto` a partir de `analysis/data/`.
+
+| Cenário | Regime medido | Redução da travessia do VE | Meta ≥ 25% |
+| --- | --- | ---: | :---: |
+| `leve` | v/c 0,18 | 39,0% | sem meta |
+| `moderado` | v/c 0,42 | **31,7%** | atinge |
+| `intenso` | v/c 0,73 | **18,1%** | **não atinge** |
+| `multiplas_emergencias` | v/c 0,42, 2 VEs | 24,6% | sem meta |
+
+**É exatamente o risco que o Bloco 4 foi antecipado para expor** — o `08` §6
+chama "resultados reais não confirmam H1" de risco mais subestimado do projeto —
+e ele apareceu com meses de margem, não na última semana.
+
+**O que o dado diz.** A dispersão entre as seeds do `intenso` é grande: 13,0% na
+pior, 25,1% na melhor. Não é um teto do método; é dependência do tráfego
+encontrado. As paradas do VE contam a mesma história: caem de 6,28 para 2,76 no
+`intenso` (contra 5,68 → 0,76 no `moderado`), ou seja, **o corredor verde não se
+fecha por inteiro quando a fila à frente não dissipa a tempo**. O VE alcança o
+cruzamento com verde e ainda assim para, porque há veículos parados adiante.
+
+**As saídas, para a equipe decidir:**
+
+1. **Ajustar o modelo.** Antecipar mais a preempção em regime saturado —
+   `tempo_antecipacao_margem_s` é fixo em 5 s e não depende da fila medida, que o
+   motor já recebe em `EstadoSemaforo.fila_por_acesso`. É trabalho de engenharia,
+   cabe no prazo, e tem a vantagem de atacar a causa. Exige remedir.
+2. **Reformular H1 declarando a faixa em que a meta vale.** A decisão P1 já
+   condicionou a meta à saturação; esta seria a mesma manobra, um degrau mais
+   fina — e o `intenso` mede v/c 0,73, que a própria classificação põe em
+   `moderado`. Custa uma conversa com o **Prof. Marco Gomes** e a reescrita da
+   hipótese.
+3. **As duas.** Ajustar o modelo primeiro, remedir, e só então decidir se a
+   formulação precisa mudar.
+
+**Recomendação: 3.** Reformular a hipótese sem antes tentar corrigir o mecanismo
+seria ajustar a régua ao resultado, que é o que o `CLAUDE.md` proíbe. Tentar
+primeiro, e reformular só se o teto for real, é a ordem defensável na arguição.
+
+**Não é bloqueante para o Bloco 5** (camada IoT), que não depende disto. É
+bloqueante para o **Bloco 8**: rodar as 600 execuções antes de decidir significa
+rodá-las de novo depois.
+
+---
+
+## P17 — E7 não entrega a mitigação de H2 · `DECISÃO DO GRUPO — ANTES DO BLOCO 8`
+
+Mesmo piloto. A compensação **roda** — o defeito de no-op foi corrigido no
+Bloco 3 e tem teste de regressão —, mas o efeito medido sobre a espera das vias
+transversais é indistinguível de zero, e negativo em dois cenários:
+
+| Cenário | Espera `FIXO` | `PREEMPCAO` | `PREEMPCAO_COMPENSADA` | Custo | Mitigação |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `leve` | 18,91 s | 18,60 s | 18,74 s | -1,6% | -0,7% |
+| `moderado` | 15,24 s | 18,08 s | 17,97 s | +18,6% | +0,6% |
+| `intenso` | 16,35 s | 20,37 s | 20,57 s | +24,6% | **-1,0%** |
+| `multiplas_emergencias` | 15,23 s | 17,63 s | 17,61 s | +15,7% | +0,1% |
+
+Meta de H2: mitigar **em até 15%**. Medido: entre −1,0% e +0,6%.
+
+**O custo que H2 existe para mitigar é real e está medido** (+18,6% no
+`moderado`, +24,6% no `intenso`) — o que falta é a mitigação.
+
+**Duas causas prováveis, nenhuma verificada ainda:**
+
+1. **`ganho_compensacao_k` (0,7) e `n_ciclos_compensacao` (2) nunca foram
+   calibrados contra dado real.** O `01` §5.3 os declara como ponto de partida
+   ("começar em K = 0.7"), e ponto de partida foi o que ficou. Dois ciclos de 70 s
+   são 140 s de compensação para uma preempção que trava a transversal por
+   dezenas de segundos — pode simplesmente ser curto demais.
+2. **A métrica pode estar diluindo o efeito.** `tempo_espera_medio_transversal_s`
+   é a média sobre **todos** os veículos transversais da hora inteira, e a
+   compensação atua nos ~140 s seguintes a cada evento. Com um VE a cada 10 min,
+   o sinal fica sobre uma fração pequena da amostra. Medir a espera **na janela
+   de compensação**, ou a fila máxima por acesso (que os detectores E2 já
+   coletam e o coletor já acumula), poderia mostrar um efeito que a média
+   esconde.
+
+**Encaminhamento sugerido, nesta ordem:** verificar (2) antes de mexer em (1) —
+se a métrica estiver diluindo, calibrar `K` contra ela seria calibrar contra
+ruído. Só depois varrer `K` e `n_ciclos_compensacao`.
+
+**E há um item de redação junto.** "Mitigar em até 15% o impacto negativo" admite
+duas leituras, e elas divergem: fração da **espera transversal** (o que a coluna
+*Mitigação* mede) ou fração do **acréscimo** que a preempção causou (a coluna
+*Mitigação do acréscimo*). O relatório do piloto imprime as duas de propósito.
+**Qual vale precisa ser declarado no texto antes do Bloco 8** — escolher depois
+de ver qual dá o número melhor é o oposto de método.
+
+> O `08` §2 é explícito: cortar E7 obriga a **tirar H2 do trabalho**, não a
+> deixá-la sem sustentação. Se a calibração não levantar o número, a decisão
+> honesta é reportar o custo transversal medido e declarar que a compensação
+> proposta não o mitigou de forma mensurável neste experimento — o que é um
+> resultado, não um fracasso, desde que dito assim.
+
 ---
 
 ## P12 — Ordem das sprints alterada · `REGISTRO`
@@ -247,4 +374,12 @@ exatamente isto.
 | 2026-08-25 | **Tráfego de fundo é passante, sem conversões** (Bloco 3) | Todo veículo de fundo entra por uma fronteira e sai pela oposta, em linha reta. As únicas conversões do experimento são as duas do VE. | Além da simplicidade, há razão metodológica: sem conversões o fluxo de cada aproximação é exatamente o fluxo declarado do cenário, e o v/c **derivado** e o **medido** passam a medir a mesma coisa — que é o que a verificação de `04` §12 item 4 confronta. Com conversões, a demanda se redistribuiria segundo uma matriz origem-destino que o pré-projeto não fornece, e inventá-la cairia na armadilha que P11 existe para evitar. **Limitação a declarar no texto:** as conversões permissivas à esquerda existem na rede mas não são exercitadas pelo tráfego de fundo. |
 | 2026-08-25 | **`queue.xml` sai do padrão; `summary` agregado a 60 s** (Bloco 3) | O SUMO grava `queue` e `summary` a cada passo. Com passo de 0,1 s, a primeira execução completa (3.600 s) produziu **77 MB de `queue.xml`** e 10 MB de `summary.xml`. `queue-output` passa a ser opcional (`--saida-detalhada`) e `summary` passa a agregar a cada 60 s. | Nas 600 execuções do Bloco 8 seriam ~46 GB só de fila, num disco de estudante — e para um dado **redundante**: os detectores E2 já medem fila com agregação de 300 s, e o coletor já acumula a fila máxima por aproximação em memória. É a mesma aritmética de P5 e da latência detalhada: volume bruto não é gratuito, e o que sustenta as hipóteses são os agregados. A saída bruta por execução caiu de ~88 MB para ~1,5 MB. Só apareceu ao rodar a primeira execução de 3.600 s de ponta a ponta — as de verificação, mais curtas, não davam a escala do problema. |
 | 2026-08-25 | **`latencias.csv` detalhado só em execução exemplar** (Bloco 3) | Uma linha por decisão apenas nas execuções marcadas como exemplares; as demais gravam só os percentis, em `execucoes.csv`. | Mesma aritmética que levou à decisão P5: são 36.000 decisões por execução, o que daria mais de 20 milhões de linhas nas 600 do Bloco 8. Os percentis — que são o que RNF01 e H3 exigem (`04` §9.3) — vão em toda execução. |
+| 2026-08-26 | **`latencias.csv` deixa de ser versionado** | Acrescentado ao `.gitignore`. É o **único** CSV de `analysis/data/` fora do controle de versão; `execucoes.csv`, `ve_por_execucao.csv`, `transversal_por_execucao.csv`, `descartes.csv` e os dois da calibração continuam versionados. | São 13 MB (~1,3 MB comprimidos) mesmo já restrito às execuções exemplares por P5, e o lote **reescreve o arquivo inteiro** a cada corrida — cada reexecução acrescentaria esse peso à história do repositório para sempre, e P16/P17 garantem várias. O que sustenta o texto do TCC são os **percentis** (mín, média, p95, p99, máx), que estão em `execucoes.csv` de toda execução e continuam versionados. O único consumidor do detalhe é a figura **F2** (`07` §5), regenerável rodando as exemplares de novo. **Ressalva registrada:** latência é a única grandeza do experimento que não é reprodutível a partir da seed — é relógio de parede, depende da máquina e da carga —, então regerar F2 dá distribuição equivalente, não idêntica. Se o Bloco 9 precisar de F2 estável entre gerações, a saída é versionar um resumo por quantis (~1.000 linhas por exemplar) em vez das 36.000 amostras. |
+| 2026-08-26 | **Removida a linha `leve/PREEMPCAO/seed=42` de `execucao_simulacao`** | Sobra de uma execução de verificação do Bloco 3 (700 s, versão `c8cc3c7`, 477 transições), apagada com as transições em cascata. O banco fica com **60 execuções e 12 exemplares**, um por par cenário x modo. | A linha estava marcada `exemplar`, o que dava **dois** exemplares para o par `leve`/`PREEMPCAO` e violava a decisão P5 — a regra que limita o volume de `estado_semaforo_amostra` e define quais execuções alimentam as figuras do capítulo 5. Não é dado experimental: não pertence a nenhuma matriz (a seed 42 está fora de 1..50), foi produzida por versão anterior do código e com duração fora do protocolo, e não aparece em nenhum CSV de `analysis/data/`. Apagá-la não altera número nenhum do piloto; deixá-la faria o Bloco 8 escolher entre dois exemplares para o mesmo par. |
+| 2026-08-26 | **Lote antecipado do Bloco 8 para o Bloco 4** | `sim/controlador/lote.py` foi escrito no Bloco 4, com a CLI que o `04` §7 já especificava. O que muda entre o piloto e o lote completo é o valor de `--seeds` (`1..5` contra `1..50`), e mais nada. | O piloto são 60 execuções de 3.600 s — número que não se roda à mão, e cujo resultado precisa ser tão reprodutível quanto o das 600. Escrever o lote duas vezes (uma versão descartável agora, a definitiva depois) custaria mais do que escrevê-lo uma vez certo, e a versão descartável seria a que produziria o dado que decide se H1 se sustenta. |
+| 2026-08-26 | **O lote paraleliza com processos `traci`** (encaminhamento parcial de **P15**) | Cada trabalhador sobe o seu SUMO e fala com ele por `traci`. `--libsumo` continua exposto e implementado; só não é o padrão. **Medido em 8 núcleos físicos, `--paralelo 6`:** as 60 execuções do piloto levaram **~35 min** — ~1 min por execução no `leve`, ~2 min no `moderado`, ~4 min no `intenso`. | Resolve na prática a opção 2 de P15 sem fechar a decisão: **o `traci` dá conta da janela de tempo**. Extrapolando, as 600 do Bloco 8 levariam ~6 h — uma noite de máquina, não uma semana. Isso enfraquece bastante o argumento para abrir exceção à regra de não instalar cliente do SUMO pelo pip. **P15 continua aberta**, mas com o número na mão que a opção 3 pedia. |
+| 2026-08-26 | **O pareamento da análise é por VE, não por execução** | `analysis/relatorio_piloto.py` compara os braços sobre a **interseção dos ids de VE presentes nos três**, por (cenário, seed), e declara no relatório quantos VEs a interseção descartou. | Comparar a média de execução tem um viés silencioso e **conservador**, que é o que o faz passar despercebido: o último VE parte perto do fim do horizonte e, no baseline — mais lento —, pode não chegar dentro dos 3.600 s. Ele sai da média do `FIXO` mas fica na da preempção; a média do controle melhora por exclusão justamente do caso difícil, e a redução medida encolhe. No piloto isso valeu de 0 a 5 VEs por cenário. Coberto por teste. |
+| 2026-08-26 | **Execução descartada não entra em `analysis/data/`** | `validar_execucao()` roda em toda execução do lote. A reprovada fica na própria pasta de `sim/saida/`, com a evidência bruta; o motivo e o caminho da evidência vão para `analysis/data/descartes.csv`. O mesmo arquivo registra as remoções feitas por `--repetir`. | O `06` §4 manda descartar e registrar. Deixar a linha reprovada no CSV consolidado exigiria que todo consumidor a filtrasse — e o Bloco 9 tem seis tabelas e seis figuras, cada uma um lugar para esquecer o filtro. Manter a evidência bruta no disco é o que permite auditar o descarte depois; o registro é o que separa metodologia de racionalização. |
+| 2026-08-26 | **O lote recusa consolidar um ponto que já tem linhas no CSV** | Antes de rodar qualquer coisa, `rodar()` confere se algum ponto da matriz já aparece em `execucoes.csv` e falha com `PontoJaConsolidadoError`. `--repetir MOTIVO` é a autorização explícita: apaga a evidência anterior do CSV **e** do banco, e registra a remoção. | O banco já tinha essa proteção (restrição única em cenário/modo/seed); o CSV não tinha nenhuma — ele simplesmente acrescenta. A assimetria é perigosa porque o CSV é o que alimenta o capítulo 5: uma linha duplicada não falha alto, ela vira **uma seed com peso dobrado na média**. A checagem vem antes das execuções porque descobrir a duplicata na consolidação significaria descobri-la depois de horas de máquina gastas. |
+| 2026-08-26 | **Cada execução do lote limpa os CSV da própria pasta antes de rodar** (defeito achado no piloto) | `_limpar_csv_da_pasta()` apaga os quatro CSV da pasta da execução antes de executá-la. | **Não é hipótese: aconteceu.** Quatro pontos tinham sido exercitados num teste curto (400 s) antes do piloto, e `gravar_csv()` **acrescenta** — comportamento certo para o arquivo consolidado, errado para a pasta de uma execução. O `execucoes.csv` do piloto saiu com **64 linhas para 60 execuções**, com as quatro sobras carregando a duração errada. Só apareceu porque a contagem foi conferida; a média não teria denunciado nada. Os quatro pontos foram reexecutados com `--repetir` e o descarte está em `descartes.csv`. Coberto por teste de regressão. |
 | 2026-08-24 | **Cliente TraCI não vem do pip** (Bloco 0) | O `pyproject.toml` **não** declara extra `sim`. `traci` e `libsumo` são importados de `%SUMO_HOME%/tools`, acrescentado ao `sys.path` pelo `conftest.py` da raiz. | Instalar `traci` pelo pip cria uma segunda cópia do cliente, que pode divergir da versão do binário instalado. A divergência não falha alto: ela aparece como comportamento sutilmente diferente do TraCI, que é a classe de bug mais cara de diagnosticar neste projeto. Usar o cliente que acompanha o binário elimina a classe inteira. |

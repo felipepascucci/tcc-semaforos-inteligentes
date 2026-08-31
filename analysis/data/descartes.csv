@@ -1,0 +1,6 @@
+registrado_em,tipo,cenario,modo,seed,detalhe,evidencia
+2026-08-26T04:50:24+00:00,REEXECUCAO,leve,FIXO,1,"execucao de verificacao do Bloco 3, sem a duracao padrao; reexecutada no piloto do Bloco 4",
+2026-08-26T04:54:48+00:00,REEXECUCAO,leve,FIXO,1,sobra de CSV de um teste curto (400 s) na pasta da execucao contaminou a consolidacao: 64 linhas para 60 execucoes; defeito corrigido em _limpar_csv_da_pasta,
+2026-08-26T04:54:48+00:00,REEXECUCAO,leve,FIXO,2,sobra de CSV de um teste curto (400 s) na pasta da execucao contaminou a consolidacao: 64 linhas para 60 execucoes; defeito corrigido em _limpar_csv_da_pasta,
+2026-08-26T04:54:48+00:00,REEXECUCAO,leve,PREEMPCAO,1,sobra de CSV de um teste curto (400 s) na pasta da execucao contaminou a consolidacao: 64 linhas para 60 execucoes; defeito corrigido em _limpar_csv_da_pasta,
+2026-08-26T04:54:48+00:00,REEXECUCAO,leve,PREEMPCAO,2,sobra de CSV de um teste curto (400 s) na pasta da execucao contaminou a consolidacao: 64 linhas para 60 execucoes; defeito corrigido em _limpar_csv_da_pasta,

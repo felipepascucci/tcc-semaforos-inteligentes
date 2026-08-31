@@ -123,7 +123,7 @@ pretty = true
 [tool.pytest.ini_options]
 minversion = "8.0"
 pythonpath = ["backend"]
-testpaths = ["backend/tests", "bridge/tests", "sim/tests", "tests"]
+testpaths = ["backend/tests", "bridge/tests", "sim/tests", "analysis/tests", "tests"]
 addopts = ["-q", "--strict-markers", "-m", "not sumo and not hardware"]
 asyncio_mode = "auto"
 markers = [

@@ -40,6 +40,21 @@ analysis/data/**/*.tmp
 **/summary.xml
 **/queue.xml
 
+# EXCEÇÃO: a latência decisão a decisão (decisão de 2026-08-26, context/09).
+# São 36.000 linhas por execução exemplar — 13 MB, ~1,3 MB comprimidos — e o
+# arquivo é reescrito INTEIRO a cada corrida do lote, então cada reexecução
+# acrescenta esse peso à história do repositório para sempre.
+#
+# O que vai para o TEXTO do TCC são os percentis (mín, média, p95, p99, máx), e
+# eles estão em `execucoes.csv`, de TODA execução, que continua versionado. O
+# único consumidor deste arquivo é a figura F2 (`context/07` §5), e F2 é
+# regenerada rodando as execuções exemplares de novo.
+#
+# Ressalva registrada: latência é a única grandeza do experimento que NÃO é
+# reprodutível a partir da seed — é relógio de parede, e depende da máquina e da
+# carga. Regerar F2 produz uma distribuição equivalente, não idêntica.
+analysis/data/latencias.csv
+
 # --- Sistema operacional / IDE --------------------------------------------
 Thumbs.db
 desktop.ini
