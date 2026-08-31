@@ -220,6 +220,62 @@ Latência de decisão: p95 de **0,05 ms** contra o orçamento de 100 ms do RNF01
 
 Saída: um relatório curto respondendo — a redução em `moderado`/`intenso` chega perto de 25%? Há gridlock? A latência p95 fica sob 100 ms? Se a resposta a qualquer uma for ruim, ajusta-se **o modelo ou o texto** aqui, não na última semana.
 
+**Estado: concluído em 2026-08-26.** 60 execuções de 3.600 s, **zero descartadas**,
+em ~35 min de máquina (8 núcleos, `--paralelo 6`). Relatório em
+[`relatorios/piloto_20260826.md`](relatorios/piloto_20260826.md), gerado por
+`python -m analysis.relatorio_piloto` — nenhum número dele é digitado à mão.
+
+Duas entregas de código, ambas antecipadas do Bloco 8:
+
+| # | Entrega |
+|---|---|
+| 4.1 | `sim/controlador/lote.py` — a matriz completa em processos paralelos, com `validar_execucao()` em toda execução e descarte documentado em `analysis/data/descartes.csv`. `--seeds 1..5` é o piloto; `--seeds 1..50` é o Bloco 8, e não muda mais nada |
+| 4.2 | `analysis/relatorio_piloto.py` — lê `analysis/data/` e escreve o relatório. A seção "o que este piloto obriga a decidir" é **calculada**, e some sozinha quando não há o que decidir |
+
+**As três respostas:**
+
+| Pergunta | Resposta |
+|---|---|
+| Redução em `moderado`/`intenso` chega a 25%? | **`moderado` sim (31,7%), `intenso` não (18,1%)** |
+| Há gridlock? | Não — zero teleporte, zero colisão, zero violação de invariante nas 60 |
+| p95 da decisão sob 100 ms? | Sim, com folga de três ordens de grandeza: pior p95 **0,163 ms** |
+
+**Redução da travessia do VE, pareada por veículo:**
+
+| Cenário | Regime medido | `PREEMPCAO` | Dispersão entre seeds | Paradas `FIXO` → `PREEMPCAO` |
+|---|---|---:|---|---:|
+| `leve` | v/c 0,18 | 39,0% | 36,1% – 44,1% | 5,56 → 0,36 |
+| `moderado` | v/c 0,42 | **31,7%** | 28,9% – 33,8% | 5,68 → 0,76 |
+| `intenso` | v/c 0,73 | **18,1%** | 13,0% – 25,1% | 6,28 → 2,76 |
+| `multiplas_emergencias` | v/c 0,42, 2 VEs | 24,6% | 20,1% – 30,2% | 3,22 → 0,55 |
+
+> **O piloto cumpriu exatamente o papel para o qual foi antecipado: expôs dois
+> problemas com meses de margem.** Ambos viraram pendência de decisão da equipe
+> em `context/09`, e **os dois bloqueiam o Bloco 8** — rodar as 600 execuções
+> antes de decidir significa rodá-las de novo depois.
+>
+> - **P16 — H1 não atinge a meta em `intenso`** (18,1% contra 25%). A dispersão
+>   entre seeds (13,0% a 25,1%) e as paradas residuais (2,76 contra 0,76 no
+>   `moderado`) apontam a causa: o corredor não se fecha por inteiro quando a fila
+>   à frente não dissipa a tempo. `tempo_antecipacao_margem_s` é fixo em 5 s e não
+>   consulta a fila, que o motor já recebe. Recomendação: **tentar corrigir o
+>   mecanismo antes de mexer na hipótese** — reformular H1 sem tentar é ajustar a
+>   régua ao resultado.
+> - **P17 — E7 não entrega a mitigação de H2.** O custo transversal que H2 existe
+>   para mitigar está medido e é real (+18,6% no `moderado`, +24,6% no `intenso`);
+>   a mitigação medida fica entre −1,0% e +0,6%, contra a meta de 15%. `K` (0,7) e
+>   `n_ciclos_compensacao` (2) nunca foram calibrados contra dado real. Antes de
+>   calibrar, verificar se a **métrica** não está diluindo o efeito: a média sobre
+>   a hora inteira mede uma compensação que dura ~140 s por evento.
+
+**Um defeito do próprio lote, achado e corrigido no piloto.** O `execucoes.csv`
+consolidado saiu com **64 linhas para 60 execuções**: quatro pontos exercitados
+antes num teste curto tinham deixado CSV na pasta da execução, e `gravar_csv()`
+acrescenta em vez de substituir. Os quatro foram reexecutados com `--repetir`, o
+descarte está em `descartes.csv`, e há teste de regressão. A lição virou guarda
+permanente: o lote agora **recusa** consolidar um ponto que já tem linhas no CSV,
+a menos que `--repetir MOTIVO` autorize.
+
 ---
 
 ### Bloco 5 — Camada IoT (Sprint 4) · ~2 semanas
@@ -257,7 +313,9 @@ Primeiro candidato ao corte se algo atrasar (`context/08` §2, item 2 e 5).
 
 ### Bloco 8 — Lote completo (Sprint 7) · ~1 semana + tempo de máquina
 
-`sim/controlador/lote.py`: 4 cenários × 3 modos × 50 seeds = **600 execuções** de 3600 s, `libsumo` headless, 4 processos.
+~~`sim/controlador/lote.py`~~ **já existe** (entrega 4.1). O Bloco 8 é rodá-lo com `--seeds 1..50`: 4 cenários × 3 modos × 50 seeds = **600 execuções** de 3600 s. Medido no piloto, com `traci` e 6 processos, isso dá **~6 h** — uma noite de máquina. `libsumo` deixou de ser necessário para caber na janela (ver P15).
+
+> **Bloqueado por P16 e P17.** As duas pendências abertas pelo piloto mudam o modelo ou a hipótese; rodar as 600 antes de decidir significa rodá-las de novo depois.
 
 **Pareamento por seed é inegociável:** gerar as rotas uma vez por (cenário, seed) e reutilizar nos três modos. Sem isso a comparação deixa de ser pareada e perde poder estatístico.
 
@@ -280,14 +338,22 @@ Em paralelo: diagramas PlantUML do `context/08` §5, DER via eralchemy2, relató
 | Marco | O que prova |
 |---|---|
 | Fim do Bloco 2 | O núcleo do TCC existe e é seguro — invariantes verificados por property-based testing |
-| Fim do Bloco 4 | **Sabemos se as hipóteses se sustentam**, com tempo de sobra para reagir |
+| Fim do Bloco 4 | ✅ **2026-08-26.** H1 se sustenta em `moderado` (31,7%) e **não** em `intenso` (18,1%); H2 tem custo medido mas **sem** mitigação (P16 e P17). Zero gridlock, RNF01 com folga de três ordens de grandeza. O marco cumpriu seu papel: os problemas apareceram com margem |
 | Fim do Bloco 5 | O protótipo físico funciona fim-a-fim, incluindo o fail-safe |
 | Fim do Bloco 8 | Os dados do capítulo 5 existem e são reprodutíveis |
 
 ## Pendências que continuam abertas
 
+- **P16 e P17** (abertas pelo piloto, 2026-08-26) — **as duas bloqueiam o Bloco 8**
+  e são `DECISÃO DO GRUPO`: H1 abaixo da meta em `intenso`, e E7 sem mitigação
+  mensurável para H2. Detalhes e encaminhamentos sugeridos em `context/09`.
+- **P15** — deixou de ser urgente. O piloto mediu: com `traci` e 6 processos, as
+  600 execuções do Bloco 8 levariam ~6 h. Cabe na janela sem instalar `libsumo`
+  pelo pip, o que enfraquece o motivo para abrir exceção à regra do `context/09`.
+  Continua aberta como decisão formal, agora com o número na mão.
 - **P4, P6, P11, P12** — ações de redação no texto do TCC. O código já implementa a versão correta; falta a equipe atualizar o documento. **P6 é o maior risco acadêmico** e depende do Bloco 8.
 - **P11 deixou de bloquear execução e ganhou dois itens novos de redação** (Bloco 3): declarar que a demanda transversal é derivada do grau de saturação, e resolver o descompasso entre o nome do cenário `intenso` e sua classificação medida (v/c 0,73). A referência bibliográfica para a faixa de plausibilidade continua pendente — agora só para *conferir* um número que o experimento produz, não para *fornecê-lo*.
 - ~~**P14** — ponto final de medição do RF02.~~ ✅ **Decidida em 2026-08-25:** mede da detecção até o **início da atuação**. O perfil de tempos da bancada e o ciclo de 24 s de P13 ficam inalterados, e o firmware do Bloco 5 já tem contra o que ser escrito.
+- ~~**P15** — `libsumo` no lote.~~ Ver acima: deixou de bloquear o Bloco 8.
 - **P8, P9** — resolvidas por teste de bancada no Bloco 5.
 - **P3** — decidida (agente reativo determinístico), mas **comunicar ao orientador** antes de fechar a redação dos capítulos 2 e 6.
