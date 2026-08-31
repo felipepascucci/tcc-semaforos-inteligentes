@@ -287,7 +287,49 @@ Formalizar a escolha antes do Bloco 8.
 
 ---
 
-## P16 — H1 não atinge a meta em `intenso` · `DECISÃO DO GRUPO — ANTES DO BLOCO 8`
+## P16 — H1 não atinge a meta em `intenso` · ✅ **RESOLVIDA em 2026-08-31**
+
+> **Resolvida corrigindo o mecanismo, sem tocar em H1.** A remedição nas seeds do
+> piloto mede **31,2%** no `intenso` contra os 18,1% de antes, e a pior seed
+> passou de 13,0% para 27,9% — acima da meta. A contingência de reformular H1
+> **não foi acionada**, e a hipótese fica como está.
+>
+> | Cenário | Piloto (2026-08-26) | Remedição (2026-08-31) | Meta ≥ 25% |
+> | --- | ---: | ---: | :---: |
+> | `intenso` | 18,1% (13,0 – 25,1) | **31,2%** (27,9 – 33,6) | **atinge** |
+> | `moderado` | 31,7% | 34,3% | atinge |
+> | `leve` | 39,0% | 40,4% | — |
+> | `multiplas_emergencias` | 24,6% | 28,1% | — |
+>
+> Paradas do VE no `intenso`: **2,76 → 0,08**. Segurança intocada: zero colisão,
+> zero teleporte, zero violação de I1 a I5 nas 60 execuções; p95 de decisão
+> 0,144 ms.
+>
+> **A comparação é pareada de verdade.** A remedição usou as **mesmas seeds
+> 1..5** do piloto, e os baselines `FIXO` saíram idênticos aos dele (538,0 ·
+> 451,3 · 490,2 · 315,3 s, e paradas 6,28 · 5,56 · 5,68 · 3,22). O braço de
+> controle não foi tocado pela alteração, que vive em E3 e só atua sob preempção
+> — então toda a diferença é atribuível à correção, e não a tráfego diferente.
+>
+> **O preço está medido e vai para o texto.** O custo transversal no `intenso`
+> subiu de **+24,6% para +43,6%**; `moderado` de +18,6% para +19,7%;
+> `multiplas_emergencias` de +15,7% para +18,3%. Era o resultado declarado no
+> critério antes de medir, e é o trade-off central do trabalho: o corredor abre
+> mais cedo porque precisa esvaziar a fila, e quem paga é a transversal.
+> **Consequência para P17:** o custo que E7 deveria mitigar quase dobrou no
+> `intenso`, o que aumenta a pressão sobre a compensação em vez de aliviá-la.
+>
+> Evidência: `docs/relatorios/remedicao_p16/piloto_20260831.md` (seeds 1..5,
+> código `d63f774`) e `docs/relatorios/calibracao_p16/piloto_20260831.md`
+> (seeds 101..105, a corrida de calibração). Dados em
+> `analysis/data/remedicao_p16/` e `analysis/data/calibracao_p16/`.
+>
+> **O que não muda:** `analysis/data/execucoes.csv` continua sendo o piloto de
+> 2026-08-26, preservado como está. Os números do capítulo 5 virão do Bloco 8,
+> rodado com o código corrigido.
+
+O registro abaixo é o histórico do problema, mantido porque a arguição pode
+perguntar como ele foi encontrado e resolvido.
 
 Achado do **piloto do Bloco 4** (2026-08-26, 60 execuções de 3.600 s, 5 seeds ×
 4 cenários × 3 modos). Números em `docs/relatorios/piloto_20260826.md`, gerados
@@ -368,6 +410,131 @@ adiante — é o que as paradas residuais mostram (2,76 no `intenso` contra 0,76
 **Se, depois da correção, o `intenso` continuar abaixo de 25%:** vale a opção 2
 (reformular H1 declarando a faixa), e aí a tentativa registrada é o que torna a
 reformulação defensável em vez de oportunista.
+
+### Critério do ajuste, declarado **antes** de mexer no código · 2026-08-31
+
+Este bloco é commitado **antes** da alteração, de propósito: o `git log` é o que
+prova que o critério precede o resultado. É o mesmo procedimento da calibração de
+`tau` (2026-08-25).
+
+**Diagnóstico, com a aritmética explícita.** No cenário `intenso` a arterial
+recebe 1.200 veíc./h em duas faixas, ou 600 veíc./h/faixa. O ciclo fixo é de 70 s
+com 30 s de verde por eixo, logo a arterial fica 40 s no vermelho e acumula
+`600 × 40/3600 ≈ 6,7` veículos por faixa. Dissipar essa fila leva
+`6,7 × 2,13 ≈ 14 s`, ao headway de saturação medido.
+
+A janela de E3 hoje é `amarelo (3) + all-red (2) + MARGEM (5) = 10 s`, mais o
+verde mínimo residual. O verde alvo abre 5 s depois da decisão, e o VE chega 10 s
+depois dela — **5 s de verde contra os ~14 s de que a fila precisa**. O corredor
+abre a tempo e não esvazia a tempo, que é exatamente o que as paradas residuais
+mostram (2,76 no `intenso` contra 0,76 no `moderado`).
+
+**A mudança.** E3 passa a somar à janela o tempo estimado de dissipação da fila
+**no acesso pelo qual o VE vai entrar**:
+
+```
+T_ANTECIPACAO = amarelo + all_red + verde_min_residual + MARGEM + T_dissipacao
+
+T_dissipacao  = min( (fila_no_acesso / faixas_do_acesso) * headway_saturacao_s,
+                     preempcao_timeout_s - tempo_transicao_segura_s )
+```
+
+**A correção não introduz nenhum parâmetro livre**, e isso é o principal
+argumento de defesa dela:
+
+| Grandeza | De onde vem |
+| --- | --- |
+| `fila_no_acesso` | Já chega ao motor em `EstadoSemaforo.fila_por_acesso`, dos detectores E2 |
+| `faixas_do_acesso` | Geometria da rede, lida pelo carregador de topologia |
+| `headway_saturacao_s` | **Medido** em `analysis/data/fluxo_saturacao.csv` — 1,9926 e 2,1213 na arterial, 2,2891 na transversal; adotada a média das faixas medidas, **2,13 s** |
+| Teto de `T_dissipacao` | **Derivado** de `preempcao_timeout_s`: antecipar mais do que a preempção sobrevive faria o corredor cair na cara do VE |
+
+Nenhum número é escolhido para caber no resultado. Mexer em `tau`, `minGap`,
+`length`, `accel` ou `decel` obriga a remedir a saturação e **também** a atualizar
+`headway_saturacao_s`, que passa a integrar a mesma cadeia de dependência.
+
+**Simplificação declarada: o tempo perdido na partida não entra.** O modelo de
+campo somaria um *start-up lost time* ao tempo de dissipação, mas a medição de
+`sim/calibracao/fluxo_saturacao.py` devolveu **0,000 s** para ele nas três faixas
+— os primeiros veículos da janela cruzam já em movimento. Somar um valor de
+manual aqui seria introduzir justamente o número sem lastro que P11 existe para
+evitar. A consequência é que a antecipação fica **conservadora em ~2 s**, ou seja,
+o erro é para o lado de **não** inflar H1.
+
+**Resultado esperado, declarado antes de medir:**
+
+1. **H1 melhora.** As paradas residuais do VE no `intenso` devem cair das 2,76
+   atuais em direção às 0,76 do `moderado`, e a redução da travessia deve subir
+   dos 18,1%. *Não* se declara aqui que ela chegará a 25% — isso é o que a
+   medição vai dizer.
+2. **H2 piora.** A preempção passa a começar antes e segura a transversal por
+   mais tempo, então o custo transversal medido (+24,6% no `intenso`) deve
+   aumentar. **Isso precisa ser medido e reportado, não escondido** — é o
+   trade-off central do trabalho, e é o que dá substância à discussão do
+   capítulo 5.
+3. **Segurança inalterada.** I1 a I5 não são tocados. A antecipação maior aumenta
+   a pressão sobre I5, que já tem guarda no motor e cede a vez à fase faminta;
+   espera-se zero violação, e violação seria motivo de reverter, não de afrouxar
+   o invariante.
+
+**Regra de parada — uma tentativa deste mecanismo.** Se a redução no `intenso`
+não atingir 25%, **não se varre parâmetro**: aciona-se a opção 2 (reformular H1),
+com o orientador. Corrigir um defeito de implementação encontrado no caminho não
+conta como nova tentativa; mudar a fórmula atrás de um número melhor conta, e é
+o que fica proibido.
+
+**Onde se mede.** Matriz completa do piloto nas **seeds 101..105**, fora do
+intervalo 1..50 do Bloco 8. As seeds 1..5 só depois, como remedição de aceitação.
+
+#### Emenda à fórmula, na implementação (mesmo dia, antes de medir)
+
+O critério acima aplicava o teto a `T_dissipacao`. **Está errado, e a correção é
+de defeito, não de número:** capar só a parcela da fila não cumpre a intenção
+declarada ("antecipar mais do que a preempção sobrevive faria o corredor cair na
+cara do VE"). Com o teto na parcela, o pior caso somava
+`5 + verde_min_residual (≤ 7) + 5 + 40 = 57 s` de antecipação contra um
+`preempcao_timeout_s` de 45 s — exatamente o cenário que o teto existia para
+impedir. O teto passa a valer sobre a **antecipação total**:
+
+```
+T_ANTECIPACAO = min( amarelo + all_red + verde_min_residual + MARGEM + T_dissipacao,
+                     preempcao_timeout_s - tempo_transicao_segura_s )
+```
+
+No perfil de simulação o teto é `45 − 5 = 40 s`, e ele quase nunca morde: o pior
+caso previsto no `intenso` é de ~31 s. É rede de segurança, não botão de ajuste.
+Coberto por `test_janela_nao_passa_do_teto_derivado_do_timeout`, e
+`Parametros.validar()` passou a recusar `preempcao_timeout_s` menor que o tempo
+de transição segura, que tornaria o teto negativo e a preempção impossível.
+
+#### Estado da implementação, 2026-08-31
+
+**Código pronto e testado; a medição é o que falta.** `mypy --strict` limpo,
+`ruff` limpo, **279 testes** na execução padrão (6 novos). Alterados:
+`core/malha.py` (`faixas_por_via`, vindo da rede e não de configuração),
+`core/parametros.py` (`headway_saturacao_s`, `tempo_dissipacao_fila_s()`,
+`antecipacao_max_s`), `core/priorizacao/deteccao.py` (`fila_por_faixa()` e o novo
+argumento de `dentro_da_janela`), `core/priorizacao/motor.py`,
+`adapters/sumo/topologia.py` e `backend/config/parametros.yaml`.
+
+Duas regressões cobrem o defeito de P16 — uma em E3 isolado e outra no motor
+inteiro, esta última mudando **só a fila** entre as duas metades do teste.
+
+**A medição não pôde ser feita na sessão em que o código foi escrito:** uma
+política de Controle de Aplicativo do Windows bloqueia o lançamento do binário do
+SUMO no ambiente do agente. Ela roda na máquina da equipe, com:
+
+```bash
+python -m sim.controlador.lote --seeds 101..105 --paralelo 6 \
+    --sem-banco --saida analysis/data/calibracao_p16
+python -m analysis.relatorio_piloto --dados analysis/data/calibracao_p16
+```
+
+`--sem-banco` e o `--saida` separado são obrigatórios: sem eles a calibração
+entraria em `analysis/data/execucoes.csv` e em `execucao_simulacao` junto com as
+60 execuções do piloto, e o Bloco 9 leria os dois conjuntos como se fossem o
+mesmo experimento. As seeds 101..105 são pontos novos, então a guarda de
+`PontoJaConsolidadoError` **não** protegeria contra isso.
 
 ---
 
@@ -460,6 +627,36 @@ alguma coisa — o que é coerente com H2 existir para mitigar um custo.
 e `K`/`n_ciclos_compensacao` seguem sem calibração. Verificar a métrica **antes**
 de calibrar, pela razão já registrada.
 
+### O que a correção de P16 mudou aqui · 2026-08-31
+
+**O alvo de P17 cresceu.** A correção de P16 antecipa a preempção pelo tempo de
+dissipação da fila, e quem paga é a transversal. Medido nas mesmas seeds:
+
+| Cenário | Custo antes de P16 | Custo depois de P16 | Mitigação de E7 |
+| --- | ---: | ---: | ---: |
+| `intenso` | +24,6% | **+43,6%** | −0,6% |
+| `moderado` | +18,6% | +19,7% | −0,8% |
+| `multiplas_emergencias` | +15,7% | +18,3% | +1,2% |
+| `leve` | −1,6% | +0,2% | +2,4% |
+
+Duas consequências:
+
+1. **P17 ficou mais urgente, não menos.** O custo que H2 existe para mitigar
+   quase dobrou no `intenso`, e a mitigação continua indistinguível de zero. O
+   trabalho agora tem um ganho maior em H1 **e** um custo maior em H2, e a
+   discussão do capítulo 5 precisa apresentar os dois juntos — reportar só o
+   ganho seria omissão.
+2. **A janela de compensação mudou de tamanho**, o que reforça o encaminhamento
+   já registrado de checar a métrica antes de calibrar `K`: a preempção agora
+   dura mais por evento, então a fração da hora em que a compensação atua também
+   mudou. Calibrar contra a média horária sem verificar isso continua sendo
+   calibrar contra ruído.
+
+Reapareceu a instabilidade da leitura pelo acréscimo quando o acréscimo é ~0: no
+`leve`, "mitigação do acréscimo" deu **+1347,1%**. É exatamente a ressalva
+declarada acima, e confirma que a métrica de H2 só se aplica onde a preempção de
+fato custa algo.
+
 > O `08` §2 é explícito: cortar E7 obriga a **tirar H2 do trabalho**, não a
 > deixá-la sem sustentação. Se a calibração não levantar o número, a decisão
 > honesta é reportar o custo transversal medido e declarar que a compensação
@@ -514,4 +711,5 @@ de calibrar, pela razão já registrada.
 | 2026-08-31 | **Enunciado de H2 passa a ser `≥ 15%`** (encaminhamento parcial de **P17**) | "Mitigar em **até** 15% o impacto negativo" vira "mitigar em **no mínimo** 15%". Propagado para `00` §5, `07` T6 (que trazia `≤ 15%`) e a docstring de `core/priorizacao/compensacao.py`. **O denominador continua aberto** — ver P17. | A redação antiga era um teto, não uma meta: sob ela, os −1,0% a +0,6% medidos no piloto **cumpririam** H2 literalmente. Hipótese que não pode falhar não é hipótese, e a banca não precisaria de muito para achar isso. `≥ 15%` é o que a equipe sempre quis dizer, é simétrico com H1 (`≥ 25%`) e é a única forma sob a qual H2 pode ser rejeitada. |
 | 2026-08-31 | **P16 — corrigir o mecanismo antes de mexer em H1** | Adotada a opção 3 começando pela 1: ajustar `tempo_antecipacao_margem_s` para consultar a fila que o motor já recebe, remedir a matriz do piloto e só então avaliar se H1 precisa ser reformulada. Reformulação vira contingência, com o orientador. Três guardas fixadas antes do código: critério declarado antes do ajuste, congelamento dos parâmetros antes da remedição, e **calibração em seeds fora de 1..50**. | Reformular a hipótese sem tentar corrigir o mecanismo é ajustar a régua ao resultado, o que o `CLAUDE.md` proíbe; tentar primeiro e reformular só se o teto for real é a ordem defensável na arguição. A guarda das seeds resolve um problema que passaria despercebido: 1..5 é subconjunto de 1..50, e afinar o modelo sobre elas contaminaria 5 das 50 execuções que validam o resultado final. Calibrar em 101..105 custa nada e torna o Bloco 8 inteiramente fora-da-amostra. |
 | 2026-08-31 | **P6 — formato dos números do capítulo 5 confirmado** | As tabelas do capítulo 5 do pré-projeto migram para uma seção **"Resultados esperados"** dentro da metodologia, rotulada como estimativa preliminar; o capítulo 5 passa a ser preenchido só pela saída de `analysis/gerar_resultados_tcc.py`. A migração **não** depende do Bloco 8 e pode ser feita já. | É o item de maior risco acadêmico do projeto (`07` §1). Separar fisicamente estimativa de medição, no documento, é o que impede um número não medido de sobreviver por esquecimento até a versão entregue — que é exatamente como esse erro chega à banca. |
+| 2026-08-31 | **P16 resolvida pelo mecanismo, sem tocar em H1** | E3 passou a somar à janela de ativação o tempo de dissipação da fila do acesso de entrada, com teto derivado de `preempcao_timeout_s`. Medido nas mesmas seeds do piloto: `intenso` **18,1% → 31,2%**, pior seed 13,0% → 27,9%, paradas do VE 2,76 → 0,08. A contingência de reformular H1 **não foi acionada**. Custo: a espera transversal no `intenso` subiu de +24,6% para +43,6%. | A ordem — tentar o mecanismo antes de mexer na hipótese — foi declarada e **commitada antes do código** (`1ae762e`), e é o que torna o resultado defensável em vez de oportunista. A correção não introduz parâmetro livre: fila dos detectores E2, faixas da geometria da rede, headway de saturação medido, teto derivado. Os baselines `FIXO` idênticos aos do piloto provam que a melhora não vem de tráfego mais fácil. O custo transversal era um dos três resultados **declarados antes de medir** e vai para o texto como trade-off, não como nota de rodapé. |
 | 2026-08-31 | **H3 — 5 repetições de bancada** | A evidência de H3 (latência fim-a-fim < 200 ms) vem do protótipo, com **5 repetições** roteirizadas no checklist de aceitação. **Com n = 5 o p95 não é estimável** — o critério passa a ser reportado como **mín / mediana / máx das 5, com o n declarado**, e o limiar de 200 ms verificado sobre o **máximo observado**. | A simulação não tem atuação física: `t_atuacao` é o mesmo passo de `t_decisao`, então o número de H3 só existe na bancada. 5 repetições é o que cabe no roteiro manual. A ressalva do n é obrigatória: chamar de "p95" o percentil de 5 amostras é, na prática, reportar o máximo com nome de percentil, e é o tipo de imprecisão que a banca pega. **Ver a observação sobre aproveitar as 100 leituras do RNF05** (`06` §2) — se a instrumentação de latência entrar nelas, H3 ganha um p95 de verdade sem repetição extra. |

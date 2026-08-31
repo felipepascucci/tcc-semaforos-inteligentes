@@ -53,6 +53,12 @@ analysis/data/**/*.tmp
 # Ressalva registrada: latência é a única grandeza do experimento que NÃO é
 # reprodutível a partir da seed — é relógio de parede, e depende da máquina e da
 # carga. Regerar F2 produz uma distribuição equivalente, não idêntica.
+#
+# O padrão cobre subdiretórios de propósito: uma corrida de calibração dirigida
+# por `--saida analysis/data/<nome>` produz o seu próprio `latencias.csv`, do
+# mesmo tamanho (13 MB), e a regra antiga — específica de caminho — deixaria
+# passar. Descoberto ao medir P16 em 2026-08-31.
+analysis/data/**/latencias.csv
 analysis/data/latencias.csv
 
 # --- Sistema operacional / IDE --------------------------------------------

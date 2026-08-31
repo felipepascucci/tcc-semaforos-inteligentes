@@ -225,6 +225,10 @@ def carregar(rede_xml: Path = REDE_PADRAO, mapa_fases_yaml: Path = MAPA_FASES_PA
             for aresta in rede.getEdges()
             if aresta.getToNode().getType() == "traffic_light"
         },
+        # E3 divide a fila do acesso pelas faixas para estimar a dissipação
+        # (P16). O número vem da rede construída, não de configuração: duplicá-lo
+        # num YAML criaria uma segunda fonte da verdade sobre a geometria.
+        faixas_por_via={aresta.getID(): aresta.getLaneNumber() for aresta in rede.getEdges()},
     )
     topologia.validar()
 

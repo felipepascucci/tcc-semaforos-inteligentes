@@ -15,6 +15,23 @@ raio_deteccao_m: 500
 tempo_antecipacao_margem_s: 5.0
 velocidade_min_estimativa_ms: 4.0
 
+# Headway de descarga de fila saturada, em segundos por veículo e por faixa.
+#
+# VALOR MEDIDO, NÃO ESCOLHIDO. Sai de `analysis/data/fluxo_saturacao.csv`,
+# produzido por `python -m sim.calibracao.fluxo_saturacao`: 1,9926 e 2,1213 s nas
+# duas faixas da arterial e 2,2891 s na transversal. Adotada a média das faixas
+# medidas — a alternativa (usar o maior, da transversal) antecipara mais e
+# favoreceria H1, que é justamente o tipo de escolha que o CLAUDE.md proíbe.
+#
+# E3 o usa para estimar em quanto tempo a fila do acesso escoa, e com isso
+# antecipar a preempção o bastante para o VE encontrar a via livre (P16). Sem
+# ele, a janela era fixa em 10 s e o corredor abria a tempo sem esvaziar a tempo.
+#
+# Mexer em `tau`, `minGap`, `length`, `accel` ou `decel` de `veiculos.typ.xml`
+# obriga a remedir a saturação e atualizar este número, na mesma cadeia de
+# dependência da tabela de cenários.
+headway_saturacao_s: 2.13
+
 # --- E5: transição segura / duração de fases ------------------------------
 verde_min_s: 7.0
 verde_max_s: 60.0

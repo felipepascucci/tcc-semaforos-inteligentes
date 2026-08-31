@@ -26,6 +26,13 @@ class Parametros:
         raio_deteccao_m: Alcance da detecção ao longo da rota (E1, RF01).
         tempo_antecipacao_margem_s: Margem somada ao tempo de transição segura
             para definir a janela de ativação (E3).
+        headway_saturacao_s: Headway de descarga de fila saturada, em segundos
+            por veículo e por faixa. **Valor medido**, não escolhido: sai de
+            `analysis/data/fluxo_saturacao.csv`, produzido por
+            `sim/calibracao/fluxo_saturacao.py`. E3 o usa para estimar quanto
+            tempo a fila do acesso leva para dissipar (P16). Mexer em `tau`,
+            `minGap`, `length`, `accel` ou `decel` de `veiculos.typ.xml` obriga a
+            remedir a saturação e atualizar este valor.
         velocidade_min_estimativa_ms: Piso de velocidade no cálculo de ETA (E2).
             Sem ele, um VE parado produziria ETA infinito.
         verde_min_s: Piso de I4 — nenhum verde é truncado antes disso.
@@ -44,6 +51,7 @@ class Parametros:
 
     raio_deteccao_m: float
     tempo_antecipacao_margem_s: float
+    headway_saturacao_s: float
     velocidade_min_estimativa_ms: float
     verde_min_s: float
     verde_max_s: float
@@ -87,6 +95,7 @@ class Parametros:
         obrigatorios = (
             "raio_deteccao_m",
             "tempo_antecipacao_margem_s",
+            "headway_saturacao_s",
             "velocidade_min_estimativa_ms",
             "verde_min_s",
             "verde_max_s",
@@ -105,6 +114,7 @@ class Parametros:
         return cls(
             raio_deteccao_m=float(dados["raio_deteccao_m"]),
             tempo_antecipacao_margem_s=float(dados["tempo_antecipacao_margem_s"]),
+            headway_saturacao_s=float(dados["headway_saturacao_s"]),
             velocidade_min_estimativa_ms=float(dados["velocidade_min_estimativa_ms"]),
             verde_min_s=float(dados["verde_min_s"]),
             verde_max_s=float(dados["verde_max_s"]),
@@ -143,6 +153,17 @@ class Parametros:
             problemas.append("all_red_s não pode ser negativo")
         if self.velocidade_min_estimativa_ms <= 0:
             problemas.append("velocidade_min_estimativa_ms precisa ser > 0 (divisor do ETA)")
+        if self.headway_saturacao_s <= 0:
+            problemas.append(
+                "headway_saturacao_s precisa ser > 0 — é o tempo de descarga por "
+                "veículo que E3 usa para estimar a dissipação da fila"
+            )
+        if self.preempcao_timeout_s <= self.tempo_transicao_segura_s:
+            problemas.append(
+                f"preempcao_timeout_s ({self.preempcao_timeout_s}) precisa ser maior que "
+                f"o tempo de transição segura ({self.tempo_transicao_segura_s}), senão o "
+                "teto da janela de ativação de E3 fica negativo e a preempção nunca começa"
+            )
         if self.raio_deteccao_m <= 0:
             problemas.append("raio_deteccao_m precisa ser > 0")
         if not self.prioridade_tipo:
@@ -170,22 +191,67 @@ class Parametros:
         """
         return self.amarelo_s + self.all_red_s
 
-    def tempo_antecipacao_s(self, verde_min_residual_s: float = 0.0) -> float:
+    @property
+    def antecipacao_max_s(self) -> float:
+        """Teto da janela de ativação de E3, **derivado** de `preempcao_timeout_s`.
+
+        Não é um parâmetro: antecipar mais do que a preempção sobrevive faria o
+        corredor cair na cara do VE, porque `_liberar` dispara por timeout antes
+        de ele chegar. A folga de uma transição segura absorve o VE chegar mais
+        tarde do que o ETA estimou.
+        """
+        return self.preempcao_timeout_s - self.tempo_transicao_segura_s
+
+    def tempo_dissipacao_fila_s(self, fila_por_faixa: float) -> float:
+        """Tempo estimado para a fila de um acesso escoar, em segundos (E3, P16).
+
+        `fila_por_faixa * headway_saturacao_s`. O headway é **medido** na própria
+        malha (`analysis/data/fluxo_saturacao.csv`), não adotado de manual — a
+        mesma regra que vale para o fluxo de saturação em P11.
+
+        O *start-up lost time* do modelo de campo **não** entra: a medição de
+        `sim/calibracao/fluxo_saturacao.py` devolveu 0,000 s para ele nas três
+        faixas. Somar um valor de manual aqui seria introduzir o número sem
+        lastro que P11 existe para evitar; omiti-lo deixa a estimativa
+        conservadora em ~2 s, e o erro fica para o lado de **não** inflar H1.
+
+        Args:
+            fila_por_faixa: Veículos parados no acesso, divididos pelas faixas.
+
+        Returns:
+            Tempo de dissipação, em segundos.
+        """
+        return max(fila_por_faixa, 0.0) * self.headway_saturacao_s
+
+    def tempo_antecipacao_s(
+        self, verde_min_residual_s: float = 0.0, tempo_dissipacao_s: float = 0.0
+    ) -> float:
         """Janela de ativação de E3.
 
-        `TEMPO_ANTECIPACAO = tempo_transicao_segura(tls) + MARGEM`. Preemptar
-        cedo demais trava a transversal sem necessidade — que é exatamente o
-        custo que H2 quer minimizar.
+        `TEMPO_ANTECIPACAO = tempo_transicao_segura + verde_min_residual +
+        MARGEM + dissipação da fila`, limitado por `antecipacao_max_s`.
+
+        Preemptar cedo demais trava a transversal sem necessidade — que é
+        exatamente o custo que H2 quer minimizar. Preemptar tarde demais abre o
+        verde a tempo mas **não esvazia a fila** a tempo, e o VE chega ao verde
+        com veículos parados à frente: é o defeito que o piloto do Bloco 4 mediu
+        como 2,76 paradas residuais no cenário `intenso` (P16).
 
         Args:
             verde_min_residual_s: Verde mínimo ainda a cumprir no cruzamento.
+            tempo_dissipacao_s: Tempo estimado para a fila do acesso do VE
+                escoar, de `tempo_dissipacao_fila_s()`.
 
         Returns:
             Antecedência, em segundos, com que a preempção deve começar.
         """
-        return (
-            self.tempo_transicao_segura_s + verde_min_residual_s + self.tempo_antecipacao_margem_s
+        bruta = (
+            self.tempo_transicao_segura_s
+            + verde_min_residual_s
+            + self.tempo_antecipacao_margem_s
+            + max(tempo_dissipacao_s, 0.0)
         )
+        return min(bruta, self.antecipacao_max_s)
 
     def indice_prioridade(self, tipo: TipoVeiculo) -> int:
         """Posição do tipo na ordem de precedência — menor vence (E8)."""

@@ -23,7 +23,7 @@ from core.modelos import EstadoMalha, EstadoSemaforo, Sinal
 from core.parametros import Parametros
 from core.priorizacao import compensacao as e7
 from core.priorizacao.conflito import Disputa, resolver
-from core.priorizacao.deteccao import dentro_da_janela, detectar
+from core.priorizacao.deteccao import dentro_da_janela, detectar, fila_por_faixa
 from core.priorizacao.fases import selecionar_fase
 
 
@@ -235,9 +235,16 @@ class MotorDecisao:
             return None
 
         # E3 — ainda é cedo? Preemptar antes da hora trava a transversal de graça,
-        # e esse custo é justamente o que H2 quer minimizar.
+        # e esse custo é justamente o que H2 quer minimizar. Tarde demais, porém,
+        # abre o verde sem tempo de a fila escoar, e o VE para mesmo com verde
+        # (P16) — por isso a janela consulta a fila do acesso de entrada.
         residual = self._verde_min_residual(estado_semaforo, cruzamento, fase_alvo)
-        if ativa is None and not dentro_da_janela(vencedor.deteccao, self.parametros, residual):
+        dissipacao = self.parametros.tempo_dissipacao_fila_s(
+            fila_por_faixa(estado_semaforo, self.topologia, vencedor.deteccao.movimento[0])
+        )
+        if ativa is None and not dentro_da_janela(
+            vencedor.deteccao, self.parametros, residual, dissipacao
+        ):
             return None
 
         # Já estamos servindo a fase certa: estende, não recomeça a transição.

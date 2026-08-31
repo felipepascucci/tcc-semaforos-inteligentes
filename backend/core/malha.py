@@ -140,11 +140,17 @@ class TopologiaMalha:
         comprimento_via_m: Comprimento de cada via, em metros.
         cruzamento_apos_via: Cruzamento em que cada via desemboca. Vias que
             saem da malha não aparecem.
+        faixas_por_via: Número de faixas de cada via. E3 precisa dele para
+            converter a fila do acesso — que os detectores E2 entregam somada
+            sobre as faixas — na fila **por faixa**, que é a que o VE tem à
+            frente. Ignorar as faixas superestimaria a fila da arterial (duas
+            faixas) pelo dobro.
     """
 
     cruzamentos: Mapping[str, Cruzamento]
     comprimento_via_m: Mapping[str, float] = field(default_factory=dict)
     cruzamento_apos_via: Mapping[str, str] = field(default_factory=dict)
+    faixas_por_via: Mapping[str, int] = field(default_factory=dict)
 
     def cruzamento(self, id_cruzamento: str) -> Cruzamento:
         """Devolve um cruzamento pelo código.
@@ -160,6 +166,17 @@ class TopologiaMalha:
     def comprimento(self, id_via: str) -> float:
         """Comprimento de uma via, em metros. Vias desconhecidas valem 0."""
         return self.comprimento_via_m.get(id_via, 0.0)
+
+    def faixas(self, id_via: str) -> int:
+        """Número de faixas de uma via.
+
+        Via desconhecida vale **1**, e não 0: o valor é divisor do cálculo de
+        dissipação de fila em E3, e uma faixa é o palpite conservador — divide
+        menos, logo estima uma fila por faixa maior e antecipa mais. Errar para
+        o lado de antecipar demais custa espera transversal; errar para o outro
+        custa o VE parar, que é o que P16 existe para corrigir.
+        """
+        return max(self.faixas_por_via.get(id_via, 1), 1)
 
     def validar(self) -> None:
         """Confere a coerência interna da topologia.
