@@ -152,6 +152,15 @@ class EstadoMalha:
 
 **E3 — Janela de ativação.** Só preempta quando `eta_i <= TEMPO_ANTECIPACAO`, com `TEMPO_ANTECIPACAO = tempo_transicao_segura(tls) + MARGEM` (`MARGEM = 5 s`). Preemptar cedo demais trava a transversal sem necessidade — é exatamente o custo que H2 quer minimizar.
 
+> **`MARGEM` fixa é a causa provável de P16** (piloto do Bloco 4, 2026-08-26): em
+> regime saturado o corredor abre a tempo mas não **esvazia** a tempo, e o VE
+> chega ao verde com veículos parados adiante — 2,76 paradas residuais no
+> `intenso` contra 0,76 no `moderado`. A margem não consulta a fila, que o motor
+> já recebe em `EstadoSemaforo.fila_por_acesso`. **Decisão de 2026-08-31: corrigir
+> o mecanismo antes de mexer em H1.** Esta é a linha que muda; a alteração vem com
+> critério declarado antes do ajuste, e a calibração roda em seeds fora de 1..50
+> (ver P16).
+
 **E4 — Seleção da fase.** Dado o movimento do VE (via de entrada → via de saída), consultar o mapa `movimento → fase` do cruzamento e escolher a fase que o serve. Esse mapa é configuração estática, carregada de `sim/config/mapa_fases.yaml` e da tabela `fase_semaforo`.
 
 **E5 — Transição segura.** Nunca saltar direto para a fase alvo. Sequência obrigatória:
@@ -175,6 +184,14 @@ verde_i = clamp(VERDE_BASE_i + K * (fila_i / soma_filas) * DEFICIT_TOTAL, VERDE_
 ```
 
 onde `DEFICIT_TOTAL` é o tempo de verde que o acesso deixou de receber durante a preempção, e `K` é o ganho de compensação (parâmetro do experimento, começar em `K = 0.7`).
+
+> **"Começar em `K = 0.7`" foi onde parou, e é P17.** O piloto do Bloco 4 mede uma
+> mitigação entre −1,0% e +0,6% contra a meta de H2 — `K` e
+> `N_CICLOS_COMPENSACAO` nunca foram calibrados contra dado real. **Antes de
+> calibrar, verificar se a métrica não está diluindo o efeito:**
+> `tempo_espera_medio_transversal_s` é a média sobre a hora inteira, e a
+> compensação atua por ~140 s depois de cada evento, com um VE a cada 10 min.
+> Calibrar contra uma métrica que dilui é calibrar contra ruído.
 
 **E8 — Conflito entre múltiplos VEs.** Cenário obrigatório de teste. Regra de desempate, em ordem:
 

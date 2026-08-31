@@ -56,7 +56,12 @@ MODOS = ("FIXO", "PREEMPCAO", "PREEMPCAO_COMPENSADA")
 #: Meta de H1 — redução mínima no tempo de travessia do VE (decisão P1).
 META_H1 = 0.25
 
-#: Meta de H2 — mitigação do impacto transversal pela compensação (E7).
+#: Meta de H2 — mitigação **mínima** do impacto transversal pela compensação (E7).
+#: O enunciado passou de "em até 15%" para "em no mínimo 15%" em 2026-08-31: a
+#: redação antiga era um teto, e sob ela a mitigação medida aqui cumpriria H2.
+#: **O denominador continua em aberto** (P17) — as duas leituras são calculadas e
+#: impressas lado a lado, e nenhuma delas atinge a meta, de modo que declarar qual
+#: vale não é escolher pelo resultado.
 META_H2 = 0.15
 
 #: Orçamento do RNF01 para o p95 da latência de **decisão**, em milissegundos.
@@ -337,8 +342,11 @@ class ResumoH2:
         custo: Aumento relativo da espera de `PREEMPCAO` sobre `FIXO`.
         mitigacao: Quanto da espera de `PREEMPCAO` a compensação removeu.
         mitigacao_do_acrescimo: Quanto do **acréscimo** sobre o baseline foi
-            removido. As duas leituras de "mitigar em até 15% o impacto" —
-            declarar qual vale é ação de redação.
+            removido. É a segunda das duas leituras de "mitigar em no mínimo 15%
+            o impacto negativo" — declarar qual vale continua sendo ação de
+            redação (P17), com recomendação registrada pela leitura do acréscimo:
+            o impacto negativo *é* o acréscimo, e não a espera que existiria sem
+            preempção nenhuma. Instável quando o acréscimo é ~0 ou negativo.
     """
 
     cenario: str
@@ -688,11 +696,13 @@ def gerar_markdown(
 
     linhas += [
         "",
-        f"A meta de H2 é mitigar **em até {META_H2 * 100:.0f}%** o impacto negativo. O",
-        "enunciado admite duas leituras — fração da espera transversal, ou fração do",
-        "*acréscimo* que a preempção causou —, e as duas colunas acima medem cada uma.",
-        "**Qual delas o texto adota é ação de redação da equipe**, e precisa ser",
-        "decidida antes do Bloco 8: os dois números divergem bastante.",
+        f"A meta de H2 é mitigar **em no mínimo {META_H2 * 100:.0f}%** o impacto negativo",
+        "(enunciado corrigido em 2026-08-31: `em até 15%` era um teto, e sob ele os",
+        "números acima cumpririam a hipótese). O enunciado ainda admite duas leituras —",
+        "fração da espera transversal, ou fração do *acréscimo* que a preempção causou —,",
+        "e as duas colunas acima medem cada uma. **Qual delas o texto adota é ação de",
+        "redação da equipe** (P17) e precisa ser declarada antes do Bloco 8. Declarar",
+        "agora não é escolher pelo resultado: **nenhuma das duas atinge a meta**.",
         "",
         "Sinal negativo em *mitigação* significa que a compensação **piorou** a espera",
         "transversal em vez de melhorá-la. Sinal negativo em *custo* significa que a",

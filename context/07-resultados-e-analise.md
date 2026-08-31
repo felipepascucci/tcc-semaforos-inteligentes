@@ -15,6 +15,21 @@ Regras que decorrem disso, e que não podem ser flexibilizadas:
 
 Ver `09-pendencias-e-decisoes.md` item P6.
 
+> **Formato confirmado pela equipe em 2026-08-31.** As tabelas do capítulo 5 do
+> pré-projeto migram para uma seção **"Resultados esperados"**, dentro da
+> metodologia, rotulada explicitamente como **estimativa preliminar do
+> pré-projeto**. O capítulo 5 passa a ser preenchido inteiramente pela saída de
+> `analysis/gerar_resultados_tcc.py`. A migração **não depende do Bloco 8** e pode
+> ser feita já — fazê-la agora é o que impede um número não medido de sobreviver
+> por esquecimento até a versão entregue.
+
+> **T2 e a latência fim-a-fim (2026-08-31).** A linha `SIMULACAO` de T2 traz a
+> latência de **decisão** (RNF01); a de `HARDWARE`, a **fim-a-fim** (H3). Na
+> simulação `t_atuacao` é o mesmo passo de `t_decisao` — não há atuação física a
+> cronometrar —, então a comparação simulação × hardware do §6 item 4 é entre
+> grandezas diferentes e precisa ser apresentada como tal, com o n de cada uma
+> declarado (a de hardware tem n = 5; ver `06` §6).
+
 ## 2. Pipeline de análise
 
 ```
@@ -110,8 +125,8 @@ Todos devem ser zero. Se não forem, isso é o achado mais importante do trabalh
 | --- | --- | --- | --- |
 | H1 | Redução ≥ 25% em `moderado` e `intenso` (decisão P1) | — | ACEITA / REJEITADA / PARCIAL |
 | H1 (exploratório) | Cenário `leve` — sem meta, apenas medido e discutido | — | n/a |
-| H2 | Mitigação ≤ 15% de impacto | — | — |
-| H3 | Latência **fim-a-fim** < 200 ms (p95) | — | — |
+| H2 | Mitigação **≥ 15%** do impacto (decisão de 2026-08-31; denominador a declarar — ver P17) | — | — |
+| H3 | Latência **fim-a-fim** < 200 ms, sobre o **máximo** de 5 repetições de bancada (n declarado) | — | — |
 | RNF01 | Latência de **decisão** < 100 ms (p95) | — | — |
 
 As duas últimas linhas são métricas distintas — ver decisão P2. Reportar as duas separadamente, com p95 **e** p99.
