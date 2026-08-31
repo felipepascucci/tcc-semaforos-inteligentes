@@ -273,7 +273,7 @@ das duas está fechada.
 
 | Pendência | O que ficou decidido | O que continua aberto |
 |---|---|---|
-| **P16** | Corrigir o mecanismo **antes** de mexer em H1 — `tempo_antecipacao_margem_s` passa a consultar a fila que o motor já recebe. Reformular H1 vira contingência, com o orientador. Guardas: critério declarado antes do ajuste, parâmetros congelados antes da remedição, e **calibração em seeds fora de 1..50** | O ajuste em si e a remedição da matriz do piloto |
+| **P16** ✅ | **Resolvida em 2026-08-31**, corrigindo o mecanismo e sem tocar em H1. E3 passou a somar o tempo de dissipação da fila do acesso de entrada. Medido nas mesmas seeds do piloto: `intenso` **18,1% → 31,2%**, paradas do VE 2,76 → 0,08 | Nada. A contingência de reformular H1 não foi acionada |
 | **P17** | O enunciado de H2 passa de "em até 15%" para **"em no mínimo 15%"** — a redação antiga era um teto, e sob ela a mitigação medida **cumpriria** a hipótese | **Qual é o denominador** (espera transversal × acréscimo), se a métrica dilui o efeito, e a calibração de `K` e `n_ciclos_compensacao` |
 
 > **A guarda das seeds vale explicação.** As 5 seeds do piloto são um subconjunto
@@ -281,6 +281,29 @@ das duas está fechada.
 > resultado final sobre 1..50 contaminaria 5 das 50 execuções que validam o
 > trabalho — o modelo teria sido calibrado sobre parte da amostra que o valida.
 > Calibrar em 101..105 custa nada e mantém o Bloco 8 inteiramente fora-da-amostra.
+
+**Correção de P16, medida em 2026-08-31.** O critério do ajuste foi declarado e
+**commitado antes do código** (`1ae762e`); o código veio depois (`d63f774`). A
+ordem é verificável no `git log`, e é ela que separa "corrigimos o mecanismo e
+medimos" de "mexemos até o número subir".
+
+| Cenário | Piloto | Após a correção | Meta ≥ 25% |
+|---|---:|---:|:---:|
+| `intenso` | 18,1% (13,0 – 25,1) | **31,2%** (27,9 – 33,6) | **atinge** |
+| `moderado` | 31,7% | 34,3% | atinge |
+| `leve` | 39,0% | 40,4% | — |
+| `multiplas_emergencias` | 24,6% | 28,1% | — |
+
+Paradas do VE no `intenso`: **2,76 → 0,08**. Zero colisão, zero teleporte, zero
+violação de I1 a I5 nas 120 execuções das duas corridas.
+
+> **O custo está medido e é o trade-off central do trabalho.** A espera
+> transversal no `intenso` subiu de **+24,6% para +43,6%** — o corredor abre mais
+> cedo porque precisa esvaziar a fila, e quem paga é a transversal. Era um dos
+> três resultados declarados **antes** de medir, e vai para a discussão do
+> capítulo 5 junto com o ganho, não como nota de rodapé. **P17 ficou mais
+> urgente:** o custo que E7 deveria mitigar quase dobrou, e a mitigação continua
+> indistinguível de zero.
 
 **Um defeito do próprio lote, achado e corrigido no piloto.** O `execucoes.csv`
 consolidado saiu com **64 linhas para 60 execuções**: quatro pontos exercitados
@@ -329,7 +352,7 @@ Primeiro candidato ao corte se algo atrasar (`context/08` §2, item 2 e 5).
 
 ~~`sim/controlador/lote.py`~~ **já existe** (entrega 4.1). O Bloco 8 é rodá-lo com `--seeds 1..50`: 4 cenários × 3 modos × 50 seeds = **600 execuções** de 3600 s. Medido no piloto, com `traci` e 6 processos, isso dá **~6 h** — uma noite de máquina. `libsumo` deixou de ser necessário para caber na janela (ver P15).
 
-> **Bloqueado por P16 e P17.** As duas pendências abertas pelo piloto mudam o modelo ou a hipótese; rodar as 600 antes de decidir significa rodá-las de novo depois.
+> **Bloqueado por P17.** ~~P16~~ foi resolvida em 2026-08-31 corrigindo o mecanismo; P17 continua aberta e ainda muda o modelo ou a hipótese, então rodar as 600 antes de decidir significa rodá-las de novo depois. As 600 rodam com o código de `d63f774` em diante — o piloto de 2026-08-26 foi produzido pelo código anterior e **não** se mistura com elas.
 
 **Pareamento por seed é inegociável:** gerar as rotas uma vez por (cenário, seed) e reutilizar nos três modos. Sem isso a comparação deixa de ser pareada e perde poder estatístico.
 
@@ -352,7 +375,7 @@ Em paralelo: diagramas PlantUML do `context/08` §5, DER via eralchemy2, relató
 | Marco | O que prova |
 |---|---|
 | Fim do Bloco 2 | O núcleo do TCC existe e é seguro — invariantes verificados por property-based testing |
-| Fim do Bloco 4 | ✅ **2026-08-26.** H1 se sustenta em `moderado` (31,7%) e **não** em `intenso` (18,1%); H2 tem custo medido mas **sem** mitigação (P16 e P17). Zero gridlock, RNF01 com folga de três ordens de grandeza. O marco cumpriu seu papel: os problemas apareceram com margem |
+| Fim do Bloco 4 | ✅ **2026-08-26.** H1 se sustenta em `moderado` (31,7%) e **não** em `intenso` (18,1%); H2 tem custo medido mas **sem** mitigação (P16 e P17). Zero gridlock, RNF01 com folga de três ordens de grandeza. O marco cumpriu seu papel: os problemas apareceram com margem — e **P16 foi corrigida em 2026-08-31** (`intenso` 31,2%), com quase três meses de folga, que é exatamente o que antecipar o piloto comprou |
 | Fim do Bloco 5 | O protótipo físico funciona fim-a-fim, incluindo o fail-safe |
 | Fim do Bloco 8 | Os dados do capítulo 5 existem e são reprodutíveis |
 
@@ -364,11 +387,14 @@ Em paralelo: diagramas PlantUML do `context/08` §5, DER via eralchemy2, relató
 > `context/09`: **P3** (o que a banca espera por "IA") e os três itens
 > bibliográficos/metodológicos de **P11**.
 
-- **P16 e P17** (abertas pelo piloto, 2026-08-26) — **as duas seguem bloqueando o
-  Bloco 8** e continuam `DECISÃO DO GRUPO`. Em 2026-08-31 ficou decidido **tentar
-  corrigir o mecanismo antes de mexer em H1** (P16) e corrigir o **enunciado de H2
-  para `≥ 15%`** (P17); o ajuste, a remedição, o denominador de H2 e a calibração
-  de `K` continuam por fazer. Ver o quadro no Bloco 4 e `context/09`.
+- ~~**P16** — H1 abaixo da meta em `intenso`.~~ ✅ **Resolvida em 2026-08-31**
+  corrigindo o mecanismo, sem tocar em H1: 18,1% → **31,2%**, paradas do VE
+  2,76 → 0,08. Ver o quadro no Bloco 4.
+- **P17** — **continua bloqueando o Bloco 8** e continua `DECISÃO DO GRUPO`. O
+  enunciado de H2 foi corrigido para `≥ 15%`, mas o **denominador** e a
+  calibração de `K`/`n_ciclos_compensacao` seguem por fazer — e a correção de P16
+  **aumentou** o custo transversal que E7 deveria mitigar (+24,6% → +43,6% no
+  `intenso`), o que torna P17 mais urgente, não menos.
 - **P3** — decidida internamente (agente reativo determinístico), mas **pendente de
   confirmação com o orientador**: a pergunta é se a banca espera aprendizado de
   máquina. É o item de expectativa, não de engenharia.
