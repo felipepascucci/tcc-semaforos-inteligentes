@@ -352,7 +352,7 @@ Primeiro candidato ao corte se algo atrasar (`context/08` §2, item 2 e 5).
 
 ~~`sim/controlador/lote.py`~~ **já existe** (entrega 4.1). O Bloco 8 é rodá-lo com `--seeds 1..50`: 4 cenários × 3 modos × 50 seeds = **600 execuções** de 3600 s. Medido no piloto, com `traci` e 6 processos, isso dá **~6 h** — uma noite de máquina. `libsumo` deixou de ser necessário para caber na janela (ver P15).
 
-> **Bloqueado por P17.** ~~P16~~ foi resolvida em 2026-08-31 corrigindo o mecanismo; P17 continua aberta e ainda muda o modelo ou a hipótese, então rodar as 600 antes de decidir significa rodá-las de novo depois. As 600 rodam com o código de `d63f774` em diante — o piloto de 2026-08-26 foi produzido pelo código anterior e **não** se mistura com elas.
+> **Bloqueado por P17 e P18.** ~~P16~~ foi resolvida em 2026-08-31 corrigindo o mecanismo. P17 continua aberta e ainda muda o modelo ou a hipótese, então rodar as 600 antes de decidir significa rodá-las de novo depois. **P18** não muda o modelo, mas precisa estar decidida antes: um teto para a degradação transversal declarado *depois* de ver os números seria régua escolhida pelo resultado. As 600 rodam com o código de `d63f774` em diante — o piloto de 2026-08-26 foi produzido pelo código anterior e **não** se mistura com elas.
 
 **Pareamento por seed é inegociável:** gerar as rotas uma vez por (cenário, seed) e reutilizar nos três modos. Sem isso a comparação deixa de ser pareada e perde poder estatístico.
 
@@ -381,15 +381,22 @@ Em paralelo: diagramas PlantUML do `context/08` §5, DER via eralchemy2, relató
 
 ## Pendências que continuam abertas
 
-> **Atualizado em 2026-08-31**, na preparação da orientação. Quatro itens ganharam
-> decisão da equipe (P16 ordem de ataque, P17 enunciado, P6 formato, H3 n = 5) e
-> quatro seguem dependendo do **orientador** — ver a tabela no topo de
-> `context/09`: **P3** (o que a banca espera por "IA") e os três itens
-> bibliográficos/metodológicos de **P11**.
+> **Atualizado em 2026-08-31.** P16 foi **resolvida** no mesmo dia; P11 (3)
+> — o enquadramento em fluxo interrompido — foi **confirmado pela equipe** e saiu
+> da pauta, restando declará-lo no texto. Abriu-se **P18**, consequência direta
+> da correção de P16. Dependem do **orientador**, na ordem da tabela no topo de
+> `context/09`: **P18** (teto para a degradação transversal), **P11 (1) e (2)**
+> (bibliografia) e **P3** (o que a banca espera por "IA").
 
 - ~~**P16** — H1 abaixo da meta em `intenso`.~~ ✅ **Resolvida em 2026-08-31**
   corrigindo o mecanismo, sem tocar em H1: 18,1% → **31,2%**, paradas do VE
   2,76 → 0,08. Ver o quadro no Bloco 4.
+- **P18** (aberta em 2026-08-31) — **bloqueia o Bloco 8** e depende do orientador.
+  O objetivo geral promete não degradar o fluxo transversal "de forma
+  inaceitável" sem definir a palavra, e a correção de P16 levou a degradação
+  medida no `intenso` de +24,6% para **+43,6%**. Ou se declara um teto numérico
+  antes das 600 execuções, ou se reescreve o objetivo. Recomendação registrada: a
+  segunda.
 - **P17** — **continua bloqueando o Bloco 8** e continua `DECISÃO DO GRUPO`. O
   enunciado de H2 foi corrigido para `≥ 15%`, mas o **denominador** e a
   calibração de `K`/`n_ciclos_compensacao` seguem por fazer — e a correção de P16

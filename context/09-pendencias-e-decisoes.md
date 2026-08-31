@@ -14,11 +14,12 @@ de redação.
 
 | Item | O que perguntar | Estado |
 | --- | --- | --- |
-| **P3** | A banca espera aprendizado de máquina? A caracterização como *agente reativo com otimização determinística* (Russell & Norvig) é suficiente? | **A confirmar** — decisão da equipe tomada em 2026-08-24, nunca comunicada ao orientador |
+| **P18** | O trabalho deve declarar um **teto numérico** para a degradação do fluxo transversal, ou tratar isso qualitativamente? O objetivo geral usa a palavra "inaceitável" sem defini-la | **A confirmar — precisa ser resolvido ANTES do Bloco 8** |
 | **P11 (1)** | Qual referência usar para a **faixa de plausibilidade** do fluxo de saturação em via urbana (autor, edição, ano, capítulo) | **A confirmar** — candidatas: Boletins Técnicos da CET-SP, Manual de Estudos de Tráfego do DNIT, HCM |
 | **P11 (2)** | Qual referência sustenta o **enquadramento por grau de saturação** — os cortes de v/c em 0,40 e 0,75 | **A confirmar** |
-| **P11 (3)** | Confirmar o enquadramento em **fluxo interrompido** (arterial semaforizada), e não ininterrupto (rodovia) | **A confirmar** — o erro de régua reclassificaria o `intenso` e derrubaria a formulação de H1 |
-| **P16** | *Só se a correção do mecanismo não levantar o número:* reformular H1 declarando a faixa de v/c em que a meta vale, ou reportar resultado parcial negativo | **Contingência** — a equipe tenta corrigir o mecanismo primeiro (ver P16) |
+| **P3** | A banca espera aprendizado de máquina? A caracterização como *agente reativo com otimização determinística* (Russell & Norvig) é suficiente? | **A confirmar** — decisão da equipe tomada em 2026-08-24, nunca comunicada ao orientador |
+| ~~**P11 (3)**~~ | ~~Confirmar o enquadramento em fluxo interrompido~~ | ✅ **Confirmado pela equipe em 2026-08-31.** Não é matéria de opinião: a malha é arterial urbana semaforizada, logo fluxo interrompido por definição. Sai da pauta; o que resta é **declarar** a distinção no texto, e a referência que a sustenta continua nos itens P11 (1) e (2) |
+| ~~**P16**~~ | ~~Reformular H1, se a correção do mecanismo não levantar o número~~ | ✅ **Contingência não acionada** — a correção levantou (`intenso` 18,1% → 31,2%). H1 fica como está |
 
 ---
 
@@ -202,11 +203,19 @@ nomes dos cenários; o que muda é a caracterização, que passa a ser a medida.
 
 ### Estado em 2026-08-31 · **item continua ABERTO**
 
-Os itens **1, 2 e 3** foram levados à orientação de 31/08/2026 e estão na tabela
-de itens que dependem do orientador, no topo deste arquivo: a referência para a
-faixa de plausibilidade, a referência para o enquadramento por grau de saturação,
-e a confirmação do enquadramento em fluxo interrompido. São os três que a equipe
-não fecha sozinha.
+Os itens **1 e 2** — a referência para a faixa de plausibilidade e a referência
+para o enquadramento por grau de saturação — foram levados à orientação de
+31/08/2026 e estão na tabela de itens que dependem do orientador, no topo deste
+arquivo. São bibliografia, e a equipe não os fecha sozinha.
+
+O item **3 saiu da pauta: o enquadramento em fluxo interrompido foi confirmado
+pela equipe em 2026-08-31.** Não é matéria de opinião — a malha é uma arterial
+urbana semaforizada, e isso *é* fluxo interrompido por definição; a capacidade
+medida (1.652 veíc./h na aproximação arterial, contra os ~4.000 que a régua de
+rodovia sugeriria) confirma a ordem de grandeza. **O que continua pendente é
+declarar a distinção no texto**, com a aritmética explícita, porque é o ponto em
+que a arguição pode aplicar a régua errada e reclassificar o cenário `intenso`
+como tráfego folgado. A referência que sustenta a afirmação vem dos itens 1 e 2.
 
 O item **4 fica confirmado pela equipe**: o cenário `intenso` é descrito no texto
 como **saturação moderada-alta (v/c ≈ 0,73)**, os fluxos e os nomes dos cenários
@@ -662,6 +671,63 @@ fato custa algo.
 > honesta é reportar o custo transversal medido e declarar que a compensação
 > proposta não o mitigou de forma mensurável neste experimento — o que é um
 > resultado, não um fracasso, desde que dito assim.
+
+---
+
+## P18 — "Degradação inaceitável" não tem limiar declarado · `DECISÃO DO GRUPO + ORIENTADOR — ANTES DO BLOCO 8`
+
+Aberta em 2026-08-31, como consequência direta da correção de P16.
+
+O **objetivo geral** do trabalho (`00-visao-geral.md` §4) é reduzir o tempo de
+travessia do VE *"sem degradar de forma **inaceitável** o fluxo transversal"*. A
+palavra nunca foi definida, e até agora isso era abstrato: o custo transversal
+medido era moderado e ninguém precisava dizer onde ficava a fronteira.
+
+**Deixou de ser abstrato.** A correção de P16 antecipa a preempção pelo tempo de
+dissipação da fila, o que resolveu H1 e, no mesmo movimento, quase dobrou o custo
+para quem está na transversal:
+
+| Cenário | Antes de P16 | Depois de P16 |
+| --- | ---: | ---: |
+| `intenso` | +24,6% | **+43,6%** |
+| `moderado` | +18,6% | +19,7% |
+| `multiplas_emergencias` | +15,7% | +18,3% |
+| `leve` | −1,6% | +0,2% |
+
+**A pergunta:** o texto declara um teto numérico para essa degradação, ou trata o
+assunto qualitativamente na discussão do capítulo 5?
+
+**Por que precisa ser resolvido antes do Bloco 8.** São 600 execuções para
+produzir os dados definitivos. Se houver limiar, ele tem de estar escrito
+**antes** delas. Declarar um teto depois de ver os números é escolher a régua
+pelo resultado — o mesmo defeito que o projeto evitou em P16 (critério commitado
+antes do código) e no enunciado de H2 (denominador declarado enquanto nenhuma
+leitura atinge a meta). Fazer diferente aqui abriria exatamente a brecha que as
+duas decisões anteriores fecharam.
+
+**As saídas:**
+
+1. **Teto numérico declarado na metodologia.** Torna o objetivo geral
+   verificável e dá uma linha nova em T6. O risco é escolher mal: um teto
+   apertado reprovaria um sistema que funciona, um teto frouxo não significa
+   nada. Se for este o caminho, o valor precisa de justificativa própria — e
+   provavelmente da mesma bibliografia de P11.
+2. **Tratamento qualitativo, com o objetivo geral reescrito.** O custo é medido,
+   reportado e discutido, sem limiar formal. Exige tirar a palavra "inaceitável"
+   do objetivo, ou substituí-la por formulação que não prometa um critério que o
+   trabalho não tem.
+
+**Recomendação: 2, com a reescrita do objetivo.** Um teto inventado agora seria
+um número sem lastro — exatamente o que P11 existe para evitar — e o trabalho não
+tem base para fixá-lo. Reportar o trade-off medido e discuti-lo é honesto e é o
+que os dados sustentam. Mas **a escolha é do grupo, e vale ouvir o orientador**,
+porque é ele que conhece a expectativa da banca sobre um objetivo geral sem
+critério numérico.
+
+> **Não confundir com H2.** H2 mede se a **compensação** devolve parte do custo, e
+> tem meta própria (≥ 15%, ver P17). P18 é outra coisa: quanto custo é aceitável
+> **existir**, mitigado ou não. Um trabalho pode ter H2 rejeitada e ainda assim
+> declarar que a degradação ficou dentro do aceitável, e vice-versa.
 
 ---
 

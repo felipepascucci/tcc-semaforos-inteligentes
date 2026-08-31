@@ -30,6 +30,13 @@ Ambas são controladas pelo **mesmo motor de decisão** (`backend/core/priorizac
 
 **Geral:** desenvolver e validar um modelo de controle dinâmico de semáforos que priorize veículos de emergência reduzindo seu tempo de travessia, sem degradar de forma inaceitável o fluxo transversal.
 
+> **A palavra "inaceitável" não tem definição — e virou pendência P18 em
+> 2026-08-31.** Até então era abstrata; depois da correção de P16 a degradação
+> transversal medida no cenário `intenso` passou de +24,6% para **+43,6%**, e o
+> objetivo geral promete um critério que o trabalho não tem. Ou se declara um
+> teto numérico na metodologia, **antes** do Bloco 8, ou se reescreve o objetivo
+> para não prometer um limiar. Ver P18 em `09-pendencias-e-decisoes.md`.
+
 **Específicos:**
 
 1. Modelar uma malha urbana arterial simulada com 4 a 8 cruzamentos semaforizados.
