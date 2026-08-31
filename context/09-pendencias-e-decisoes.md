@@ -369,6 +369,81 @@ adiante — é o que as paradas residuais mostram (2,76 no `intenso` contra 0,76
 (reformular H1 declarando a faixa), e aí a tentativa registrada é o que torna a
 reformulação defensável em vez de oportunista.
 
+### Critério do ajuste, declarado **antes** de mexer no código · 2026-08-31
+
+Este bloco é commitado **antes** da alteração, de propósito: o `git log` é o que
+prova que o critério precede o resultado. É o mesmo procedimento da calibração de
+`tau` (2026-08-25).
+
+**Diagnóstico, com a aritmética explícita.** No cenário `intenso` a arterial
+recebe 1.200 veíc./h em duas faixas, ou 600 veíc./h/faixa. O ciclo fixo é de 70 s
+com 30 s de verde por eixo, logo a arterial fica 40 s no vermelho e acumula
+`600 × 40/3600 ≈ 6,7` veículos por faixa. Dissipar essa fila leva
+`6,7 × 2,13 ≈ 14 s`, ao headway de saturação medido.
+
+A janela de E3 hoje é `amarelo (3) + all-red (2) + MARGEM (5) = 10 s`, mais o
+verde mínimo residual. O verde alvo abre 5 s depois da decisão, e o VE chega 10 s
+depois dela — **5 s de verde contra os ~14 s de que a fila precisa**. O corredor
+abre a tempo e não esvazia a tempo, que é exatamente o que as paradas residuais
+mostram (2,76 no `intenso` contra 0,76 no `moderado`).
+
+**A mudança.** E3 passa a somar à janela o tempo estimado de dissipação da fila
+**no acesso pelo qual o VE vai entrar**:
+
+```
+T_ANTECIPACAO = amarelo + all_red + verde_min_residual + MARGEM + T_dissipacao
+
+T_dissipacao  = min( (fila_no_acesso / faixas_do_acesso) * headway_saturacao_s,
+                     preempcao_timeout_s - tempo_transicao_segura_s )
+```
+
+**A correção não introduz nenhum parâmetro livre**, e isso é o principal
+argumento de defesa dela:
+
+| Grandeza | De onde vem |
+| --- | --- |
+| `fila_no_acesso` | Já chega ao motor em `EstadoSemaforo.fila_por_acesso`, dos detectores E2 |
+| `faixas_do_acesso` | Geometria da rede, lida pelo carregador de topologia |
+| `headway_saturacao_s` | **Medido** em `analysis/data/fluxo_saturacao.csv` — 1,9926 e 2,1213 na arterial, 2,2891 na transversal; adotada a média das faixas medidas, **2,13 s** |
+| Teto de `T_dissipacao` | **Derivado** de `preempcao_timeout_s`: antecipar mais do que a preempção sobrevive faria o corredor cair na cara do VE |
+
+Nenhum número é escolhido para caber no resultado. Mexer em `tau`, `minGap`,
+`length`, `accel` ou `decel` obriga a remedir a saturação e **também** a atualizar
+`headway_saturacao_s`, que passa a integrar a mesma cadeia de dependência.
+
+**Simplificação declarada: o tempo perdido na partida não entra.** O modelo de
+campo somaria um *start-up lost time* ao tempo de dissipação, mas a medição de
+`sim/calibracao/fluxo_saturacao.py` devolveu **0,000 s** para ele nas três faixas
+— os primeiros veículos da janela cruzam já em movimento. Somar um valor de
+manual aqui seria introduzir justamente o número sem lastro que P11 existe para
+evitar. A consequência é que a antecipação fica **conservadora em ~2 s**, ou seja,
+o erro é para o lado de **não** inflar H1.
+
+**Resultado esperado, declarado antes de medir:**
+
+1. **H1 melhora.** As paradas residuais do VE no `intenso` devem cair das 2,76
+   atuais em direção às 0,76 do `moderado`, e a redução da travessia deve subir
+   dos 18,1%. *Não* se declara aqui que ela chegará a 25% — isso é o que a
+   medição vai dizer.
+2. **H2 piora.** A preempção passa a começar antes e segura a transversal por
+   mais tempo, então o custo transversal medido (+24,6% no `intenso`) deve
+   aumentar. **Isso precisa ser medido e reportado, não escondido** — é o
+   trade-off central do trabalho, e é o que dá substância à discussão do
+   capítulo 5.
+3. **Segurança inalterada.** I1 a I5 não são tocados. A antecipação maior aumenta
+   a pressão sobre I5, que já tem guarda no motor e cede a vez à fase faminta;
+   espera-se zero violação, e violação seria motivo de reverter, não de afrouxar
+   o invariante.
+
+**Regra de parada — uma tentativa deste mecanismo.** Se a redução no `intenso`
+não atingir 25%, **não se varre parâmetro**: aciona-se a opção 2 (reformular H1),
+com o orientador. Corrigir um defeito de implementação encontrado no caminho não
+conta como nova tentativa; mudar a fórmula atrás de um número melhor conta, e é
+o que fica proibido.
+
+**Onde se mede.** Matriz completa do piloto nas **seeds 101..105**, fora do
+intervalo 1..50 do Bloco 8. As seeds 1..5 só depois, como remedição de aceitação.
+
 ---
 
 ## P17 — E7 não entrega a mitigação de H2 · `DECISÃO DO GRUPO — ANTES DO BLOCO 8`
