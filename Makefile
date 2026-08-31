@@ -29,6 +29,8 @@ ajuda:
 	@echo "validar     valida a malha antes de experimentar (3.4)"
 	@echo "executar    uma execução (CENARIO=$(CENARIO) MODO=$(MODO) SEED=$(SEED))"
 	@echo "demo        a mesma execução na sumo-gui, para ver o corredor verde"
+	@echo "lote        a matriz inteira (SEEDS=$(SEEDS) PARALELO=$(PARALELO))"
+	@echo "piloto      lote + relatório do Bloco 4"
 	@echo "teste       pytest (padrão) + pytest -m sumo"
 	@echo "lint        ruff check, ruff format --check e mypy"
 
@@ -61,6 +63,22 @@ executar:
 demo:
 	$(PYTHON) -m sim.controlador.executor --cenario $(CENARIO) --modo PREEMPCAO \
 		--seed $(SEED) --duracao 900 --gui --sem-banco
+
+# --- Bloco 4 (piloto) e Bloco 8 (lote completo) ----------------------------
+# O mesmo alvo serve aos dois: o que muda é SEEDS. Com PARALELO=6, as 60
+# execuções do piloto levam ~40 min nesta máquina (8 núcleos físicos).
+SEEDS ?= 1..5
+PARALELO ?= 4
+
+lote:
+	$(PYTHON) -m sim.controlador.lote --seeds $(SEEDS) --paralelo $(PARALELO)
+
+# Lê analysis/data/ e escreve docs/relatorios/piloto_AAAAMMDD.md. Nenhum número
+# do relatório é digitado à mão (regra de ouro do CLAUDE.md).
+relatorio-piloto:
+	$(PYTHON) -m analysis.relatorio_piloto
+
+piloto: lote relatorio-piloto
 
 # --- qualidade -------------------------------------------------------------
 teste:
