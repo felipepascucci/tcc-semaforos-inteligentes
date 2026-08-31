@@ -108,6 +108,22 @@ Execução que falhe qualquer item é **descartada e reexecutada com a mesma see
 >
 > A verificação da **malha** (`04` §12), que roda uma vez antes de experimentar,
 > é outra coisa e mora em `sim/validacao/malha.py`.
+>
+> **Ligada ao lote no Bloco 4.** `sim/controlador/lote.py` chama
+> `validar_execucao()` em **toda** execução. A que reprova não entra nos CSV de
+> `analysis/data/`: fica na própria pasta de `sim/saida/`, com a evidência bruta,
+> e o motivo — mais o caminho da evidência — vai para
+> `analysis/data/descartes.csv`. Reexecutar exige apagar a linha de
+> `execucao_simulacao` (a restrição única em cenário/modo/seed a bloqueia), o que
+> se faz com `--repetir MOTIVO`; a remoção também é registrada no mesmo arquivo.
+>
+> **`ves_planejados` fica desligado no lote, de propósito.** Quantos VEs completam
+> a rota depende do braço: o último parte perto do fim do horizonte e, no
+> baseline — que é mais lento —, pode não chegar dentro dos 3.600 s. Exigir um
+> número fixo reprovaria execuções legítimas de `FIXO`, justamente o controle. O
+> pareamento é feito **por id de VE** na análise, sobre a interseção dos três
+> braços (`analysis/relatorio_piloto.py`), e o relatório declara quantos VEs a
+> interseção descartou.
 
 ## 5. Relatório de validação (entregável 6 do escopo)
 

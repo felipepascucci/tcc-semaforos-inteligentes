@@ -45,7 +45,7 @@ from core.parametros import Parametros
 from core.priorizacao.motor import MotorDecisao
 from core.seguranca import VerificadorSeguranca
 from sim.ambiente import executavel
-from sim.controlador.coletor import ColetorMetricas, ResultadoExecucao, gravar_csv
+from sim.controlador.coletor import DADOS, ColetorMetricas, ResultadoExecucao, gravar_csv
 from sim.demanda import gerar_rotas
 
 RAIZ = Path(__file__).resolve().parents[2]
@@ -76,6 +76,11 @@ class Opcoes:
             com os detectores E2. Útil para depurar uma execução específica.
         atraso_ms: Atraso por passo na GUI, em milissegundos. Só tem efeito com
             `gui=True`. Zero roda o mais rápido que a máquina permitir.
+        diretorio_csv: Onde escrever os CSV de `context/04` §10. `None` usa
+            `analysis/data/`. O lote (`sim/controlador/lote.py`) aponta cada
+            execução para a **própria** pasta de saída e consolida depois: com
+            vários processos escrevendo direto no arquivo compartilhado, as
+            linhas se intercalariam e a ordem mudaria a cada corrida.
     """
 
     cenario: str
@@ -88,6 +93,7 @@ class Opcoes:
     persistir: bool = True
     saida_detalhada: bool = False
     atraso_ms: int = 20
+    diretorio_csv: Path | None = None
 
 
 def versao_do_codigo() -> str:
@@ -268,6 +274,7 @@ def executar(opcoes: Opcoes) -> ResultadoExecucao:
         id_execucao=registro,
         versao_codigo=versao_do_codigo(),
         detalhar_latencias=opcoes.exemplar,
+        diretorio=opcoes.diretorio_csv or DADOS,
     )
     if registro is not None:
         _fechar_registro(registro, resultado, exemplar=opcoes.exemplar)

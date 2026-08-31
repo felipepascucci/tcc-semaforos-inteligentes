@@ -235,6 +235,29 @@ python -m sim.controlador.lote \
 
 Com `libsumo` e 4 processos em paralelo, isso roda em algumas horas. Com `traci` + GUI, em dias. Rodar o lote com `libsumo` e headless.
 
+> **Implementado no Bloco 4** (`sim/controlador/lote.py`), antecipado porque o
+> piloto já são 60 execuções. A CLI é a de cima, com dois acréscimos: `--repetir
+> MOTIVO`, que apaga do banco os pontos já gravados antes de reexecutar, e
+> `--sem-banco`.
+>
+> **O lote paraleliza com processos `traci`, não com `libsumo`** — o módulo
+> Python do `libsumo` não vem no instalador Windows (P15). O adaptador abstrai os
+> dois (3.6), então trocar é passar `--libsumo` quando a decisão for tomada. O
+> ganho perdido é menor do que os "10x" nominais sugerem: o adaptador lê o estado
+> por **assinaturas**, ~4 chamadas de IPC por passo, e é o custo de IPC que o
+> `libsumo` elimina. Medido em 8 núcleos físicos, com `--paralelo 6`: uma execução
+> de 3.600 s leva ~1 min no `leve`, ~2 min no `moderado` e ~4 min no `intenso`.
+>
+> **O pareamento é garantido no processo pai.** Os arquivos de rota são gerados
+> em série, antes de qualquer processo subir: dois trabalhadores correndo para
+> escrever o mesmo `sim/saida/rotas/<cenario>_<seed>.rou.xml` produziriam um
+> arquivo truncado, e o pareamento morreria em silêncio.
+>
+> **Cada execução escreve seus CSV na própria pasta**, e o pai consolida na ordem
+> da matriz. Escrever direto no arquivo compartilhado intercalaria as linhas a
+> cada `flush`, e a ordem mudaria a cada corrida — um `diff` entre duas corridas
+> deixaria de significar nada.
+
 ## 8. Loop do controlador
 
 ```python
@@ -325,8 +348,17 @@ analysis/data/
 ├── execucoes.csv                      # 1 linha por execução (600 linhas)
 ├── ve_por_execucao.csv                # 1 linha por VE por execução
 ├── transversal_por_execucao.csv       # fila máxima por aproximação
-└── latencias.csv                      # 1 linha por decisão — só execução exemplar
+├── latencias.csv                      # 1 linha por decisão — só execução exemplar
+└── descartes.csv                      # execuções reprovadas e reexecuções, com motivo
 ```
+
+> **`descartes.csv` é entregue pelo lote** (Bloco 4). Só execução **válida** entra
+> nos quatro primeiros arquivos; a que `validar_execucao()` reprova fica na
+> própria pasta de `sim/saida/`, com a evidência bruta, e o motivo vai para
+> `descartes.csv` junto com o caminho dessa pasta. O arquivo registra também as
+> remoções feitas por `--repetir`, que é como se apaga a linha de
+> `execucao_simulacao` que a restrição única bloqueia. É a prova documental que
+> `context/06` §4 exige.
 
 A saída bruta do SUMO (`tripinfo.xml`, `summary.xml`, `colisoes.xml`,
 detectores) fica em `sim/saida/<cenario>_<modo>_<seed>/`, fora do Git.
@@ -345,6 +377,20 @@ detectores) fica em `sim/saida/<cenario>_<modo>_<seed>/`, fora do Git.
 > execução — mais de 20 milhões de linhas nas 600 do Bloco 8. É a mesma aritmética
 > da decisão P5. Os percentis, que são o que RNF01 e H3 exigem, vão em
 > `execucoes.csv` de **toda** execução.
+>
+> **E `latencias.csv` é o único CSV de `analysis/data/` que NÃO é versionado**
+> (decisão de 2026-08-26). Mesmo restrito às exemplares ele dá 13 MB, e o lote o
+> reescreve inteiro a cada corrida — cada reexecução acrescentaria ~1,3 MB
+> permanentes à história do repositório. Seu único consumidor é a figura **F2**
+> (`context/07` §5, histograma + CDF da latência de decisão); os números que vão
+> ao **texto** são os percentis, que ficam em `execucoes.csv`.
+>
+> **Ressalva para quem for gerar F2 no Bloco 9:** latência é a única grandeza
+> deste experimento que **não** é reprodutível a partir da seed — é relógio de
+> parede e depende da máquina e da carga. Regerar F2 dá uma distribuição
+> equivalente, não idêntica. Se a figura precisar ser estável entre gerações, o
+> caminho é o pipeline de análise emitir um resumo por quantis (~1.000 linhas por
+> execução exemplar, algumas centenas de KB) e **esse** ser versionado.
 
 Esses CSVs são o insumo de `07-resultados-e-analise.md`. Devem ser regeneráveis do zero com um comando.
 
