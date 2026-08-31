@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import pytest
 
-from core.modelos import TipoVeiculo, VeiculoEmergencia
+from core.modelos import EstadoSemaforo, TipoVeiculo, VeiculoEmergencia
 from core.parametros import Parametros
 from core.priorizacao.deteccao import (
     calcular_eta_s,
     dentro_da_janela,
     detectar,
     distancia_ao_longo_da_rota,
+    fila_por_faixa,
 )
 from tests.core.conftest import construir_parametros, construir_topologia, construir_ve
 
@@ -187,6 +188,88 @@ def test_verde_minimo_pendente_antecipa_a_janela(parametros: Parametros) -> None
 
     assert dentro_da_janela(deteccao, parametros, verde_min_residual=0.0) is False
     assert dentro_da_janela(deteccao, parametros, verde_min_residual=5.0) is True
+
+
+# ---------------------------------------------------------------------------
+# E3 — dissipação da fila (P16)
+# ---------------------------------------------------------------------------
+
+
+def test_fila_no_acesso_antecipa_a_janela(parametros: Parametros) -> None:
+    """**Regressão de P16.** Abrir o verde a tempo não basta: a fila tem de escoar.
+
+    O piloto do Bloco 4 mediu 2,76 paradas residuais do VE no cenário `intenso`
+    contra 0,76 no `moderado` — o corredor abria a tempo e não esvaziava a
+    tempo. Com a janela fixa em 10 s, um VE com ETA de 20 s ficava de fora;
+    com seis veículos parados à frente (6 x 2,13 = 12,8 s de dissipação) ele
+    passa a entrar.
+    """
+    topologia = construir_topologia(n_cruzamentos=1)
+    # 200 m a 10 m/s: ETA de 20 s, o dobro da janela sem fila.
+    veiculo = construir_ve(n_vias=2, posicao_na_via_m=300.0, velocidade=10.0)
+    deteccao = detectar(topologia, veiculo, parametros)[0]
+    assert deteccao.eta_s == pytest.approx(20.0)
+
+    assert dentro_da_janela(deteccao, parametros) is False
+
+    dissipacao = parametros.tempo_dissipacao_fila_s(fila_por_faixa=6)
+    assert dissipacao == pytest.approx(12.78)
+    assert dentro_da_janela(deteccao, parametros, tempo_dissipacao_s=dissipacao) is True
+
+
+def test_sem_fila_a_janela_e_a_mesma_de_antes(parametros: Parametros) -> None:
+    """A correção de P16 não muda o comportamento onde não há fila.
+
+    Importa porque os cenários `leve` e `moderado` já atingiam a meta: uma
+    correção que mexesse neles também obrigaria a explicar por que os números
+    de H1 mudaram onde não havia defeito.
+    """
+    assert parametros.tempo_dissipacao_fila_s(fila_por_faixa=0) == 0.0
+    assert parametros.tempo_antecipacao_s(tempo_dissipacao_s=0.0) == pytest.approx(10.0)
+    assert parametros.tempo_antecipacao_s() == pytest.approx(10.0)
+
+
+def test_janela_nao_passa_do_teto_derivado_do_timeout(parametros: Parametros) -> None:
+    """Antecipar mais que a preempção sobrevive derrubaria o corredor no rosto do VE.
+
+    `_liberar` dispara por `preempcao_timeout_s`; se a janela fosse maior que
+    isso, a preempção começaria, expiraria e o VE chegaria no vermelho — pior
+    que não ter preemptado. O teto é derivado, não é parâmetro novo.
+    """
+    assert parametros.antecipacao_max_s == pytest.approx(40.0)  # 45 - (3 + 2)
+
+    # Fila absurda: 100 veículos por faixa dariam 213 s de dissipação.
+    enorme = parametros.tempo_dissipacao_fila_s(fila_por_faixa=100)
+    assert enorme == pytest.approx(213.0)
+    assert parametros.tempo_antecipacao_s(tempo_dissipacao_s=enorme) == pytest.approx(40.0)
+
+
+def test_fila_e_dividida_pelas_faixas_do_acesso() -> None:
+    """Doze parados em duas faixas são seis à frente do VE, não doze.
+
+    Os detectores E2 somam as faixas do acesso; usar a soma estimaria o dobro do
+    tempo de dissipação numa arterial de duas faixas, e a preempção começaria
+    cedo demais — o custo transversal que H2 mede, pago sem necessidade.
+    """
+    de_duas = construir_topologia(n_cruzamentos=1, faixas=2)
+    de_uma = construir_topologia(n_cruzamentos=1, faixas=1)
+    estado = EstadoSemaforo(
+        id="CRUZ_TESTE_1", fase_atual=1, tempo_na_fase=0.0, fila_por_acesso={"E0": 12}
+    )
+
+    assert fila_por_faixa(estado, de_duas, "E0") == pytest.approx(6.0)
+    assert fila_por_faixa(estado, de_uma, "E0") == pytest.approx(12.0)
+
+
+def test_via_sem_faixa_declarada_conta_como_uma() -> None:
+    """Desconhecida vale 1 — o palpite que antecipa mais, não menos.
+
+    Errar para o lado de antecipar demais custa espera transversal; errar para o
+    outro custa o VE parar, que é o defeito que P16 corrige.
+    """
+    topologia = construir_topologia(n_cruzamentos=1)
+    assert topologia.faixas("VIA_QUE_NAO_EXISTE") == 1
+    assert topologia.faixas("E0") == 1
 
 
 def test_raio_de_deteccao_vem_dos_parametros() -> None:

@@ -29,11 +29,16 @@ def construir_topologia(
     verde_min_s: float = 7.0,
     verde_max_s: float = 60.0,
     duracao_base_s: float = 30.0,
+    faixas: int = 1,
 ) -> TopologiaMalha:
     """Corredor linear com `n` cruzamentos.
 
     Vias `E0..En`; a via `E{i}` desemboca no cruzamento `CRUZ_TESTE_{i+1}`.
     A rota arterial completa é `("E0", "E1", ..., "En")`.
+
+    `faixas` vale para todas as vias e existe para exercitar E3: a fila que os
+    detectores E2 entregam é somada sobre as faixas, e o que atrasa o VE é a
+    fila da faixa dele.
     """
     cruzamentos: dict[str, Cruzamento] = {}
     comprimentos: dict[str, float] = {}
@@ -79,6 +84,7 @@ def construir_topologia(
         cruzamentos=cruzamentos,
         comprimento_via_m=comprimentos,
         cruzamento_apos_via=apos_via,
+        faixas_por_via=dict.fromkeys(comprimentos, faixas),
     )
 
 
@@ -91,6 +97,7 @@ def construir_parametros(**sobrescritas: object) -> Parametros:
     base: dict[str, object] = {
         "raio_deteccao_m": 500,
         "tempo_antecipacao_margem_s": 5.0,
+        "headway_saturacao_s": 2.13,
         "velocidade_min_estimativa_ms": 4.0,
         "verde_min_s": 7.0,
         "verde_max_s": 60.0,

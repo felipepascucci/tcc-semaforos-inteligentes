@@ -444,6 +444,56 @@ o que fica proibido.
 **Onde se mede.** Matriz completa do piloto nas **seeds 101..105**, fora do
 intervalo 1..50 do Bloco 8. As seeds 1..5 só depois, como remedição de aceitação.
 
+#### Emenda à fórmula, na implementação (mesmo dia, antes de medir)
+
+O critério acima aplicava o teto a `T_dissipacao`. **Está errado, e a correção é
+de defeito, não de número:** capar só a parcela da fila não cumpre a intenção
+declarada ("antecipar mais do que a preempção sobrevive faria o corredor cair na
+cara do VE"). Com o teto na parcela, o pior caso somava
+`5 + verde_min_residual (≤ 7) + 5 + 40 = 57 s` de antecipação contra um
+`preempcao_timeout_s` de 45 s — exatamente o cenário que o teto existia para
+impedir. O teto passa a valer sobre a **antecipação total**:
+
+```
+T_ANTECIPACAO = min( amarelo + all_red + verde_min_residual + MARGEM + T_dissipacao,
+                     preempcao_timeout_s - tempo_transicao_segura_s )
+```
+
+No perfil de simulação o teto é `45 − 5 = 40 s`, e ele quase nunca morde: o pior
+caso previsto no `intenso` é de ~31 s. É rede de segurança, não botão de ajuste.
+Coberto por `test_janela_nao_passa_do_teto_derivado_do_timeout`, e
+`Parametros.validar()` passou a recusar `preempcao_timeout_s` menor que o tempo
+de transição segura, que tornaria o teto negativo e a preempção impossível.
+
+#### Estado da implementação, 2026-08-31
+
+**Código pronto e testado; a medição é o que falta.** `mypy --strict` limpo,
+`ruff` limpo, **279 testes** na execução padrão (6 novos). Alterados:
+`core/malha.py` (`faixas_por_via`, vindo da rede e não de configuração),
+`core/parametros.py` (`headway_saturacao_s`, `tempo_dissipacao_fila_s()`,
+`antecipacao_max_s`), `core/priorizacao/deteccao.py` (`fila_por_faixa()` e o novo
+argumento de `dentro_da_janela`), `core/priorizacao/motor.py`,
+`adapters/sumo/topologia.py` e `backend/config/parametros.yaml`.
+
+Duas regressões cobrem o defeito de P16 — uma em E3 isolado e outra no motor
+inteiro, esta última mudando **só a fila** entre as duas metades do teste.
+
+**A medição não pôde ser feita na sessão em que o código foi escrito:** uma
+política de Controle de Aplicativo do Windows bloqueia o lançamento do binário do
+SUMO no ambiente do agente. Ela roda na máquina da equipe, com:
+
+```bash
+python -m sim.controlador.lote --seeds 101..105 --paralelo 6 \
+    --sem-banco --saida analysis/data/calibracao_p16
+python -m analysis.relatorio_piloto --dados analysis/data/calibracao_p16
+```
+
+`--sem-banco` e o `--saida` separado são obrigatórios: sem eles a calibração
+entraria em `analysis/data/execucoes.csv` e em `execucao_simulacao` junto com as
+60 execuções do piloto, e o Bloco 9 leria os dois conjuntos como se fossem o
+mesmo experimento. As seeds 101..105 são pontos novos, então a guarda de
+`PontoJaConsolidadoError` **não** protegeria contra isso.
+
 ---
 
 ## P17 — E7 não entrega a mitigação de H2 · `DECISÃO DO GRUPO — ANTES DO BLOCO 8`

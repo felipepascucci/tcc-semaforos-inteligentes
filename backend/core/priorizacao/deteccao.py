@@ -156,22 +156,47 @@ def verde_min_residual_s(
     return max(verde_min_s - estado.tempo_na_fase, 0.0)
 
 
+def fila_por_faixa(estado: EstadoSemaforo, topologia: TopologiaMalha, acesso: str) -> float:
+    """Fila do acesso dividida pelas faixas que ele tem (E3, P16).
+
+    Os detectores E2 entregam a fila **somada sobre as faixas** do acesso, mas o
+    que atrasa o VE são os veículos à frente **na faixa dele**. Numa arterial de
+    duas faixas, usar a soma estimaria o dobro do tempo de dissipação real.
+
+    Args:
+        estado: Estado observado do cruzamento.
+        topologia: Geometria da malha, que sabe quantas faixas o acesso tem.
+        acesso: Via de entrada pela qual o VE chegará ao cruzamento.
+
+    Returns:
+        Veículos parados por faixa no acesso.
+    """
+    return estado.fila_por_acesso.get(acesso, 0) / topologia.faixas(acesso)
+
+
 def dentro_da_janela(
-    deteccao: DeteccaoVE, parametros: Parametros, verde_min_residual: float = 0.0
+    deteccao: DeteccaoVE,
+    parametros: Parametros,
+    verde_min_residual: float = 0.0,
+    tempo_dissipacao_s: float = 0.0,
 ) -> bool:
     """Etapa **E3** — decide se já é hora de preemptar.
 
     Preemptar cedo demais trava a via transversal sem necessidade, e esse é
     exatamente o custo que H2 quer minimizar. Preemptar tarde demais não dá tempo
-    de completar a transição segura antes de o VE chegar.
+    de completar a transição segura **nem de a fila escoar** antes de o VE
+    chegar — foi o segundo caso que o piloto do Bloco 4 mediu (P16): o corredor
+    abria a tempo e não esvaziava a tempo.
 
     Args:
         deteccao: A detecção avaliada.
         parametros: Parâmetros do algoritmo.
         verde_min_residual: Verde mínimo ainda a cumprir no cruzamento, em
             segundos — a transição não pode começar antes disso (I4).
+        tempo_dissipacao_s: Tempo estimado para a fila do acesso de entrada
+            escoar, em segundos.
 
     Returns:
         `True` se a preempção deve começar agora.
     """
-    return deteccao.eta_s <= parametros.tempo_antecipacao_s(verde_min_residual)
+    return deteccao.eta_s <= parametros.tempo_antecipacao_s(verde_min_residual, tempo_dissipacao_s)

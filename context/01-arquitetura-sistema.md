@@ -157,9 +157,24 @@ class EstadoMalha:
 > chega ao verde com veículos parados adiante — 2,76 paradas residuais no
 > `intenso` contra 0,76 no `moderado`. A margem não consulta a fila, que o motor
 > já recebe em `EstadoSemaforo.fila_por_acesso`. **Decisão de 2026-08-31: corrigir
-> o mecanismo antes de mexer em H1.** Esta é a linha que muda; a alteração vem com
-> critério declarado antes do ajuste, e a calibração roda em seeds fora de 1..50
-> (ver P16).
+> o mecanismo antes de mexer em H1.** A alteração veio com critério declarado
+> antes do ajuste, e a calibração roda em seeds fora de 1..50 (ver P16).
+>
+> **A fórmula em vigor desde 2026-08-31**, com o teto derivado de
+> `preempcao_timeout_s` (não é parâmetro novo — antecipar mais do que a preempção
+> sobrevive derrubaria o corredor no rosto do VE):
+>
+> ```
+> TEMPO_ANTECIPACAO = min( AMARELO + ALL_RED + verde_min_residual + MARGEM
+>                            + fila_por_faixa * HEADWAY_SATURACAO,
+>                          PREEMPCAO_TIMEOUT - (AMARELO + ALL_RED) )
+> ```
+>
+> `HEADWAY_SATURACAO` (2,13 s) é **medido** em
+> `analysis/data/fluxo_saturacao.csv`, não adotado de manual — mesma regra do
+> fluxo de saturação em P11. `fila_por_faixa` divide a fila do acesso, que os
+> detectores E2 entregam somada, pelo número de faixas da via. A correção **não
+> introduz parâmetro livre**, e é esse o argumento de defesa dela.
 
 **E4 — Seleção da fase.** Dado o movimento do VE (via de entrada → via de saída), consultar o mapa `movimento → fase` do cruzamento e escolher a fase que o serve. Esse mapa é configuração estática, carregada de `sim/config/mapa_fases.yaml` e da tabela `fase_semaforo`.
 

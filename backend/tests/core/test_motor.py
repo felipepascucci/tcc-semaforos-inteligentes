@@ -43,6 +43,38 @@ def test_ve_longe_demais_nao_dispara_preempcao(
     assert motor.avaliar(construir_estado(topologia, veiculos=(longe,))) == []
 
 
+def test_fila_a_frente_faz_o_motor_preemptar_mais_cedo(
+    motor: MotorDecisao, topologia: TopologiaMalha
+) -> None:
+    """**Regressão de P16**, no motor inteiro e não só em E3.
+
+    Mesma seed, mesmo VE, mesma distância — muda só a fila no acesso de entrada.
+    Com a via livre o motor espera, porque abrir o verde 20 s antes travaria a
+    transversal sem necessidade. Com seis veículos parados à frente, esperar
+    faria o VE chegar ao verde com a fila ainda escoando, que é exatamente o que
+    o piloto do Bloco 4 mediu como 2,76 paradas residuais no cenário `intenso`.
+
+    O comando tem de sair para a fase **arterial**, e não para a que já está
+    verde: antecipar sem trocar de fase não serviria o VE.
+    """
+    # 200 m do primeiro cruzamento a 10 m/s: ETA de 20 s, o dobro da janela sem fila.
+    chegando = construir_ve(n_vias=4, posicao_na_via_m=300.0, velocidade=10.0)
+
+    livre = construir_estado(topologia, veiculos=(chegando,), fase_atual=FASE_TRANSVERSAL, fila=0)
+    assert motor.avaliar(livre) == []
+
+    # `fila` do construtor é por acesso, e a topologia de teste tem uma faixa.
+    congestionado = construir_estado(
+        topologia, veiculos=(chegando,), fase_atual=FASE_TRANSVERSAL, fila=6
+    )
+    comandos = MotorDecisao(parametros=motor.parametros, topologia=topologia).avaliar(congestionado)
+
+    do_primeiro = [c for c in comandos if c.id_semaforo == "CRUZ_TESTE_1"]
+    assert len(do_primeiro) == 1
+    assert do_primeiro[0].tipo is TipoComando.IR_PARA_FASE
+    assert do_primeiro[0].fase_alvo == FASE_ARTERIAL
+
+
 # ---------------------------------------------------------------------------
 # Preempção
 # ---------------------------------------------------------------------------
