@@ -6,6 +6,15 @@ Data-base: **2026-08-24**. Janela de entrega assumida: **3 a 6 meses** → apres
 
 Escopo: completo, conforme `context/`. Sem cortes preventivos — a lista de corte do `context/08` §2 fica de reserva, acionada só se um marco atrasar.
 
+> **Revisão de cronograma devida, em 2026-09-10.** Faltam os Blocos 5 a 9, e
+> **P19 acrescenta um bloco novo** de aprendizado de máquina que não estava
+> previsto. Se a apresentação for em **nov/2026** — o limite inferior da janela —
+> são cerca de dois meses para cinco blocos mais um. A lista de corte do `08` §2
+> deixa de ser reserva e passa a ser decisão a tomar: o **dashboard** (itens 2 e
+> 5 da lista) é o primeiro a ceder, e decidir isso agora custa menos que
+> descobrir em dezembro. **Confirmar a data real da banca é pré-requisito** para
+> qualquer replanejamento.
+
 ---
 
 ## Princípio que organiza a ordem
@@ -381,22 +390,29 @@ Em paralelo: diagramas PlantUML do `context/08` §5, DER via eralchemy2, relató
 
 ## Pendências que continuam abertas
 
-> **Atualizado em 2026-08-31.** P16 foi **resolvida** no mesmo dia; P11 (3)
-> — o enquadramento em fluxo interrompido — foi **confirmado pela equipe** e saiu
-> da pauta, restando declará-lo no texto. Abriu-se **P18**, consequência direta
-> da correção de P16. Dependem do **orientador**, na ordem da tabela no topo de
-> `context/09`: **P18** (teto para a degradação transversal), **P11 (1) e (2)**
-> (bibliografia) e **P3** (o que a banca espera por "IA").
+> **Atualizado em 2026-09-10, com as respostas da orientação.** P16 e P18 estão
+> **resolvidas**; P11 (3) foi confirmado pela equipe e resta declará-lo no texto;
+> P11 (1) e (2) estão **aguardando as referências** que o orientador ficou de
+> devolver — ele aprovou o método de medir na simulação e justificar o valor
+> medido. **P3 foi revogada:** a banca espera aprendizado de máquina, o que abre
+> **P19** e muda o escopo. Bloqueiam o Bloco 8: **P17** e, agora, o desenho de
+> **P19**.
 
 - ~~**P16** — H1 abaixo da meta em `intenso`.~~ ✅ **Resolvida em 2026-08-31**
   corrigindo o mecanismo, sem tocar em H1: 18,1% → **31,2%**, paradas do VE
   2,76 → 0,08. Ver o quadro no Bloco 4.
-- **P18** (aberta em 2026-08-31) — **bloqueia o Bloco 8** e depende do orientador.
-  O objetivo geral promete não degradar o fluxo transversal "de forma
-  inaceitável" sem definir a palavra, e a correção de P16 levou a degradação
-  medida no `intenso` de +24,6% para **+43,6%**. Ou se declara um teto numérico
-  antes das 600 execuções, ou se reescreve o objetivo. Recomendação registrada: a
-  segunda.
+- **P19** (aberta em 2026-09-10) — **muda o escopo do trabalho.** O orientador
+  confirmou que a banca espera aprendizado de máquina, e indicou onde: um modelo
+  para decidir **qual VE é priorizado** quando há mais de uma emergência
+  simultânea — hoje o desempate determinístico de E8. Revoga a decisão P3.
+  Acrescenta um bloco inteiro (instrumentação, dados, treino, braço novo,
+  hipótese nova, análise própria) a um caminho crítico já bloqueado por P17.
+  **Primeiro passo é medir quantos conflitos existem por execução — hoje ninguém
+  conta.** Detalhes, desenho a definir e impacto de cronograma em `context/09`.
+- ~~**P18**~~ ✅ **Resolvida em 2026-09-10.** Sem teto numérico: o custo
+  transversal é tratado qualitativamente, e o objetivo geral foi reescrito de
+  "sem degradar de forma inaceitável" para "quantificar o custo que essa
+  priorização impõe". Nada muda no código.
 - **P17** — **continua bloqueando o Bloco 8** e continua `DECISÃO DO GRUPO`. O
   enunciado de H2 foi corrigido para `≥ 15%`, mas o **denominador** e a
   calibração de `K`/`n_ciclos_compensacao` seguem por fazer — e a correção de P16

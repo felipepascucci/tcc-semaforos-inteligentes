@@ -216,6 +216,21 @@ onde `DEFICIT_TOTAL` é o tempo de verde que o acesso deixou de receber durante 
 
 Se dois VEs demandam fases conflitantes no mesmo TLS, **um espera**. Nunca conceder as duas. Registrar em `log_prioridade` com `status_execucao = 'CONFLITO_ADIADO'`.
 
+> **E8 é o ponto onde entra o aprendizado de máquina** (pendência **P19**, aberta
+> em 2026-09-10 por decisão do orientador). O desempate acima é lexicográfico e
+> **míope**: decide um cruzamento por vez, sem pesar a consequência sequencial —
+> priorizar o VE A agora pode custar mais ao VE B adiante. A ordem por tipo é
+> convenção declarada, não otimização.
+>
+> O desenho ainda não está definido, e o primeiro passo é **medir quantos eventos
+> de conflito existem por execução** — hoje ninguém conta: `conflito.py` devolve
+> os adiados, mas o coletor não agrega e `execucoes.csv` não tem a coluna.
+>
+> Restrição arquitetural que vale desde já: qualquer modelo é **treinado fora e
+> exportado como dado** (tabela, pesos ou árvore pequena), com inferência pura em
+> `core/`. É o que preserva a decisão do §1 deste documento — o mesmo motor roda
+> na simulação e no protótipo — e o que mantém `test_arquitetura.py` verde.
+
 ### 5.3 Parâmetros (arquivo `backend/config/parametros.yaml`)
 
 Todo número mágico do algoritmo vive aqui, nunca no código:
