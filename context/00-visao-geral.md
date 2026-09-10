@@ -57,6 +57,18 @@ Ambas são controladas pelo **mesmo motor de decisão** (`backend/core/priorizac
 | H1 | A fusão radar + V2I reduz em **no mínimo 25%** o tempo total de travessia do VE, em cenários de saturação **moderada a intensa**, em relação à temporização estática | Comparação pareada por seed, baseline vs. proposto. O cenário `leve` é medido e discutido, mas **sem meta numérica** |
 | H2 | É possível mitigar em **no mínimo 15%** o impacto negativo nas vias transversais com compensação dinâmica de ciclo pós-evento | Três braços: baseline / preempção sem compensação / preempção com compensação |
 | H3 | A infraestrutura em borda sustenta latência operacional **fim-a-fim inferior a 200 ms** | Instrumentação `t_deteccao → t_decisao → t_atuacao`, medida no **protótipo**, com **5 repetições** roteirizadas no checklist |
+| **H4** | 🕓 **A formular no Bloco 10, antes de treinar** — uma política aprendida para escolher entre VEs em conflito supera o desempate determinístico de E8 | Braço `PREEMPCAO_ML` contra `PREEMPCAO`, pareado por seed, nos cenários com múltiplos VEs. Mesmo rigor de H1: Wilcoxon, Cliff's δ, IC 95% |
+
+> **Por que H4 aparece sem número.** A hipótese existe porque o orientador pediu
+> aprendizado de máquina (P19), mas o critério quantitativo **não pode ser
+> inventado agora**: ele depende do desenho do modelo e de quantos eventos de
+> conflito existem, que é a entrega 10.1. O que fica decidido desde já é a ordem —
+> **H4 é formulada e commitada antes de o modelo ser treinado**, nunca depois de
+> ver o resultado. É a mesma disciplina do critério de P16 e do denominador de H2.
+>
+> Fica registrado também que **veredito nulo é veredito**: se a política aprendida
+> não superar a heurística, isso é reportado com tamanho de efeito e intervalo de
+> confiança, não escondido.
 
 > **Decisões P1 e P2 tomadas em 2026-08-24** (ver `09-pendencias-e-decisoes.md`):
 >

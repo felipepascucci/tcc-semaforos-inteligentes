@@ -875,27 +875,50 @@ superou a heurística, com o tamanho de efeito e o intervalo de confiança, é
 contribuição legítima — e é o que o `07` §1 já exige em espírito. O que não pode
 acontecer é o modelo entrar sem avaliação, só para satisfazer a expectativa.
 
-### Impacto no cronograma
+### Impacto no cronograma · **decidido pela equipe em 2026-09-10**
 
-Hoje é **2026-09-10**. Faltam os Blocos 5 a 9 e a apresentação está estimada
-entre nov/2026 e jan/2027. P19 acrescenta um bloco inteiro — instrumentação,
-geração de dados, treino, exportação, braço novo, hipótese nova e análise
-estatística própria — a um caminho crítico que **já está bloqueado por P17**.
+**Nada sai do escopo.** Todos os blocos já previstos seguem como estão, e o de
+aprendizado de máquina é **acrescentado** — ver **Bloco 10** em
+`docs/plano-desenvolvimento.md`. A lista de corte do `08` §2 **continua sendo
+reserva**, não decisão tomada, e a data da banca não é tratada como restrição
+neste momento.
 
-A lista de corte do `08` §2 existe para isto e passa a ser candidata real: o
-**dashboard** (itens 2 e 5) é o primeiro a ceder, e vale decidir cedo em vez de
-descobrir em dezembro.
+> **Consequência a registrar, sem alarme.** A lista de corte deixa de ser o
+> primeiro instrumento de ajuste, então o que absorve um eventual atraso passa a
+> ser o prazo. Se em algum momento a data apertar, a lista está pronta e a decisão
+> é rápida — é para isso que ela existe. Registrado aqui para que, se a discussão
+> voltar, ela volte com o histórico e não do zero.
 
 ### Recomendação
 
-1. **Medir a frequência dos conflitos primeiro** (horas de trabalho).
+1. **Medir a frequência dos conflitos primeiro.** Virou a entrega **10.1** do
+   Bloco 10, por decisão da equipe em 2026-09-10 — será feita em sessão própria,
+   junto com o resto do bloco, em vez de isolada agora. A ordem se mantém: a
+   medição vem antes de escolher o paradigma.
 2. Com o número na mão, escolher o paradigma — a inclinação é pela **opção (c) ou
    (a)**, por custo e explicabilidade, deixando Q-learning como alternativa.
 3. **Declarar o objetivo de otimização antes de treinar**, e commitá-lo antes do
    código, como se fez em P16.
 4. **Levar a proposta de desenho ao orientador antes de implementar.** Ele pediu
-   ML, não um desenho específico; alinhar o desenho evita construir a coisa errada.
-5. Decidir, na mesma conversa, **o que sai do escopo** para P19 entrar.
+   ML, não um desenho específico; alinhar evita construir a coisa errada.
+
+> **O que "desenho" significa aqui** — registrado porque o termo gerou dúvida na
+> equipe, e vai gerar na banca. **Não é escolha de biblioteca nem de framework de
+> agentes de LLM**; "agente" neste trabalho é *agente reativo* no sentido de
+> Russell & Norvig, e não tem relação com orquestração de modelos de linguagem.
+> Desenho são as decisões de modelagem:
+>
+> | Decisão | O que precisa ser respondido |
+> | --- | --- |
+> | **Entrada** | Que atributos o modelo vê no instante do conflito — tipo de cada VE, ETA, distância, fila no acesso, preempção em curso, cruzamentos restantes na rota |
+> | **Saída** | Qual VE recebe prioridade. É escolha entre candidatos, não um número contínuo |
+> | **Como aprende** | Supervisionado com rótulos de oráculo, por reforço, ou pesos aprendidos de uma função de utilidade |
+> | **O que otimiza** | Soma dos tempos, pior caso, ou ponderado por tipo — escolha ética e metodológica, declarada antes de treinar |
+> | **Dados** | Quantos eventos existem, e de quais execuções vêm treino e teste |
+>
+> A ferramenta é o menor problema: treino offline (provavelmente scikit-learn,
+> dependência **só de treino**, a registrar como exceção ao `02` §2) e política
+> exportada como dado, com inferência em Python puro dentro de `core/`.
 
 ---
 
