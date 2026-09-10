@@ -405,12 +405,26 @@ convenção declarada, não otimização. Há lacuna genuína a preencher.
 |---|---|
 | 10.1 | **Contagem de conflitos.** Agregado no coletor, coluna nova em `execucoes.csv`, e medição em `multiplas_emergencias`. **Hoje ninguém conta:** `conflito.py` devolve os adiados, mas nada agrega. **Vem primeiro, e decide o resto** — o paradigma viável depende de quantos eventos existem |
 | 10.2 | Cenário de treino mais denso em VEs, **se e só se** 10.1 mostrar que os conflitos são raros. Novos arquivos de demanda, mesma malha |
-| 10.3 | **Declaração do objetivo de otimização, commitada antes de treinar** — soma dos tempos, pior caso (minimax) ou ponderado por tipo. Mesma disciplina do critério de P16 e do denominador de H2 |
-| 10.4 | Geração do conjunto de dados, com **divisão treino/teste por seed** e o treino **fora** do intervalo 1..50 do Bloco 8 (guarda de P16) |
-| 10.5 | Treino offline em `analysis/` ou `ml/`, e **exportação da política como dado** — tabela, pesos ou árvore pequena, versionada |
-| 10.6 | Inferência **pura** em `core/priorizacao/`, sem import de framework: `test_arquitetura.py` continua verde e o RNF01 continua medido |
+| 10.3 | ~~Declaração do objetivo de otimização~~ · **já feita** em 2026-09-10: critério **minimax**, minimizar o tempo do VE mais prejudicado. Registrada em P19 e em `context/00` §5 **antes** de existir treino |
+| 10.4 | **Rotulagem por bifurcação da simulação** — `saveState`/`loadState` no instante do conflito, rodando as duas escolhas até os VEs liberarem a rota, e rotulando pelo minimax. Com **divisão treino/teste por seed** e o treino **fora** do intervalo 1..50 (guarda de P16) |
+| 10.5 | Treino offline (regressão logística par a par sobre diferenças) e **exportação dos pesos como arquivo versionado** |
+| 10.6 | Inferência **pura** em `core/priorizacao/`, sem import de framework: `test_arquitetura.py` continua verde e o RNF01 continua medido. A guarda "preempção em curso vence" fica **acima** do modelo |
 | 10.7 | Braço `PREEMPCAO_ML` no executor e no lote, comparável contra o E8 determinístico |
-| 10.8 | **H4 formulada** (antes de treinar), linha nova em T6, e análise estatística própria — mesmo rigor de H1: Wilcoxon, Cliff's δ, IC 95% |
+| 10.8 | Linha nova em T6 e análise estatística própria de **H4** — mesmo rigor de H1: Wilcoxon pareado, Cliff's δ, IC 95% |
+
+**Desenho, decidido em 2026-09-10 e anterior a qualquer treino** (justificativas em P19):
+
+```
+score = w · (x_A − x_B)      escolhe A se score > 0, senão B
+
+x = (tipo, eta_s, velocidade_ms, fila_no_acesso, cruzamentos_restantes)
+```
+
+Comparação par a par **sobre diferenças**, com torneio para três ou mais VEs — a
+antissimetria fica garantida por construção, e não depende de o modelo aprendê-la.
+Critério **minimax**. Rótulos por bifurcação da simulação. `distancia_m` ficou de
+fora por redundância com `eta_s`; `preempcao_em_curso` ficou de fora porque não
+informa a decisão, **suspende** a decisão — é regra rígida acima do modelo.
 
 **Pronto quando:** o braço `PREEMPCAO_ML` roda a matriz inteira; a política vem de
 arquivo versionado e não de código; `mypy --strict` e o teste de arquitetura

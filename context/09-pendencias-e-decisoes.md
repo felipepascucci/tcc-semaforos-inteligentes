@@ -824,32 +824,131 @@ o cenário `multiplas_emergencias` em algumas seeds. É trabalho de horas e
 transforma a escolha do paradigma em evidência — o mesmo procedimento que P15
 seguiu ("medir antes de decidir") e que P16 formalizou.
 
-### As decisões de modelagem, para depois da medição
+### Desenho decidido pela equipe · 2026-09-10
 
-1. **Paradigma.** (a) **Classificador supervisionado com rótulos de oráculo** —
-   para cada conflito, simular as duas escolhas e rotular a melhor; treina sobre
-   verdade construída, dispensa desenho de recompensa, e a avaliação é direta.
-   (b) **Q-learning tabular** — é o que o texto já descreve como trabalho futuro
-   (para E7), mas exige discretizar o estado e converge mal com eventos raros.
-   (c) **Função de utilidade linear com pesos aprendidos** — mantém a estrutura de
-   E8 e aprende os coeficientes em vez de declará-los; é o caminho mais baixo em
-   custo e o mais explicável.
-2. **O que otimizar.** Soma dos tempos dos dois VEs? O **pior** dos dois
-   (minimax, que é o critério mais justo e mais fácil de defender eticamente)?
-   Soma ponderada por tipo? **Precisa ser declarado antes de treinar** — é a
-   mesma disciplina do denominador de H2 e do critério de P16.
-3. **Onde o modelo roda.** `core/` é puro por decisão arquitetural central: é o
-   que sustenta a afirmação de que o mesmo motor roda na simulação e no
-   protótipo, e `test_arquitetura.py` reprova qualquer import de framework.
-   **A saída é treinar fora e exportar a política como dado** — tabela, pesos ou
-   árvore pequena — com inferência pura em `core/`. Isso preserva a arquitetura,
-   mantém a latência do RNF01 e deixa o modelo auditável na defesa.
-4. **Divisão treino/teste por seed**, com o treino **fora** do intervalo 1..50 do
-   Bloco 8. Mesma guarda de P16, pela mesma razão: treinar sobre parte da amostra
-   que valida o resultado contamina a validação.
-5. **Densidade de VEs.** O cenário `multiplas_emergencias` tem ~11 VEs por
-   execução de 1 h, em pares. Se os conflitos forem raros, será preciso um cenário
-   mais denso para treinar — e isso significa novos arquivos de demanda.
+**Todas as decisões de modelagem abaixo estão fechadas e são anteriores a
+qualquer treino** — é a mesma disciplina do critério de P16. O que continua
+dependendo da entrega 10.1 é o **volume de dados**, e só ele.
+
+#### Forma do modelo — comparação par a par sobre diferenças
+
+O modelo compara **dois VEs por vez**; três ou mais se resolvem por torneio. E as
+entradas são as **diferenças** entre os dois candidatos, não os valores absolutos
+de cada um:
+
+```
+score = w · (x_A − x_B)         escolhe A se score > 0, senão B
+```
+
+**A razão é estrutural, não estética.** Um modelo que recebesse os dois vetores
+soltos poderia aprender a preferir A a B *e* B a A, dependendo da ordem em que
+fossem apresentados — uma inconsistência que apareceria como oscilação na rua.
+Sobre diferenças, a antissimetria é garantida por construção:
+`score(B, A) = −score(A, B)`. Não é uma propriedade que se espera que o modelo
+aprenda; é uma que ele não consegue violar.
+
+Regressão logística par a par. Exporta como **um vetor de pesos** — meia dúzia de
+números em arquivo versionado, com inferência em Python puro dentro de `core/`.
+
+#### Entrada — cinco diferenças
+
+| Atributo (por VE, entra como diferença) | Por quê |
+| --- | --- |
+| `tipo` | Codifica a precedência atual (`AMBULANCIA > BOMBEIRO > POLICIA`) como atributo, e não como regra fixa — o peso aprendido dirá quanto ela de fato pesa |
+| `eta_s` | Quando cada um chega |
+| `velocidade_ms` | **Substitui `distancia_m`.** ETA já é distância dividida por velocidade: carregar os dois seria quase colinear, e o que agrega informação é a velocidade |
+| `fila_no_acesso` | Já chega ao motor pelos detectores E2, e é o que P16 mostrou ser decisivo |
+| `cruzamentos_restantes` | Proxy do quanto de rota ainda depende de priorização — é o que dá caráter sequencial à decisão |
+
+**`distancia_m` ficou de fora** por redundância com `eta_s`, e
+**`preempcao_em_curso` também**, mas por outro motivo — ver a guarda abaixo.
+
+#### Critério: minimax sobre o tempo dos VEs
+
+**Minimizar o tempo de travessia do VE mais prejudicado:**
+
+```
+escolha = argmin( max(tempo_travessia_A, tempo_travessia_B) )
+```
+
+Três razões, e a primeira é a que se defende na banca:
+
+1. **Nenhum VE é sacrificado.** A soma dos tempos aceitaria atrasar muito um para
+   ganhar pouco no outro, e esse um pode ser a ambulância.
+2. **Não troca tempo de resposta por fluxo de tráfego.** O critério "atraso total
+   da rede" foi considerado e **recusado**: ele pode decidir atrasar uma
+   ambulância para favorecer o tráfego de fundo, o que contradiz a premissa do
+   trabalho. O custo transversal continua **medido e reportado** ao lado — o que é
+   exatamente o que o objetivo geral reescrito em P18 promete —, mas não entra na
+   troca.
+3. **É um número só**, sem pesos por tipo a justificar (que era o custo da quarta
+   alternativa considerada).
+
+#### De onde vêm os rótulos — bifurcação da simulação
+
+Pesos aprendidos exigem supervisão, e supervisão exige saber qual escolha foi
+melhor. **No instante de cada conflito, a simulação é bifurcada:** roda-se a
+escolha A e a escolha B, cada uma até os dois VEs liberarem a rota, e o rótulo é
+a que der o melhor minimax.
+
+Tecnicamente viável: o TraCI expõe `simulation.saveState()` e `loadState()`. O
+custo por evento é limitado — a bifurcação não precisa ir até o fim da hora, só
+até os dois VEs saírem.
+
+> **Por que não estimar o rótulo por heurística.** Rotular por uma regra
+> (ex.: "quem tem menor ETA é o certo") ensinaria ao modelo a própria regra, e o
+> resultado seria uma imitação caríssima de E8. O rótulo tem de vir de **medição
+> da consequência**, senão H4 não tem como ser superada nem refutada.
+
+#### Guarda de oscilação — fora do modelo, de propósito
+
+O item 3 do desempate atual ("preempção já em curso vence") **permanece como
+regra rígida, acima do modelo**. O modelo decide apenas quando **não** há
+preempção em curso; iniciada uma, trocar de VE no meio é governado pela regra, não
+pela política aprendida.
+
+**A razão é de segurança.** Uma política que pudesse reverter a escolha a cada
+passo geraria tempestade de trocas de fase, e isso pressiona I4 (verde mínimo) e
+I5 (starvation). Com a guarda fora do modelo, o argumento de invariantes
+permanece o mesmo de hoje e não depende do que a rede aprendeu — o que é
+exatamente o tipo de garantia que não se quer delegar a um modelo estatístico.
+
+É também por isso que `preempcao_em_curso` **não** entra como atributo: ela não
+informa a decisão, ela a suspende.
+
+#### Hipótese H4, na forma que essas escolhas permitem
+
+**"A política aprendida reduz o tempo de travessia do VE mais prejudicado, em
+cenários com múltiplos VEs, em relação ao desempate determinístico de E8."**
+
+**Sem meta numérica, e isso é correto aqui** — diferente de H1 e H2, cujos
+percentuais vêm do pré-projeto. H4 é hipótese **comparativa direcional**, testada
+por significância e tamanho de efeito: Wilcoxon pareado por seed, Cliff's δ e IC
+95% por bootstrap. Inventar um percentual agora seria fabricar régua; testar
+direção com tamanho de efeito é o que os dados sustentam.
+
+**A formulação acima é para ser commitada antes de o modelo ser treinado.**
+
+### O que continua aberto — e depende só de dados
+
+Todas as decisões de **modelagem** foram tomadas (seção acima). O que resta
+depende da entrega **10.1**, a contagem de eventos de conflito:
+
+1. **Densidade de VEs.** O cenário `multiplas_emergencias` tem ~11 VEs por
+   execução de 1 h, em pares. Se 10.1 mostrar que os conflitos são raros, será
+   preciso um cenário mais denso **para treinar** — novos arquivos de demanda,
+   mesma malha. O cenário declarado continua sendo o de avaliação.
+2. **Divisão treino/teste por seed**, com o treino **fora** do intervalo 1..50 do
+   Bloco 8 (guarda de P16). *Quais* seeds depende de quantos eventos cada uma
+   rende.
+3. **Regularização e número de atributos.** Com cinco diferenças e poucas
+   centenas de eventos, o modelo cabe. Com poucas dezenas, será preciso reduzir
+   atributos — e isso se decide com o número na mão, não antes.
+
+> **Uma dependência que já se pode afirmar:** se 10.1 devolver menos de ~100
+> eventos de conflito por conjunto de treino, o desenho acima não muda, mas a
+> conclusão de H4 nasce com poder estatístico baixo — e isso tem de ser declarado
+> na análise, não descoberto na arguição.
 
 ### O que mais precisa mudar no trabalho
 
