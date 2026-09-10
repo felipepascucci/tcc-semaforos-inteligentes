@@ -6,6 +6,13 @@ Data-base: **2026-08-24**. Janela de entrega assumida: **3 a 6 meses** → apres
 
 Escopo: completo, conforme `context/`. Sem cortes preventivos — a lista de corte do `context/08` §2 fica de reserva, acionada só se um marco atrasar.
 
+> **Escopo confirmado em 2026-09-10, após a orientação.** **Nada sai.** Todos os
+> blocos previstos seguem como estão, e o **Bloco 10** — priorização aprendida
+> entre múltiplos VEs, pedido pelo orientador (P19) — é **acrescentado**. A lista
+> de corte do `context/08` §2 **continua sendo reserva**, e a data da banca não é
+> tratada como restrição neste momento. Faltam, portanto, os Blocos 5, 6, 7, 10,
+> 8 e 9 — nessa ordem de execução.
+
 ---
 
 ## Princípio que organiza a ordem
@@ -352,9 +359,15 @@ Primeiro candidato ao corte se algo atrasar (`context/08` §2, item 2 e 5).
 
 ~~`sim/controlador/lote.py`~~ **já existe** (entrega 4.1). O Bloco 8 é rodá-lo com `--seeds 1..50`: 4 cenários × 3 modos × 50 seeds = **600 execuções** de 3600 s. Medido no piloto, com `traci` e 6 processos, isso dá **~6 h** — uma noite de máquina. `libsumo` deixou de ser necessário para caber na janela (ver P15).
 
-> **Bloqueado por P17 e P18.** ~~P16~~ foi resolvida em 2026-08-31 corrigindo o mecanismo. P17 continua aberta e ainda muda o modelo ou a hipótese, então rodar as 600 antes de decidir significa rodá-las de novo depois. **P18** não muda o modelo, mas precisa estar decidida antes: um teto para a degradação transversal declarado *depois* de ver os números seria régua escolhida pelo resultado. As 600 rodam com o código de `d63f774` em diante — o piloto de 2026-08-26 foi produzido pelo código anterior e **não** se mistura com elas.
+> **A matriz cresce com o Bloco 10.** O braço `PREEMPCAO_ML` (entrega 10.7) entra
+> nos cenários com múltiplos VEs, então as 600 execuções passam a ser o piso e não
+> o total. O acréscimo exato depende de quantos cenários de múltiplas emergências
+> existirem depois de 10.2. **Por isso o Bloco 10 executa antes do Bloco 8**: um
+> braço acrescentado depois obriga a rodar tudo de novo.
 
-**Pareamento por seed é inegociável:** gerar as rotas uma vez por (cenário, seed) e reutilizar nos três modos. Sem isso a comparação deixa de ser pareada e perde poder estatístico.
+> **Bloqueado por P17 e pelo Bloco 10.** ~~P16~~ foi resolvida em 2026-08-31 corrigindo o mecanismo, e ~~P18~~ em 2026-09-10 sem teto numérico. **P17** continua aberta e ainda muda o modelo ou a hipótese, então rodar as 600 antes de decidir significa rodá-las de novo depois. **P19 / Bloco 10** acrescenta um braço à matriz, com a mesma consequência. As 600 rodam com o código de `d63f774` em diante — o piloto de 2026-08-26 foi produzido pelo código anterior e **não** se mistura com elas.
+
+**Pareamento por seed é inegociável:** gerar as rotas uma vez por (cenário, seed) e reutilizar em **todos** os modos, inclusive no braço de ML. Sem isso a comparação deixa de ser pareada e perde poder estatístico.
 
 `validar_execucao()` do `context/06` §4 roda em toda execução; falha → descarte **documentado** e reexecução com a mesma seed.
 
@@ -370,6 +383,69 @@ Em paralelo: diagramas PlantUML do `context/08` §5, DER via eralchemy2, relató
 
 ---
 
+### Bloco 10 — Priorização aprendida entre múltiplos VEs (P19) · ~2 a 3 semanas
+
+> **O número é 10, mas a posição na fila é antes do Bloco 8.** O braço novo tem de
+> existir quando as 600 execuções rodarem, senão elas precisam ser rodadas duas
+> vezes. Não renumerei os Blocos 8 e 9 porque o `context/` os referencia por
+> número em dezenas de lugares, e renumerar trocaria uma confusão pequena por
+> muitas oportunidades de erro. **Ordem de execução: 5 → 6 → 7 → 10 → 8 → 9.**
+
+Pedido do orientador (P19, 2026-09-10): um modelo de aprendizado de máquina para
+decidir **qual VE é priorizado** quando há mais de uma emergência simultânea.
+Substitui o desempate determinístico de **E8** — hoje lexicográfico por tipo,
+depois ETA, depois preempção em curso.
+
+**Por que é defensável e não decorativo:** E8 é míope. Decide um cruzamento por
+vez, sem pesar a consequência sequencial — priorizar o VE A agora pode custar
+mais ao VE B adiante, ou formar fila que prejudica os dois. A ordem por tipo é
+convenção declarada, não otimização. Há lacuna genuína a preencher.
+
+| # | Entrega |
+|---|---|
+| 10.1 | **Contagem de conflitos.** Agregado no coletor, coluna nova em `execucoes.csv`, e medição em `multiplas_emergencias`. **Hoje ninguém conta:** `conflito.py` devolve os adiados, mas nada agrega. **Vem primeiro, e decide o resto** — o paradigma viável depende de quantos eventos existem |
+| 10.2 | Cenário de treino mais denso em VEs, **se e só se** 10.1 mostrar que os conflitos são raros. Novos arquivos de demanda, mesma malha |
+| 10.3 | ~~Declaração do objetivo de otimização~~ · **já feita** em 2026-09-10: critério **minimax**, minimizar o tempo do VE mais prejudicado. Registrada em P19 e em `context/00` §5 **antes** de existir treino |
+| 10.4 | **Rotulagem por bifurcação da simulação** — `saveState`/`loadState` no instante do conflito, rodando as duas escolhas até os VEs liberarem a rota, e rotulando pelo minimax. Com **divisão treino/teste por seed** e o treino **fora** do intervalo 1..50 (guarda de P16) |
+| 10.5 | Treino offline (regressão logística par a par sobre diferenças) e **exportação dos pesos como arquivo versionado** |
+| 10.6 | Inferência **pura** em `core/priorizacao/`, sem import de framework: `test_arquitetura.py` continua verde e o RNF01 continua medido. A guarda "preempção em curso vence" fica **acima** do modelo |
+| 10.7 | Braço `PREEMPCAO_ML` no executor e no lote, comparável contra o E8 determinístico |
+| 10.8 | Linha nova em T6 e análise estatística própria de **H4** — mesmo rigor de H1: Wilcoxon pareado, Cliff's δ, IC 95% |
+
+**Desenho, decidido em 2026-09-10 e anterior a qualquer treino** (justificativas em P19):
+
+```
+score = w · (x_A − x_B)      escolhe A se score > 0, senão B
+
+x = (tipo, eta_s, velocidade_ms, fila_no_acesso, cruzamentos_restantes)
+```
+
+Comparação par a par **sobre diferenças**, com torneio para três ou mais VEs — a
+antissimetria fica garantida por construção, e não depende de o modelo aprendê-la.
+Critério **minimax**. Rótulos por bifurcação da simulação. `distancia_m` ficou de
+fora por redundância com `eta_s`; `preempcao_em_curso` ficou de fora porque não
+informa a decisão, **suspende** a decisão — é regra rígida acima do modelo.
+
+**Pronto quando:** o braço `PREEMPCAO_ML` roda a matriz inteira; a política vem de
+arquivo versionado e não de código; `mypy --strict` e o teste de arquitetura
+seguem limpos; e existe uma comparação estatística entre a política aprendida e o
+desempate determinístico.
+
+> **Restrição arquitetural, decidida desde já.** O modelo é **treinado fora e
+> exportado como dado**. É o que preserva a decisão do `context/01` §1 — o mesmo
+> motor roda na simulação e no protótipo —, mantém a latência de decisão dentro do
+> RNF01, e deixa a política auditável na defesa. Um `import sklearn` dentro de
+> `core/` reprovaria `test_arquitetura.py`, e com razão.
+
+> **Risco a declarar desde já: o modelo pode não bater o heurístico.** Com dois
+> VEs e desempate por tipo e ETA, a margem é estreita. O bloco precisa estar
+> estruturado para que **resultado nulo continue sendo resultado** — relatar que a
+> política aprendida não superou a heurística, com tamanho de efeito e intervalo
+> de confiança, é contribuição legítima. O que não pode acontecer é o modelo
+> entrar sem avaliação, só para satisfazer a expectativa.
+
+---
+
 ## Marcos de verificação
 
 | Marco | O que prova |
@@ -377,26 +453,35 @@ Em paralelo: diagramas PlantUML do `context/08` §5, DER via eralchemy2, relató
 | Fim do Bloco 2 | O núcleo do TCC existe e é seguro — invariantes verificados por property-based testing |
 | Fim do Bloco 4 | ✅ **2026-08-26.** H1 se sustenta em `moderado` (31,7%) e **não** em `intenso` (18,1%); H2 tem custo medido mas **sem** mitigação (P16 e P17). Zero gridlock, RNF01 com folga de três ordens de grandeza. O marco cumpriu seu papel: os problemas apareceram com margem — e **P16 foi corrigida em 2026-08-31** (`intenso` 31,2%), com quase três meses de folga, que é exatamente o que antecipar o piloto comprou |
 | Fim do Bloco 5 | O protótipo físico funciona fim-a-fim, incluindo o fail-safe |
+| **Entrega 10.1** | Sabe-se **quantos eventos de conflito entre VEs existem por execução** — é o que define se há dado suficiente para treinar, e nenhuma decisão de modelagem é tomada antes disso |
+| Fim do Bloco 10 | Existe uma política aprendida, exportada como dado e comparada estatisticamente contra o desempate determinístico. Veredito favorável **ou** nulo, ambos reportáveis |
 | Fim do Bloco 8 | Os dados do capítulo 5 existem e são reprodutíveis |
 
 ## Pendências que continuam abertas
 
-> **Atualizado em 2026-08-31.** P16 foi **resolvida** no mesmo dia; P11 (3)
-> — o enquadramento em fluxo interrompido — foi **confirmado pela equipe** e saiu
-> da pauta, restando declará-lo no texto. Abriu-se **P18**, consequência direta
-> da correção de P16. Dependem do **orientador**, na ordem da tabela no topo de
-> `context/09`: **P18** (teto para a degradação transversal), **P11 (1) e (2)**
-> (bibliografia) e **P3** (o que a banca espera por "IA").
+> **Atualizado em 2026-09-10, com as respostas da orientação.** P16 e P18 estão
+> **resolvidas**; P11 (3) foi confirmado pela equipe e resta declará-lo no texto;
+> P11 (1) e (2) estão **aguardando as referências** que o orientador ficou de
+> devolver — ele aprovou o método de medir na simulação e justificar o valor
+> medido. **P3 foi revogada:** a banca espera aprendizado de máquina, o que abre
+> **P19** e muda o escopo. Bloqueiam o Bloco 8: **P17** e, agora, o desenho de
+> **P19**.
 
 - ~~**P16** — H1 abaixo da meta em `intenso`.~~ ✅ **Resolvida em 2026-08-31**
   corrigindo o mecanismo, sem tocar em H1: 18,1% → **31,2%**, paradas do VE
   2,76 → 0,08. Ver o quadro no Bloco 4.
-- **P18** (aberta em 2026-08-31) — **bloqueia o Bloco 8** e depende do orientador.
-  O objetivo geral promete não degradar o fluxo transversal "de forma
-  inaceitável" sem definir a palavra, e a correção de P16 levou a degradação
-  medida no `intenso` de +24,6% para **+43,6%**. Ou se declara um teto numérico
-  antes das 600 execuções, ou se reescreve o objetivo. Recomendação registrada: a
-  segunda.
+- **P19** (aberta em 2026-09-10) — **acrescenta o Bloco 10 e bloqueia o Bloco 8.**
+  O orientador confirmou que a banca espera aprendizado de máquina e indicou
+  onde: um modelo para decidir **qual VE é priorizado** quando há mais de uma
+  emergência simultânea — hoje o desempate determinístico de E8. Revoga a decisão
+  P3. **Nada sai do escopo em troca** (decisão da equipe, 2026-09-10). O desenho
+  do modelo ainda não está definido, e a primeira entrega do bloco é medir
+  quantos conflitos existem por execução, porque é isso que define o que é
+  treinável. Ver Bloco 10 acima e P19 em `context/09`.
+- ~~**P18**~~ ✅ **Resolvida em 2026-09-10.** Sem teto numérico: o custo
+  transversal é tratado qualitativamente, e o objetivo geral foi reescrito de
+  "sem degradar de forma inaceitável" para "quantificar o custo que essa
+  priorização impõe". Nada muda no código.
 - **P17** — **continua bloqueando o Bloco 8** e continua `DECISÃO DO GRUPO`. O
   enunciado de H2 foi corrigido para `≥ 15%`, mas o **denominador** e a
   calibração de `K`/`n_ciclos_compensacao` seguem por fazer — e a correção de P16

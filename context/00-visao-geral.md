@@ -28,14 +28,17 @@ Ambas são controladas pelo **mesmo motor de decisão** (`backend/core/priorizac
 
 ## 4. Objetivos
 
-**Geral:** desenvolver e validar um modelo de controle dinâmico de semáforos que priorize veículos de emergência reduzindo seu tempo de travessia, sem degradar de forma inaceitável o fluxo transversal.
+**Geral:** desenvolver e validar um modelo de controle dinâmico de semáforos que priorize veículos de emergência, reduzindo seu tempo de travessia, e **quantificar o custo que essa priorização impõe ao fluxo transversal**.
 
-> **A palavra "inaceitável" não tem definição — e virou pendência P18 em
-> 2026-08-31.** Até então era abstrata; depois da correção de P16 a degradação
-> transversal medida no cenário `intenso` passou de +24,6% para **+43,6%**, e o
-> objetivo geral promete um critério que o trabalho não tem. Ou se declara um
-> teto numérico na metodologia, **antes** do Bloco 8, ou se reescreve o objetivo
-> para não prometer um limiar. Ver P18 em `09-pendencias-e-decisoes.md`.
+> **Redação alterada em 2026-09-10, pela decisão de P18.** A formulação anterior
+> dizia *"sem degradar de forma **inaceitável** o fluxo transversal"*, e a palavra
+> nunca foi definida. O orientador decidiu que o trabalho **não declara teto
+> numérico** e trata o custo transversal qualitativamente, na discussão. Um
+> objetivo que promete um critério inexistente é mais frágil na arguição do que um
+> que promete medição — então "sem degradar de forma inaceitável" (promessa sem
+> régua) foi substituído por "quantificar o custo" (promessa que os dados
+> cumprem). O trade-off deixa de ser ressalva e passa a ser objetivo declarado.
+> Ver P18 em `09-pendencias-e-decisoes.md`.
 
 **Específicos:**
 
@@ -54,6 +57,24 @@ Ambas são controladas pelo **mesmo motor de decisão** (`backend/core/priorizac
 | H1 | A fusão radar + V2I reduz em **no mínimo 25%** o tempo total de travessia do VE, em cenários de saturação **moderada a intensa**, em relação à temporização estática | Comparação pareada por seed, baseline vs. proposto. O cenário `leve` é medido e discutido, mas **sem meta numérica** |
 | H2 | É possível mitigar em **no mínimo 15%** o impacto negativo nas vias transversais com compensação dinâmica de ciclo pós-evento | Três braços: baseline / preempção sem compensação / preempção com compensação |
 | H3 | A infraestrutura em borda sustenta latência operacional **fim-a-fim inferior a 200 ms** | Instrumentação `t_deteccao → t_decisao → t_atuacao`, medida no **protótipo**, com **5 repetições** roteirizadas no checklist |
+| **H4** | Uma política aprendida para escolher entre VEs em conflito **reduz o tempo de travessia do VE mais prejudicado**, em cenários com múltiplos VEs, em relação ao desempate determinístico de E8 | Braço `PREEMPCAO_ML` contra `PREEMPCAO`, pareado por seed, nos cenários com múltiplos VEs. Mesmo rigor de H1: Wilcoxon pareado, Cliff's δ e IC 95% por bootstrap |
+
+> **H4 formulada em 2026-09-10, antes de qualquer treino** (P19). O critério de
+> otimização escolhido é **minimax**: minimizar o tempo do VE mais prejudicado.
+> As alternativas foram consideradas e recusadas — a soma dos tempos aceitaria
+> sacrificar sistematicamente um VE, e o atraso total da rede poderia atrasar uma
+> ambulância para favorecer o tráfego de fundo, contradizendo a premissa do
+> trabalho. O custo transversal continua **medido e reportado**, como o objetivo
+> geral promete, mas não entra na troca.
+>
+> **H4 não tem meta percentual, e isso é correto** — diferente de H1 e H2, cujos
+> números vêm do pré-projeto. É hipótese **comparativa direcional**, avaliada por
+> significância e tamanho de efeito. Inventar um percentual agora seria fabricar
+> régua.
+>
+> Fica registrado também que **veredito nulo é veredito**: se a política aprendida
+> não superar a heurística, isso é reportado com tamanho de efeito e intervalo de
+> confiança, não escondido.
 
 > **Decisões P1 e P2 tomadas em 2026-08-24** (ver `09-pendencias-e-decisoes.md`):
 >
@@ -133,7 +154,9 @@ Como cada um vira teste executável: ver `06-testes-e-validacao.md`.
 Registrar isso evita que o agente "melhore" o projeto para fora do prazo:
 
 - ❌ Versão mobile do dashboard (decisão documentada no pré-projeto: operação em estação fixa).
-- ❌ Treinamento de modelo de machine learning preditivo. **Decisão P3, 2026-08-24:** a "IA" deste TCC é um **agente reativo com otimização determinística baseada em conhecimento** — técnica clássica de IA, coberta por Russell & Norvig (já na bibliografia). Ver `01-arquitetura-sistema.md` §5. A palavra "IA" fica reservada à caracterização de agente; o restante do texto diz "algoritmo de decisão". Q-learning tabular para a política de compensação (E7) é **trabalho futuro explicitamente descrito**, não entrega deste TCC.
+- ⚠️ ~~Treinamento de modelo de machine learning preditivo.~~ **DEIXOU DE ESTAR FORA DE ESCOPO em 2026-09-10.** O orientador confirmou que a banca espera aprendizado de máquina, e indicou onde: um modelo para decidir **qual VE é priorizado** quando há mais de uma emergência simultânea — hoje o desempate determinístico da etapa E8. Isso **revoga a decisão P3** de 2026-08-24 e abre a pendência **P19** (`09-pendencias-e-decisoes.md`), onde estão o desenho a definir, o impacto no cronograma e o que precisa sair do escopo em troca.
+  - O que **continua** verdadeiro da decisão P3: o restante do sistema — detecção, seleção de fase, transição segura, compensação — segue sendo **agente reativo com otimização determinística baseada em conhecimento**, técnica clássica de IA coberta por Russell & Norvig. O ML entra em **um** ponto delimitado, não substitui o motor.
+  - Q-learning tabular para a política de compensação (E7) **continua fora de escopo**, como trabalho futuro descrito.
 - ❌ Integração com sistemas reais da CET, SAMU ou Corpo de Bombeiros.
 - ❌ Radar físico. **Decisão P7, 2026-08-24:** no protótipo, o RFID-RC522 **emula** a função do conjunto radar + V2I, e isso é declarado explicitamente no texto. A validação da fusão de sensores ocorre exclusivamente em ambiente simulado. Sem sensor adicional (HC-SR04 descartado — ampliaria escopo sem sustentar nenhuma das três hipóteses).
 - ❌ Autenticação multi-tenant, gestão de usuários, RBAC completo. Um login simples basta.

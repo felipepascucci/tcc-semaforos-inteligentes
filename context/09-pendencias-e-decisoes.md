@@ -12,14 +12,20 @@ Levantados na preparação da orientação de 31/08/2026. São os únicos itens 
 que a equipe **não** pode fechar sozinha — os demais são trabalho de engenharia ou
 de redação.
 
-| Item | O que perguntar | Estado |
+**Respondidos na orientação, registrados em 2026-09-10.** A tabela fica como
+histórico; o que cada resposta gerou está no item correspondente.
+
+| Item | O que se perguntou | Resposta |
 | --- | --- | --- |
-| **P18** | O trabalho deve declarar um **teto numérico** para a degradação do fluxo transversal, ou tratar isso qualitativamente? O objetivo geral usa a palavra "inaceitável" sem defini-la | **A confirmar — precisa ser resolvido ANTES do Bloco 8** |
-| **P11 (1)** | Qual referência usar para a **faixa de plausibilidade** do fluxo de saturação em via urbana (autor, edição, ano, capítulo) | **A confirmar** — candidatas: Boletins Técnicos da CET-SP, Manual de Estudos de Tráfego do DNIT, HCM |
-| **P11 (2)** | Qual referência sustenta o **enquadramento por grau de saturação** — os cortes de v/c em 0,40 e 0,75 | **A confirmar** |
-| **P3** | A banca espera aprendizado de máquina? A caracterização como *agente reativo com otimização determinística* (Russell & Norvig) é suficiente? | **A confirmar** — decisão da equipe tomada em 2026-08-24, nunca comunicada ao orientador |
-| ~~**P11 (3)**~~ | ~~Confirmar o enquadramento em fluxo interrompido~~ | ✅ **Confirmado pela equipe em 2026-08-31.** Não é matéria de opinião: a malha é arterial urbana semaforizada, logo fluxo interrompido por definição. Sai da pauta; o que resta é **declarar** a distinção no texto, e a referência que a sustenta continua nos itens P11 (1) e (2) |
+| **P3** | A banca espera aprendizado de máquina? | ⚠️ **Sim.** E veio com sugestão concreta: usar ML para **priorizar entre múltiplos VEs** em cenários com mais de uma emergência simultânea. Abre **P19** e **revoga a decisão P3 de 2026-08-24** |
+| **P18** | Declarar teto numérico para a degradação transversal? | ✅ **Não** — tratamento qualitativo. Objetivo geral reescrito. Ver P18 |
+| **P11 (1) e (2)** | Referências para o fluxo de saturação e para os cortes de v/c | 🕓 **Ele ficou de devolver as referências.** Aprovou o método: medir na simulação e justificar o valor medido. Ver P11 |
+| ~~**P11 (3)**~~ | ~~Enquadramento em fluxo interrompido~~ | ✅ **Confirmado pela equipe em 2026-08-31**, antes da orientação. Resta **declarar** a distinção no texto |
 | ~~**P16**~~ | ~~Reformular H1, se a correção do mecanismo não levantar o número~~ | ✅ **Contingência não acionada** — a correção levantou (`intenso` 18,1% → 31,2%). H1 fica como está |
+
+> **O item 4 da pauta era o de menor risco técnico e virou o de maior impacto.**
+> A resposta a P3 não confirma o que a equipe havia decidido — ela o inverte, e
+> com isso muda o escopo declarado do trabalho. Ver **P19**.
 
 ---
 
@@ -204,9 +210,20 @@ nomes dos cenários; o que muda é a caracterização, que passa a ser a medida.
 ### Estado em 2026-08-31 · **item continua ABERTO**
 
 Os itens **1 e 2** — a referência para a faixa de plausibilidade e a referência
-para o enquadramento por grau de saturação — foram levados à orientação de
-31/08/2026 e estão na tabela de itens que dependem do orientador, no topo deste
-arquivo. São bibliografia, e a equipe não os fecha sozinha.
+para o enquadramento por grau de saturação — foram levados à orientação. **Estado
+em 2026-09-10: o orientador aprovou o método e ficou de devolver as referências.**
+
+O que ele aprovou é o que importava mais: **medir o fluxo de saturação na própria
+malha e justificar o valor medido** é caminho válido, e a referência entra para
+confrontar o número, não para fornecê-lo. Isso confirma o encaminhamento de
+2026-08-25 e remove o risco de a calibração inteira ter de ser refeita sobre um
+valor de manual.
+
+**P11 continua aberta, mas mudou de natureza:** deixou de ser pergunta e passou a
+ser espera. O que falta é receber as citações e escrevê-las. Se elas não
+chegarem, o item volta a ser risco — sem referência, a faixa de plausibilidade e
+os cortes de v/c ficam sem lastro bibliográfico, e são alvo fácil na arguição.
+**Cobrar na próxima orientação se não vierem.**
 
 O item **3 saiu da pauta: o enquadramento em fluxo interrompido foi confirmado
 pela equipe em 2026-08-31.** Não é matéria de opinião — a malha é uma arterial
@@ -674,7 +691,27 @@ fato custa algo.
 
 ---
 
-## P18 — "Degradação inaceitável" não tem limiar declarado · `DECISÃO DO GRUPO + ORIENTADOR — ANTES DO BLOCO 8`
+## P18 — "Degradação inaceitável" não tem limiar declarado · ✅ **RESOLVIDA em 2026-09-10**
+
+> **Decisão do orientador: tratamento qualitativo, sem teto numérico.** É a opção 2
+> abaixo, que era a recomendação registrada. O custo transversal é medido,
+> reportado e discutido no capítulo 5, sem limiar formal — e o **objetivo geral
+> foi reescrito** para não prometer um critério que o trabalho não tem:
+>
+> | | |
+> | --- | --- |
+> | Antes | "…reduzindo seu tempo de travessia, **sem degradar de forma inaceitável** o fluxo transversal" |
+> | Agora | "…reduzindo seu tempo de travessia, e **quantificar o custo que essa priorização impõe** ao fluxo transversal" |
+>
+> A troca é mais que cosmética: o trade-off sai da condição de ressalva e passa a
+> ser **objetivo declarado**. O trabalho promete o que os dados cumprem —
+> medir — em vez de um julgamento que ninguém fixou. Não há linha nova em T6,
+> porque não há critério a verificar; há uma seção de discussão a escrever.
+>
+> Aplicado em `00-visao-geral.md` §4. **Nada muda no código nem nas execuções.**
+
+O registro abaixo é o histórico, mantido porque a arguição pode perguntar por que
+o objetivo geral foi reescrito no meio do trabalho.
 
 Aberta em 2026-08-31, como consequência direta da correção de P16.
 
@@ -731,6 +768,259 @@ critério numérico.
 
 ---
 
+## P19 — Modelo de ML para priorizar entre múltiplos VEs · `DECISÃO DO GRUPO — DEFINE UM BLOCO NOVO`
+
+Aberta em 2026-09-10, pela resposta do orientador a P3. **Revoga a decisão P3 de
+2026-08-24**, que reservava a palavra "IA" à caracterização de agente e punha
+aprendizado de máquina explicitamente fora de escopo.
+
+**O que o orientador pediu:** um modelo de *machine learning* para decidir, em
+cenários com mais de um veículo de emergência simultâneo, **qual deles é
+priorizado**. A banca espera ML no trabalho, e este é o ponto onde ele deve
+entrar.
+
+### O que isso substitui
+
+A etapa **E8** (`01-arquitetura-sistema.md` §5.2), hoje um desempate
+determinístico e lexicográfico:
+
+1. maior prioridade por tipo (`AMBULANCIA > BOMBEIRO > POLICIA`);
+2. menor ETA ao cruzamento;
+3. preempção já em curso vence, para evitar oscilação.
+
+### Por que a substituição é defensável — e não decorativa
+
+Este é o argumento que vai para o texto, e ele é real: **E8 é míope.** Decide um
+cruzamento por vez, num instante, por uma ordem fixa, sem considerar a
+consequência sequencial. Priorizar o VE A agora pode custar muito mais ao VE B
+adiante, ou formar uma fila que prejudica os dois. A ordem por tipo é uma
+convenção declarada, não uma otimização — nada garante que servir a ambulância
+primeiro minimize o tempo do conjunto.
+
+Uma política aprendida pode pesar a consequência. **Existe, portanto, uma lacuna
+genuína que o ML preenche**, o que é bem diferente de vestir de ML algo que já
+funciona. É o que torna a entrega defensável na arguição em vez de parecer
+concessão à expectativa da banca.
+
+### O primeiro passo é medir, e o dado não existe
+
+**Ninguém sabe quantos eventos de conflito existem por execução.** `conflito.py`
+resolve a disputa e devolve os adiados, mas o coletor **não agrega** e
+`execucoes.csv` **não tem coluna** para isso — verificado em 2026-09-10. O
+`status_execucao = 'CONFLITO_ADIADO'` está previsto em `log_prioridade`, mas o
+lote roda com `--sem-banco` e nada conta o evento no CSV.
+
+Isso importa porque **o paradigma viável depende dessa contagem**, e escolher o
+modelo antes de conhecê-la seria projetar no escuro:
+
+| Se houver… | …então |
+| --- | --- |
+| ~3 conflitos por execução | ~150 eventos em 50 seeds. Não sustenta treino **e** avaliação separados; obriga cenário mais denso |
+| ~30 conflitos por execução | ~1.500 eventos. Sustenta tabela Q ou modelo pequeno, com divisão treino/teste por seed |
+
+**Ação imediata, antes de qualquer decisão de modelagem:** instrumentar a
+contagem de conflitos no coletor, acrescentar a coluna em `execucoes.csv` e rodar
+o cenário `multiplas_emergencias` em algumas seeds. É trabalho de horas e
+transforma a escolha do paradigma em evidência — o mesmo procedimento que P15
+seguiu ("medir antes de decidir") e que P16 formalizou.
+
+### Desenho decidido pela equipe · 2026-09-10
+
+**Todas as decisões de modelagem abaixo estão fechadas e são anteriores a
+qualquer treino** — é a mesma disciplina do critério de P16. O que continua
+dependendo da entrega 10.1 é o **volume de dados**, e só ele.
+
+#### Forma do modelo — comparação par a par sobre diferenças
+
+O modelo compara **dois VEs por vez**; três ou mais se resolvem por torneio. E as
+entradas são as **diferenças** entre os dois candidatos, não os valores absolutos
+de cada um:
+
+```
+score = w · (x_A − x_B)         escolhe A se score > 0, senão B
+```
+
+**A razão é estrutural, não estética.** Um modelo que recebesse os dois vetores
+soltos poderia aprender a preferir A a B *e* B a A, dependendo da ordem em que
+fossem apresentados — uma inconsistência que apareceria como oscilação na rua.
+Sobre diferenças, a antissimetria é garantida por construção:
+`score(B, A) = −score(A, B)`. Não é uma propriedade que se espera que o modelo
+aprenda; é uma que ele não consegue violar.
+
+Regressão logística par a par. Exporta como **um vetor de pesos** — meia dúzia de
+números em arquivo versionado, com inferência em Python puro dentro de `core/`.
+
+#### Entrada — cinco diferenças
+
+| Atributo (por VE, entra como diferença) | Por quê |
+| --- | --- |
+| `tipo` | Codifica a precedência atual (`AMBULANCIA > BOMBEIRO > POLICIA`) como atributo, e não como regra fixa — o peso aprendido dirá quanto ela de fato pesa |
+| `eta_s` | Quando cada um chega |
+| `velocidade_ms` | **Substitui `distancia_m`.** ETA já é distância dividida por velocidade: carregar os dois seria quase colinear, e o que agrega informação é a velocidade |
+| `fila_no_acesso` | Já chega ao motor pelos detectores E2, e é o que P16 mostrou ser decisivo |
+| `cruzamentos_restantes` | Proxy do quanto de rota ainda depende de priorização — é o que dá caráter sequencial à decisão |
+
+**`distancia_m` ficou de fora** por redundância com `eta_s`, e
+**`preempcao_em_curso` também**, mas por outro motivo — ver a guarda abaixo.
+
+#### Critério: minimax sobre o tempo dos VEs
+
+**Minimizar o tempo de travessia do VE mais prejudicado:**
+
+```
+escolha = argmin( max(tempo_travessia_A, tempo_travessia_B) )
+```
+
+Três razões, e a primeira é a que se defende na banca:
+
+1. **Nenhum VE é sacrificado.** A soma dos tempos aceitaria atrasar muito um para
+   ganhar pouco no outro, e esse um pode ser a ambulância.
+2. **Não troca tempo de resposta por fluxo de tráfego.** O critério "atraso total
+   da rede" foi considerado e **recusado**: ele pode decidir atrasar uma
+   ambulância para favorecer o tráfego de fundo, o que contradiz a premissa do
+   trabalho. O custo transversal continua **medido e reportado** ao lado — o que é
+   exatamente o que o objetivo geral reescrito em P18 promete —, mas não entra na
+   troca.
+3. **É um número só**, sem pesos por tipo a justificar (que era o custo da quarta
+   alternativa considerada).
+
+#### De onde vêm os rótulos — bifurcação da simulação
+
+Pesos aprendidos exigem supervisão, e supervisão exige saber qual escolha foi
+melhor. **No instante de cada conflito, a simulação é bifurcada:** roda-se a
+escolha A e a escolha B, cada uma até os dois VEs liberarem a rota, e o rótulo é
+a que der o melhor minimax.
+
+Tecnicamente viável: o TraCI expõe `simulation.saveState()` e `loadState()`. O
+custo por evento é limitado — a bifurcação não precisa ir até o fim da hora, só
+até os dois VEs saírem.
+
+> **Por que não estimar o rótulo por heurística.** Rotular por uma regra
+> (ex.: "quem tem menor ETA é o certo") ensinaria ao modelo a própria regra, e o
+> resultado seria uma imitação caríssima de E8. O rótulo tem de vir de **medição
+> da consequência**, senão H4 não tem como ser superada nem refutada.
+
+#### Guarda de oscilação — fora do modelo, de propósito
+
+O item 3 do desempate atual ("preempção já em curso vence") **permanece como
+regra rígida, acima do modelo**. O modelo decide apenas quando **não** há
+preempção em curso; iniciada uma, trocar de VE no meio é governado pela regra, não
+pela política aprendida.
+
+**A razão é de segurança.** Uma política que pudesse reverter a escolha a cada
+passo geraria tempestade de trocas de fase, e isso pressiona I4 (verde mínimo) e
+I5 (starvation). Com a guarda fora do modelo, o argumento de invariantes
+permanece o mesmo de hoje e não depende do que a rede aprendeu — o que é
+exatamente o tipo de garantia que não se quer delegar a um modelo estatístico.
+
+É também por isso que `preempcao_em_curso` **não** entra como atributo: ela não
+informa a decisão, ela a suspende.
+
+#### Hipótese H4, na forma que essas escolhas permitem
+
+**"A política aprendida reduz o tempo de travessia do VE mais prejudicado, em
+cenários com múltiplos VEs, em relação ao desempate determinístico de E8."**
+
+**Sem meta numérica, e isso é correto aqui** — diferente de H1 e H2, cujos
+percentuais vêm do pré-projeto. H4 é hipótese **comparativa direcional**, testada
+por significância e tamanho de efeito: Wilcoxon pareado por seed, Cliff's δ e IC
+95% por bootstrap. Inventar um percentual agora seria fabricar régua; testar
+direção com tamanho de efeito é o que os dados sustentam.
+
+**A formulação acima é para ser commitada antes de o modelo ser treinado.**
+
+### O que continua aberto — e depende só de dados
+
+Todas as decisões de **modelagem** foram tomadas (seção acima). O que resta
+depende da entrega **10.1**, a contagem de eventos de conflito:
+
+1. **Densidade de VEs.** O cenário `multiplas_emergencias` tem ~11 VEs por
+   execução de 1 h, em pares. Se 10.1 mostrar que os conflitos são raros, será
+   preciso um cenário mais denso **para treinar** — novos arquivos de demanda,
+   mesma malha. O cenário declarado continua sendo o de avaliação.
+2. **Divisão treino/teste por seed**, com o treino **fora** do intervalo 1..50 do
+   Bloco 8 (guarda de P16). *Quais* seeds depende de quantos eventos cada uma
+   rende.
+3. **Regularização e número de atributos.** Com cinco diferenças e poucas
+   centenas de eventos, o modelo cabe. Com poucas dezenas, será preciso reduzir
+   atributos — e isso se decide com o número na mão, não antes.
+
+> **Uma dependência que já se pode afirmar:** se 10.1 devolver menos de ~100
+> eventos de conflito por conjunto de treino, o desenho acima não muda, mas a
+> conclusão de H4 nasce com poder estatístico baixo — e isso tem de ser declarado
+> na análise, não descoberto na arguição.
+
+### O que mais precisa mudar no trabalho
+
+- **`00-visao-geral.md` §8** põe "treinamento de modelo de machine learning
+  preditivo" explicitamente **fora de escopo**. Contradição direta; tem de ser
+  reescrito.
+- **A decisão P3** (tabela de decisões tomadas, 2026-08-24) fica **revogada**, com
+  a data e o motivo registrados. Mudança de escopo justificada é normal; mudança
+  silenciosa parece descuido — é o mesmo princípio de P12.
+- **Hipótese nova (H4)** e **braço novo** (`PREEMPCAO_ML`), comparado contra o E8
+  determinístico. Sem braço próprio não há como isolar o efeito do modelo.
+- **A matriz do Bloco 8 cresce.** Um braço a mais nos cenários com múltiplos VEs,
+  mais as execuções de treino.
+- **Bibliografia de ML** — Russell & Norvig já cobre aprendizado por reforço; um
+  classificador supervisionado pede referência própria.
+
+### Risco a declarar desde já
+
+**O modelo pode não bater o heurístico.** Com dois VEs e um desempate por tipo e
+ETA, a margem é estreita. O trabalho precisa estar estruturado para que **um
+resultado nulo continue sendo resultado**: relatar que a política aprendida não
+superou a heurística, com o tamanho de efeito e o intervalo de confiança, é
+contribuição legítima — e é o que o `07` §1 já exige em espírito. O que não pode
+acontecer é o modelo entrar sem avaliação, só para satisfazer a expectativa.
+
+### Impacto no cronograma · **decidido pela equipe em 2026-09-10**
+
+**Nada sai do escopo.** Todos os blocos já previstos seguem como estão, e o de
+aprendizado de máquina é **acrescentado** — ver **Bloco 10** em
+`docs/plano-desenvolvimento.md`. A lista de corte do `08` §2 **continua sendo
+reserva**, não decisão tomada, e a data da banca não é tratada como restrição
+neste momento.
+
+> **Consequência a registrar, sem alarme.** A lista de corte deixa de ser o
+> primeiro instrumento de ajuste, então o que absorve um eventual atraso passa a
+> ser o prazo. Se em algum momento a data apertar, a lista está pronta e a decisão
+> é rápida — é para isso que ela existe. Registrado aqui para que, se a discussão
+> voltar, ela volte com o histórico e não do zero.
+
+### Recomendação
+
+1. **Medir a frequência dos conflitos primeiro.** Virou a entrega **10.1** do
+   Bloco 10, por decisão da equipe em 2026-09-10 — será feita em sessão própria,
+   junto com o resto do bloco, em vez de isolada agora. A ordem se mantém: a
+   medição vem antes de escolher o paradigma.
+2. Com o número na mão, escolher o paradigma — a inclinação é pela **opção (c) ou
+   (a)**, por custo e explicabilidade, deixando Q-learning como alternativa.
+3. **Declarar o objetivo de otimização antes de treinar**, e commitá-lo antes do
+   código, como se fez em P16.
+4. **Levar a proposta de desenho ao orientador antes de implementar.** Ele pediu
+   ML, não um desenho específico; alinhar evita construir a coisa errada.
+
+> **O que "desenho" significa aqui** — registrado porque o termo gerou dúvida na
+> equipe, e vai gerar na banca. **Não é escolha de biblioteca nem de framework de
+> agentes de LLM**; "agente" neste trabalho é *agente reativo* no sentido de
+> Russell & Norvig, e não tem relação com orquestração de modelos de linguagem.
+> Desenho são as decisões de modelagem:
+>
+> | Decisão | O que precisa ser respondido |
+> | --- | --- |
+> | **Entrada** | Que atributos o modelo vê no instante do conflito — tipo de cada VE, ETA, distância, fila no acesso, preempção em curso, cruzamentos restantes na rota |
+> | **Saída** | Qual VE recebe prioridade. É escolha entre candidatos, não um número contínuo |
+> | **Como aprende** | Supervisionado com rótulos de oráculo, por reforço, ou pesos aprendidos de uma função de utilidade |
+> | **O que otimiza** | Soma dos tempos, pior caso, ou ponderado por tipo — escolha ética e metodológica, declarada antes de treinar |
+> | **Dados** | Quantos eventos existem, e de quais execuções vêm treino e teste |
+>
+> A ferramenta é o menor problema: treino offline (provavelmente scikit-learn,
+> dependência **só de treino**, a registrar como exceção ao `02` §2) e política
+> exportada como dado, com inferência em Python puro dentro de `core/`.
+
+---
+
 ## P12 — Ordem das sprints alterada · `REGISTRO`
 
 `08-roadmap-e-convencoes.md` §1 antecipa o banco de dados (Sprint 5 do texto) porque a Sprint 2 já precisa persistir. Registrar a alteração no capítulo de metodologia, com a justificativa — mudança de plano justificada é normal em processo iterativo e demonstra maturidade; mudança silenciosa parece descuido.
@@ -743,6 +1033,8 @@ critério numérico.
 | --- | --- | --- | --- |
 | 2026-08-24 | **P1** — meta de redução (20% vs 30%) | H1 reformulada e **condicionada à saturação**: *"redução ≥ 25% no tempo total de travessia do VE em cenários de saturação moderada a intensa"*. O cenário `leve` é analisado e discutido separadamente, sem meta numérica. | A Tabela 1 do próprio pré-projeto mostra 8,3% em fluxo leve — nenhuma meta única sobrevive aos quatro cenários. Condicionar à saturação é fisicamente coerente (com a via livre há pouco tempo perdido a recuperar) e mais defensável que uma meta única. |
 | 2026-08-24 | **P2** — latência (100 ms vs 200 ms) | **Duas métricas distintas, ambas instrumentadas e ambas mantidas no texto.** RNF01 = *latência de decisão* (< 100 ms): do estado recebido à emissão do comando, software puro, medida com `perf_counter()`. H3 = *latência fim-a-fim* (< 200 ms): de `t_deteccao` a `t_atuacao`, incluindo rede e atuação física. | Não são o mesmo número medindo a mesma coisa; o conflito era aparente. A tabela `metrica_latencia` já prevê os três carimbos (`t_deteccao`, `t_decisao`, `t_atuacao`), então a separação sai de graça. Reportar p95 e p99 de ambas, nunca só a média. |
+| 2026-09-10 | **P3 REVOGADA** — a banca espera ML | A decisão de 2026-08-24 (abaixo) **deixa de valer na parte que excluía aprendizado de máquina**. O orientador confirmou que a banca espera ML e indicou o ponto: decidir **qual VE é priorizado** quando há mais de uma emergência simultânea, hoje o desempate determinístico de E8. Abre **P19**. Continua valendo que o **restante** do motor é agente reativo determinístico — o ML entra em um ponto delimitado, não substitui o motor —, e que Q-learning para E7 segue como trabalho futuro. | A decisão P3 foi tomada em 2026-08-24 com a ressalva expressa de **"comunicar ao orientador — a expectativa do avaliador pesa aqui"**. Comunicada, a expectativa se revelou oposta à suposição. Registrar a revogação com data e motivo é o que separa mudança de escopo justificada de descuido (mesmo princípio de P12); apagar a decisão anterior esconderia que a equipe raciocinou antes de decidir, o que é justamente o que sustenta a defesa. |
+| 2026-09-10 | **P18** — teto para a degradação transversal | **Sem teto numérico; tratamento qualitativo**, por decisão do orientador. O objetivo geral foi reescrito: de *"sem degradar de forma inaceitável o fluxo transversal"* para *"quantificar o custo que essa priorização impõe ao fluxo transversal"*. | Um objetivo que promete um critério inexistente é mais frágil na arguição do que um que promete medição. A troca move o trade-off de ressalva para objetivo declarado, e o trabalho passa a prometer exatamente o que os dados cumprem. Sem teto não há linha nova em T6 — há uma seção de discussão a escrever, com o custo medido (+43,6% no `intenso` após P16). Nada muda no código nem nas execuções. |
 | 2026-08-24 | **P3** — o que é a "IA" | **Opção 1:** o sistema é descrito como *agente reativo com otimização determinística baseada em conhecimento* — técnica clássica de IA, coberta por Russell & Norvig (já na bibliografia). A palavra "IA" fica reservada à caracterização de agente; o restante do texto usa "algoritmo de decisão". Aprendizado de máquina (ex.: Q-learning tabular para a política de compensação E7) fica como **trabalho futuro explicitamente descrito**. | Baixo risco e custo zero de cronograma, sem sacrificar rigor: o sistema *é* um agente reativo, e chamá-lo pelo nome correto é mais forte na banca do que vestir de ML algo que não treina nada. **Comunicar a decisão ao orientador** — a expectativa do avaliador pesa aqui. |
 | 2026-08-24 | **P5** — volume de `estado_semaforo_amostra` | **Opção (b) + (c):** o Postgres recebe apenas **transições de fase**, não amostras periódicas. Além disso, só execuções marcadas como **exemplares** (uma por par cenário × modo, usadas nas figuras) são persistidas; as demais das 600 vivem em CSV sob `analysis/data/`. | Transições permitem reconstruir o histórico completo e verificar I2/I3 e I4 com custo de centenas de milhares de linhas em vez de 173 milhões. CSV cobre a análise em lote sem sobrecarregar o banco numa máquina de estudante. A coluna `t_simulacao` passa a marcar o instante da transição. |
 | 2026-08-24 | **P13** — conjunto de fases do protótipo | O protótipo é **um cruzamento com 4 aproximações**, em regime de ***split phasing***: **4 fases, uma aproximação verde por vez**. `PRE,<fase>,<dur_s>` passa a aceitar `fase ∈ 1..4`. Acrescentados `TESTMODE,<0\|1>` e `TEST,<c1><c2><c3><c4>` para acionamento direto **restrito ao modo de bancada**. A matriz de conflito é aplicada **no motor e, independentemente, no firmware**. | Refuta a inferência de 2 fases da v1 do contrato. Sob split phasing a matriz de conflito é total, então I1 vira `contar_verdes() <= 1` — três linhas de guarda no AVR e uma verificação grep-ável na telemetria. O comando direto atende à necessidade de conferir fiação sem abrir brecha para violar I1 em operação: fora do modo de teste é recusado, e mesmo dentro dele a guarda de conflito continua ativa. |

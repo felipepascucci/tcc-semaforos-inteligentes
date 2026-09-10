@@ -216,6 +216,44 @@ onde `DEFICIT_TOTAL` é o tempo de verde que o acesso deixou de receber durante 
 
 Se dois VEs demandam fases conflitantes no mesmo TLS, **um espera**. Nunca conceder as duas. Registrar em `log_prioridade` com `status_execucao = 'CONFLITO_ADIADO'`.
 
+> **E8 é o ponto onde entra o aprendizado de máquina** (pendência **P19**, aberta
+> em 2026-09-10 por decisão do orientador). O desempate acima é lexicográfico e
+> **míope**: decide um cruzamento por vez, sem pesar a consequência sequencial —
+> priorizar o VE A agora pode custar mais ao VE B adiante. A ordem por tipo é
+> convenção declarada, não otimização.
+>
+> **Desenho decidido em 2026-09-10** (detalhes e justificativas em P19):
+>
+> ```
+> score = w · (x_A − x_B)      escolhe A se score > 0, senão B
+>
+> x = (tipo, eta_s, velocidade_ms, fila_no_acesso, cruzamentos_restantes)
+> ```
+>
+> **Comparação par a par sobre diferenças**, com torneio para três ou mais VEs. As
+> diferenças não são conveniência: elas garantem `score(B,A) = −score(A,B)` **por
+> construção**, e sem isso o modelo poderia preferir A a B e B a A conforme a
+> ordem de apresentação — inconsistência que apareceria como oscilação na rua.
+>
+> **Critério de treino: minimax** — minimizar o tempo de travessia do VE mais
+> prejudicado. Rótulos vêm de **bifurcar a simulação** no instante do conflito
+> (`traci.simulation.saveState`/`loadState`), rodando as duas escolhas e medindo a
+> consequência. Rotular por heurística ensinaria ao modelo a própria heurística.
+>
+> **O item 3 acima — "preempção em curso vence" — continua sendo regra rígida
+> ACIMA do modelo.** A política decide só quando não há preempção em curso;
+> iniciada uma, a troca é governada pela regra. Assim o argumento de I4 e I5 não
+> passa a depender do que o modelo aprendeu, e não há tempestade de trocas de fase.
+>
+> Restrição arquitetural: o modelo é **treinado fora e exportado como dado** — no
+> desenho escolhido, um vetor de pesos em arquivo versionado —, com inferência
+> pura em `core/`. É o que preserva a decisão do §1 deste documento e o que mantém
+> `test_arquitetura.py` verde.
+>
+> **Continua aberto apenas o volume de dados**, que é a entrega 10.1: ninguém
+> conta eventos de conflito hoje — `conflito.py` devolve os adiados, mas o coletor
+> não agrega e `execucoes.csv` não tem a coluna.
+
 ### 5.3 Parâmetros (arquivo `backend/config/parametros.yaml`)
 
 Todo número mágico do algoritmo vive aqui, nunca no código:
