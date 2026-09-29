@@ -128,6 +128,47 @@ def test_ve_e_detectado_pela_classe_e_nao_pelo_nome(tmp_path: Path) -> None:
     assert veiculo.posicao_na_via_m >= 0.0
 
 
+def test_ve_nunca_anda_para_tras_ao_atravessar_um_cruzamento(tmp_path: Path) -> None:
+    """Regressão do defeito de via interna, achado na entrega 10.1.
+
+    Enquanto o VE atravessa a área interna de um cruzamento, o SUMO o põe numa
+    faixa cujo id começa por `:`: `VAR_ROUTE_INDEX` ainda aponta para a via que
+    ele deixou e `VAR_LANEPOSITION` já recomeçou do zero na faixa interna.
+    Somados sem tratamento, os dois campos colocavam o VE no **começo da via
+    anterior** — no cenário `multiplas_emergencias` isso o jogava ~490 m para
+    trás por cerca de um segundo a cada travessia, inflava o ETA de 32 s para
+    63 s e fazia a disputa com o outro VE sumir da visão do motor.
+
+    O que se verifica é a consequência observável, e não a implementação: o
+    progresso do VE ao longo da própria rota é monotônico. Um VE que anda para
+    trás é erro de leitura, não de tráfego.
+    """
+    from adapters.sumo import topologia as topologia_sumo
+
+    topologia = topologia_sumo.carregar().topologia
+    _, _, _, estados, _ = _rodar(controlar=True, area=tmp_path)
+
+    def progresso(veiculo) -> float:  # tipo vem de módulo importado sob demanda
+        percorrido = sum(
+            topologia.comprimento(via) for via in veiculo.rota[: veiculo.indice_via_atual]
+        )
+        return percorrido + veiculo.posicao_na_via_m
+
+    anterior: dict[str, float] = {}
+    atravessou = False
+    for estado in estados:
+        for veiculo in estado.veiculos_emergencia:
+            atual = progresso(veiculo)
+            if veiculo.id in anterior:
+                assert atual >= anterior[veiculo.id] - 0.01, (
+                    f"{veiculo.id} recuou {anterior[veiculo.id] - atual:.1f} m em t={estado.t}"
+                )
+                atravessou = atravessou or veiculo.indice_via_atual > 0
+            anterior[veiculo.id] = atual
+
+    assert atravessou, "o VE não trocou de via no cenário: o teste não provaria nada"
+
+
 # ---------------------------------------------------------------------------
 # Escrita no mundo
 # ---------------------------------------------------------------------------

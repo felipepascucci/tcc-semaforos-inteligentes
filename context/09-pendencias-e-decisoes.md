@@ -824,6 +824,128 @@ o cenário `multiplas_emergencias` em algumas seeds. É trabalho de horas e
 transforma a escolha do paradigma em evidência — o mesmo procedimento que P15
 seguiu ("medir antes de decidir") e que P16 formalizou.
 
+#### Entrega 10.1, 2026-09-10 · ✅ **MEDIDA** — e a 10.2 passa a ser obrigatória
+
+**O número: 60 disputas em 10 execuções, 56 delas decidíveis** — 6 por execução,
+sem variação entre seeds. Está **abaixo do piso de 100** que esta pendência
+declarou, então a entrega 10.2 (cenário de treino mais denso) deixa de ser
+condicional e passa a ser necessária.
+
+Matriz: `multiplas_emergencias`, braço `PREEMPCAO`, seeds 101..110, 3.600 s cada,
+2m03s de parede com `--paralelo 6`. Dez válidas, zero descartadas. Dados em
+`analysis/data/bloco10_conflitos/`.
+
+| Grandeza | Valor |
+| --- | ---: |
+| Disputas (episódios) | 60 |
+| Decidíveis, sem preempção em curso | 56 |
+| Por execução | 6, em todas as seeds |
+| Duração mediana da disputa | 26,3 s |
+| Passos de simulação em disputa | 16.335 |
+
+Toda disputa é entre **dois** VEs, sempre no cruzamento **CRUZ_02**, que é onde a
+rota do corredor cruza a transversal. A ausência de dispersão entre seeds é
+esperada e não é defeito: as partidas de VE não dependem da seed, só o tráfego de
+fundo depende.
+
+> **Segundo achado, e ele muda o desenho da 10.2: os pares são sempre do mesmo
+> tipo.** Vinte pares ambulância-ambulância, vinte bombeiro-bombeiro, vinte
+> polícia-polícia, e **nenhum par misto**. `partidas_de_emergencia`
+> (`sim/demanda/gerar_rotas.py`) percorre a lista de tipos com o mesmo índice nas
+> duas rotas, então os dois VEs de cada par nascem sempre do mesmo tipo.
+>
+> Como as entradas do modelo são **diferenças**, o atributo `tipo` vale zero em
+> todos os eventos e seu peso é **inestimável**. O desenho abaixo inclui o tipo
+> justamente para que "o peso aprendido diga quanto a precedência de fato pesa" —
+> com estes dados ele não diria nada. **Decisão da equipe, 2026-09-10: o cenário
+> da 10.2 defasa a rotação de tipos entre as duas rotas**, para que apareçam pares
+> mistos. Sem isso, um quinto do desenho do modelo é decorativo.
+
+##### Defeito encontrado pela instrumentação: VE recua um quarteirão dentro do cruzamento
+
+A primeira corrida devolveu **120 episódios**, exatamente o dobro do correto, com
+cada uma das 60 disputas partida em dois episódios separados por 0,7 a 2,6 s. A
+causa não era a agregação: era leitura de posição no adaptador.
+
+Enquanto o VE atravessa a área interna de um cruzamento, o SUMO o põe numa faixa
+cujo identificador começa por `:`. Nesse trecho `VAR_ROUTE_INDEX` ainda aponta
+para a via que ele **acabou de deixar** e `VAR_LANEPOSITION` já recomeçou do zero
+na faixa interna. `AdaptadorSumo` somava os dois campos crus e colocava o VE no
+**começo da via anterior** — cerca de 490 m atrás de onde ele estava. Medido no
+registro passo a passo: a distância ao cruzamento seguinte saltava de 486 m para
+492 m, o ETA de 32 s para 63 s, e a disputa com o outro VE **sumia da visão do
+motor** por cerca de um segundo, reabrindo depois como episódio novo.
+
+**Isto é defeito de E1/E2, não de contagem, e é anterior ao Bloco 10.** Ele
+ocorre em toda travessia de cruzamento, em todos os cenários e nos três braços. A
+instrumentação da 10.1 apenas o tornou visível, o que é um argumento a favor de
+medir antes de modelar.
+
+**Correção (2026-09-10):** o adaptador passa a assinar também `VAR_ROAD_ID` — uma
+variável a mais na mesma assinatura, sem chamada de IPC adicional — e, quando o
+identificador indica faixa interna, trata o VE como estando **no fim da via
+atual**, isto é, na linha de retenção do cruzamento que ele está atravessando. O
+erro residual é no máximo o comprimento da faixa interna (~13 m) e é conservador
+na direção certa: o VE continua demandando aquele cruzamento até limpá-lo, que é
+o que E5 precisa para não soltar a preempção cedo demais.
+
+Regressão em `sim/tests/test_adaptador.py`, marcada `sumo`: o progresso do VE ao
+longo da própria rota tem de ser monotônico. Sem a correção ela falha com
+"recuou 491,2 m".
+
+**Consequência a registrar, e ela não é do Bloco 10.** Os números de P16 — a
+remedição que fechou H1 com 31,2% no `intenso` — foram produzidos por código com
+este defeito. A correção tende a melhorar a detecção, não a piorá-la, mas **os
+números do capítulo 5 são os do Bloco 8**, que ainda não rodou e rodará com o
+código corrigido. O que P16 registra continua sendo evidência de que o mecanismo
+de antecipação por fila funcionou; a confirmação numérica final vem do Bloco 8.
+
+**Descarte documentado.** A corrida contaminada está preservada em
+`analysis/data/bloco10_conflitos_descartado_defeito_via_interna/`, com o nome
+dizendo o que é. A remedição usou as **mesmas seeds 101..110**.
+
+##### Estado da implementação
+
+`mypy --strict` limpo, `ruff` limpo,
+**303 testes** na execução padrão (24 novos) e **22** na suíte `sumo` (1 novo).
+Alterados: `core/priorizacao/conflito.py` (`EventoConflito`),
+`core/priorizacao/motor.py` (campo `observador_conflito`, publicação em
+`avaliar`), `sim/controlador/coletor.py` (`EpisodioConflito`, agregação em
+episódios, CSV novo, três colunas novas em `execucoes.csv`),
+`sim/controlador/executor.py`, `sim/controlador/lote.py`,
+`adapters/sumo/adaptador.py` (correção da via interna) e o módulo novo
+`analysis/resumo_conflitos.py`.
+
+**Três definições fixadas, porque elas decidem o que o número significa:**
+
+1. **Conflito é fase distinta, não VE a mais.** Dois VEs pedindo a mesma fase são
+   servidos pelo mesmo verde e não geram escolha nenhuma.
+2. **A unidade é o episódio**, não o passo. Com passo de 0,1 s, contar por passo
+   inflaria a contagem em duas ordens de grandeza sem acrescentar uma escolha
+   sequer. As duas grandezas são gravadas, e o contraste entre elas fica visível
+   no resumo.
+3. **Só o episódio decidível é treinável.** Havendo preempção em curso, a escolha
+   está suspensa pela guarda de oscilação — que é regra rígida acima do modelo,
+   por decisão registrada nesta mesma pendência.
+
+**Como reproduzir a medição:**
+
+```bash
+python -m sim.controlador.lote --cenarios multiplas_emergencias --modos PREEMPCAO \
+    --seeds 101..110 --paralelo 6 --sem-banco --saida analysis/data/bloco10_conflitos
+python -m analysis.resumo_conflitos --dados analysis/data/bloco10_conflitos
+```
+
+`--sem-banco` e o `--saida` separado são obrigatórios pelas razões já registradas
+em P16, e aqui há uma a mais: `execucoes.csv` ganhou três colunas, e acrescentar
+linhas de 25 colunas ao piloto de 2026-08-26, que tem 22, o corromperia.
+
+`FIXO` fica de fora porque não roda o motor, logo tem zero conflitos por
+construção. As seeds 101..110 ficam fora do intervalo 1..50 do Bloco 8 pela
+guarda de P16 — vale notar que as partidas de VE **não** dependem da seed, só o
+tráfego de fundo depende, então a dispersão entre seeds mede o efeito do tráfego
+sobre a frequência das disputas.
+
 ### Desenho decidido pela equipe · 2026-09-10
 
 **Todas as decisões de modelagem abaixo estão fechadas e são anteriores a
@@ -931,24 +1053,36 @@ direção com tamanho de efeito é o que os dados sustentam.
 
 ### O que continua aberto — e depende só de dados
 
-Todas as decisões de **modelagem** foram tomadas (seção acima). O que resta
-depende da entrega **10.1**, a contagem de eventos de conflito:
+Todas as decisões de **modelagem** foram tomadas (seção acima). O que dependia da
+entrega **10.1** agora tem número, e as três consequências são estas:
 
-1. **Densidade de VEs.** O cenário `multiplas_emergencias` tem ~11 VEs por
-   execução de 1 h, em pares. Se 10.1 mostrar que os conflitos são raros, será
-   preciso um cenário mais denso **para treinar** — novos arquivos de demanda,
-   mesma malha. O cenário declarado continua sendo o de avaliação.
+1. **Densidade de VEs — a 10.2 é obrigatória.** O cenário
+   `multiplas_emergencias` rende **6 disputas por execução**, 60 em dez seeds, e
+   apenas 56 decidíveis. Rodar mais seeds não resolve barato: são ~12 s de
+   máquina por disputa, e chegar a algumas centenas exigiria dezenas de execuções
+   só para treinar. O cenário de treino precisa de mais VEs por hora — novos
+   arquivos de demanda, mesma malha. **O cenário declarado continua sendo o de
+   avaliação.**
+   - **E ele precisa defasar a rotação de tipos entre as duas rotas**, pelo
+     achado dos pares sempre do mesmo tipo. Sem par misto, o atributo `tipo` é
+     zero em todo evento e seu peso não existe.
+   - Vale reavaliar também a densidade de **disputas por VE**: hoje toda disputa
+     acontece no mesmo cruzamento, porque as duas rotas se cruzam uma única vez.
+     Rotas que se cruzem em mais de um ponto rendem mais eventos pelo mesmo custo
+     de simulação, e dão variedade de `fila_no_acesso` e
+     `cruzamentos_restantes`, que hoje é estreita.
 2. **Divisão treino/teste por seed**, com o treino **fora** do intervalo 1..50 do
-   Bloco 8 (guarda de P16). *Quais* seeds depende de quantos eventos cada uma
-   rende.
-3. **Regularização e número de atributos.** Com cinco diferenças e poucas
-   centenas de eventos, o modelo cabe. Com poucas dezenas, será preciso reduzir
-   atributos — e isso se decide com o número na mão, não antes.
+   Bloco 8 (guarda de P16). Com 6 disputas por seed e sem dispersão entre seeds,
+   *quantas* seeds importa mais do que *quais*.
+3. **Regularização e número de atributos.** Com poucas dezenas de eventos por
+   conjunto, cinco atributos são muitos. A decisão fica para depois da 10.2, com
+   o volume do cenário novo na mão.
 
-> **Uma dependência que já se pode afirmar:** se 10.1 devolver menos de ~100
-> eventos de conflito por conjunto de treino, o desenho acima não muda, mas a
-> conclusão de H4 nasce com poder estatístico baixo — e isso tem de ser declarado
-> na análise, não descoberto na arguição.
+> **A dependência que se podia afirmar antes de medir se confirmou:** o volume
+> ficou abaixo dos ~100 eventos por conjunto de treino. O desenho não muda, mas
+> **ou a 10.2 levanta o volume, ou a conclusão de H4 nasce com poder estatístico
+> baixo** — e nesse caso isso tem de ser declarado na análise, não descoberto na
+> arguição.
 
 ### O que mais precisa mudar no trabalho
 
@@ -1034,6 +1168,7 @@ neste momento.
 | 2026-08-24 | **P1** — meta de redução (20% vs 30%) | H1 reformulada e **condicionada à saturação**: *"redução ≥ 25% no tempo total de travessia do VE em cenários de saturação moderada a intensa"*. O cenário `leve` é analisado e discutido separadamente, sem meta numérica. | A Tabela 1 do próprio pré-projeto mostra 8,3% em fluxo leve — nenhuma meta única sobrevive aos quatro cenários. Condicionar à saturação é fisicamente coerente (com a via livre há pouco tempo perdido a recuperar) e mais defensável que uma meta única. |
 | 2026-08-24 | **P2** — latência (100 ms vs 200 ms) | **Duas métricas distintas, ambas instrumentadas e ambas mantidas no texto.** RNF01 = *latência de decisão* (< 100 ms): do estado recebido à emissão do comando, software puro, medida com `perf_counter()`. H3 = *latência fim-a-fim* (< 200 ms): de `t_deteccao` a `t_atuacao`, incluindo rede e atuação física. | Não são o mesmo número medindo a mesma coisa; o conflito era aparente. A tabela `metrica_latencia` já prevê os três carimbos (`t_deteccao`, `t_decisao`, `t_atuacao`), então a separação sai de graça. Reportar p95 e p99 de ambas, nunca só a média. |
 | 2026-09-10 | **P3 REVOGADA** — a banca espera ML | A decisão de 2026-08-24 (abaixo) **deixa de valer na parte que excluía aprendizado de máquina**. O orientador confirmou que a banca espera ML e indicou o ponto: decidir **qual VE é priorizado** quando há mais de uma emergência simultânea, hoje o desempate determinístico de E8. Abre **P19**. Continua valendo que o **restante** do motor é agente reativo determinístico — o ML entra em um ponto delimitado, não substitui o motor —, e que Q-learning para E7 segue como trabalho futuro. | A decisão P3 foi tomada em 2026-08-24 com a ressalva expressa de **"comunicar ao orientador — a expectativa do avaliador pesa aqui"**. Comunicada, a expectativa se revelou oposta à suposição. Registrar a revogação com data e motivo é o que separa mudança de escopo justificada de descuido (mesmo princípio de P12); apagar a decisão anterior esconderia que a equipe raciocinou antes de decidir, o que é justamente o que sustenta a defesa. |
+| 2026-09-10 | **Defeito de posição do VE dentro do cruzamento, corrigido** (achado pela entrega 10.1) | O adaptador somava `VAR_ROUTE_INDEX` e `VAR_LANEPOSITION` sem tratar as **faixas internas** do cruzamento, onde o primeiro ainda aponta para a via já deixada e o segundo recomeça do zero. O VE aparecia no começo da via anterior, ~490 m atrás, por ~1 s a cada travessia. Passa a assinar `VAR_ROAD_ID` e, em faixa interna, trata o VE como estando no fim da via atual. Regressão `sumo` que exige progresso monotônico ao longo da rota. | **Afeta E1 e E2 em todos os cenários e nos três braços**, não só a contagem de conflitos: nesse intervalo o ETA saltava de 32 s para 63 s e o VE deixava de ser visto no cruzamento que de fato se aproximava. Só apareceu porque a instrumentação da 10.1 tornou observável uma disputa que sumia e voltava — argumento concreto a favor de medir antes de modelar. **Consequência:** os números de P16 vieram de código com o defeito; os do capítulo 5 virão do Bloco 8, com o código corrigido. |
 | 2026-09-10 | **P18** — teto para a degradação transversal | **Sem teto numérico; tratamento qualitativo**, por decisão do orientador. O objetivo geral foi reescrito: de *"sem degradar de forma inaceitável o fluxo transversal"* para *"quantificar o custo que essa priorização impõe ao fluxo transversal"*. | Um objetivo que promete um critério inexistente é mais frágil na arguição do que um que promete medição. A troca move o trade-off de ressalva para objetivo declarado, e o trabalho passa a prometer exatamente o que os dados cumprem. Sem teto não há linha nova em T6 — há uma seção de discussão a escrever, com o custo medido (+43,6% no `intenso` após P16). Nada muda no código nem nas execuções. |
 | 2026-08-24 | **P3** — o que é a "IA" | **Opção 1:** o sistema é descrito como *agente reativo com otimização determinística baseada em conhecimento* — técnica clássica de IA, coberta por Russell & Norvig (já na bibliografia). A palavra "IA" fica reservada à caracterização de agente; o restante do texto usa "algoritmo de decisão". Aprendizado de máquina (ex.: Q-learning tabular para a política de compensação E7) fica como **trabalho futuro explicitamente descrito**. | Baixo risco e custo zero de cronograma, sem sacrificar rigor: o sistema *é* um agente reativo, e chamá-lo pelo nome correto é mais forte na banca do que vestir de ML algo que não treina nada. **Comunicar a decisão ao orientador** — a expectativa do avaliador pesa aqui. |
 | 2026-08-24 | **P5** — volume de `estado_semaforo_amostra` | **Opção (b) + (c):** o Postgres recebe apenas **transições de fase**, não amostras periódicas. Além disso, só execuções marcadas como **exemplares** (uma por par cenário × modo, usadas nas figuras) são persistidas; as demais das 600 vivem em CSV sob `analysis/data/`. | Transições permitem reconstruir o histórico completo e verificar I2/I3 e I4 com custo de centenas de milhares de linhas em vez de 173 milhões. CSV cobre a análise em lote sem sobrecarregar o banco numa máquina de estudante. A coluna `t_simulacao` passa a marcar o instante da transição. |
