@@ -349,11 +349,23 @@ analysis/data/
 ├── ve_por_execucao.csv                # 1 linha por VE por execução
 ├── transversal_por_execucao.csv       # fila máxima por aproximação
 ├── latencias.csv                      # 1 linha por decisão — só execução exemplar
+├── conflitos_por_execucao.csv         # 1 linha por episódio de disputa entre VEs
 └── descartes.csv                      # execuções reprovadas e reexecuções, com motivo
 ```
 
+> **`conflitos_por_execucao.csv` é a entrega 10.1** (Bloco 10, 2026-09-10). Uma
+> linha por **episódio**: uma disputa contígua no mesmo cruzamento entre o mesmo
+> conjunto de VEs, e não uma linha por passo — a definição está em `context/01`
+> §5.2, e a razão é que há **uma** escolha a fazer por episódio, que é a escolha
+> que a política aprendida de P19 vai tomar. Traz o instante, o cruzamento, os
+> VEs com tipo, ETA e fase demandada, e se a escolha estava em aberto ou suspensa
+> pela guarda de "preempção em curso vence". Os agregados
+> (`eventos_conflito`, `eventos_conflito_decidiveis`, `passos_em_conflito`) vão em
+> `execucoes.csv` de toda execução, e `python -m analysis.resumo_conflitos` lê os
+> dois. Cenários de um VE só produzem zero linhas, o que é resultado e não falha.
+
 > **`descartes.csv` é entregue pelo lote** (Bloco 4). Só execução **válida** entra
-> nos quatro primeiros arquivos; a que `validar_execucao()` reprova fica na
+> nos cinco primeiros arquivos; a que `validar_execucao()` reprova fica na
 > própria pasta de `sim/saida/`, com a evidência bruta, e o motivo vai para
 > `descartes.csv` junto com o caminho dessa pasta. O arquivo registra também as
 > remoções feitas por `--repetir`, que é como se apaga a linha de

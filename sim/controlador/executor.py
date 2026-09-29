@@ -42,6 +42,7 @@ from adapters.sumo import topologia as topologia_sumo
 from adapters.sumo.adaptador import AdaptadorSumo
 from adapters.sumo.cliente import abrir_cliente
 from core.parametros import Parametros
+from core.priorizacao.conflito import EventoConflito
 from core.priorizacao.motor import MotorDecisao
 from core.seguranca import VerificadorSeguranca
 from sim.ambiente import executavel
@@ -243,15 +244,28 @@ def executar(opcoes: Opcoes) -> ResultadoExecucao:
         parametros=parametros,
         controlar=controlar,
     )
-    motor = MotorDecisao(parametros=parametros, topologia=malha.topologia)
+    # O motor publica os conflitos entre VEs num buffer, e não no coletor: a
+    # publicação acontece dentro do trecho cronometrado do laço, e um `append`
+    # não mexe na medição do RNF01 — agregar episódios mexeria (entrega 10.1).
+    conflitos: list[EventoConflito] = []
+    motor = MotorDecisao(
+        parametros=parametros,
+        topologia=malha.topologia,
+        observador_conflito=conflitos.append,
+    )
     verificador = VerificadorSeguranca(parametros=parametros)
-    coletor = ColetorMetricas(cenario=opcoes.cenario, modo=opcoes.modo, seed=opcoes.seed)
+    coletor = ColetorMetricas(
+        cenario=opcoes.cenario,
+        modo=opcoes.modo,
+        seed=opcoes.seed,
+        passo_s=float(configuracao["execucao"]["passo_s"]),
+    )
 
     registro = _abrir_registro(opcoes, parametros, duracao_s) if opcoes.persistir else None
 
     adaptador.iniciar(_comando_sumo(opcoes, rotas, saida, duracao_s))
     try:
-        _laco(adaptador, motor, verificador, coletor, duracao_s, controlar)
+        _laco(adaptador, motor, verificador, coletor, duracao_s, controlar, conflitos)
     finally:
         adaptador.fechar()
 
@@ -289,12 +303,16 @@ def _laco(
     coletor: ColetorMetricas,
     duracao_s: float,
     controlar: bool,
+    conflitos: list[EventoConflito],
 ) -> None:
     """O laço de `context/04` §8.
 
     A ordem importa: primeiro o passo do simulador, depois a leitura do estado,
     depois a decisão (cronometrada **sem** I/O), depois a atuação e, por último,
     a verificação dos invariantes sobre o estado resultante.
+
+    O buffer `conflitos` é preenchido pelo motor durante a decisão e drenado
+    depois que o cronômetro para.
     """
     while adaptador.cliente.tempo() < duracao_s:
         t = adaptador.passo()
@@ -304,6 +322,8 @@ def _laco(
             inicio = time.perf_counter()
             comandos = motor.avaliar(estado)
             coletor.registrar_decisao((time.perf_counter() - inicio) * 1000.0, len(comandos))
+            coletor.registrar_conflitos(conflitos)
+            conflitos.clear()
         else:
             comandos = []
 

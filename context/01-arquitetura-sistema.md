@@ -250,9 +250,35 @@ Se dois VEs demandam fases conflitantes no mesmo TLS, **um espera**. Nunca conce
 > pura em `core/`. É o que preserva a decisão do §1 deste documento e o que mantém
 > `test_arquitetura.py` verde.
 >
-> **Continua aberto apenas o volume de dados**, que é a entrega 10.1: ninguém
-> conta eventos de conflito hoje — `conflito.py` devolve os adiados, mas o coletor
-> não agrega e `execucoes.csv` não tem a coluna.
+> **Continua aberto apenas o volume de dados**, que é a entrega 10.1. ~~Ninguém
+> conta eventos de conflito hoje.~~ **A instrumentação existe desde 2026-09-10**;
+> falta rodar o lote e ler o número. Ver abaixo.
+
+**Observação dos conflitos (entrega 10.1, 2026-09-10).** E8 passou a ser
+observável de fora, sem deixar de ser a mesma regra. `MotorDecisao` aceita um
+`observador_conflito` opcional e publica um `EventoConflito` por passo e por
+cruzamento em que **mais de um VE demanda fases distintas**. Três decisões de
+projeto merecem registro, porque definem o que o número da 10.1 significa:
+
+- **A publicação precede `resolver`.** `_decidir_para` pode retornar antes de E8
+  pelo timeout de E6, e uma disputa que existiu não pode deixar de ser contada
+  por causa do caminho que a decisão tomou.
+- **A unidade é o episódio, não o passo.** Uma disputa contígua no mesmo
+  cruzamento entre o mesmo conjunto de VEs é **uma** escolha, e é a escolha que a
+  política aprendida vai tomar. Com passo de 0,1 s, contar por passo inflaria o
+  número em duas ordens de grandeza. A agregação vive no coletor
+  (`sim/controlador/coletor.py`), fora do trecho cronometrado do laço, para não
+  contaminar a latência que sustenta o RNF01.
+- **Episódio decidível é o que se pode treinar.** Quando já há preempção em curso
+  no cruzamento, a escolha está **suspensa** pela guarda de oscilação, que é
+  regra rígida acima do modelo. O evento carrega o VE que detém a preempção, e o
+  agregado separa os dois casos.
+
+Pedidos pela **mesma** fase não são conflito: o mesmo verde serve os dois, e
+`resolver` os devolve em `atendidos_juntos`. O motor **não acumula** os eventos —
+quem observa que os guarde. É o que mantém o estado do motor nos mesmos três
+dicionários, e portanto mantém pequena a fotografia que a bifurcação da entrega
+10.4 terá de salvar e restaurar junto com o estado do SUMO.
 
 ### 5.3 Parâmetros (arquivo `backend/config/parametros.yaml`)
 

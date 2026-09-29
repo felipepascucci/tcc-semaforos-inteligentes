@@ -38,6 +38,40 @@ class Disputa:
 
 
 @dataclass(frozen=True)
+class EventoConflito:
+    """Um instante em que mais de um VE demanda fases distintas no mesmo cruzamento.
+
+    É a unidade que a entrega 10.1 conta, e o gatilho que a rotulagem por
+    bifurcação (10.4) vai usar. Note que o evento é publicado **antes** de E8
+    desempatar: ele descreve a disputa, não o desfecho.
+
+    Attributes:
+        t: Instante da observação, em segundos.
+        id_semaforo: Cruzamento disputado.
+        disputas: Os pedidos concorrentes, na ordem em que foram levantados.
+        preempcao_em_curso: Id do VE que já detém a preempção no cruzamento, ou
+            `None`. Quando há um, a decisão está **suspensa** pela guarda de
+            oscilação, que é regra rígida acima de qualquer política aprendida
+            (`context/09` P19) — por isso o campo, e não um simples contador.
+    """
+
+    t: float
+    id_semaforo: str
+    disputas: tuple[Disputa, ...]
+    preempcao_em_curso: str | None = None
+
+    @property
+    def decidivel(self) -> bool:
+        """Se a escolha do vencedor está em aberto neste instante."""
+        return self.preempcao_em_curso is None
+
+    @property
+    def ids_veiculos(self) -> tuple[str, ...]:
+        """Ids dos VEs em disputa, ordenados — a identidade do episódio."""
+        return tuple(sorted(disputa.deteccao.id_veiculo for disputa in self.disputas))
+
+
+@dataclass(frozen=True)
 class Resolucao:
     """Quem foi atendido e quem esperou.
 

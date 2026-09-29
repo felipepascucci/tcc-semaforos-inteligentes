@@ -26,6 +26,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from core.modelos import EstadoMalha, Transicao
+from core.priorizacao.conflito import EventoConflito
 from core.seguranca import Violacao
 
 RAIZ = Path(__file__).resolve().parents[2]
@@ -35,6 +36,12 @@ ARQUIVO_EXECUCOES = "execucoes.csv"
 ARQUIVO_VE = "ve_por_execucao.csv"
 ARQUIVO_TRANSVERSAL = "transversal_por_execucao.csv"
 ARQUIVO_LATENCIAS = "latencias.csv"
+ARQUIVO_CONFLITOS = "conflitos_por_execucao.csv"
+
+#: Quantos passos de folga separam dois episódios de conflito. Um conflito
+#: reaparece a cada passo enquanto os dois VEs se aproximam; um buraco maior que
+#: isto significa que a disputa se desfez e outra começou depois.
+FOLGA_ENTRE_EPISODIOS_EM_PASSOS = 1.5
 
 #: Prefixos de id que identificam veículo de fundo em via transversal. Os ids
 #: são gerados por `sim/demanda/gerar_rotas.py` a partir do nome da corrente.
@@ -79,6 +86,61 @@ class ViagemVE:
 
 
 @dataclass(frozen=True)
+class EpisodioConflito:
+    """Uma disputa entre VEs, agregada ao longo dos passos em que durou.
+
+    A unidade da contagem da entrega 10.1 é o **episódio**, não o passo. Com
+    passo de 0,1 s, um único conflito de dez segundos apareceria como cem
+    "eventos" — número grande e sem significado, porque há **uma** escolha a
+    fazer ali, e é ela que a política aprendida de P19 vai decidir.
+
+    Os atributos dos VEs são os da **abertura** do episódio: é o instante em que
+    a escolha se apresenta pela primeira vez, e portanto o instante que a
+    rotulagem por bifurcação (10.4) vai usar. As tuplas seguem a ordem dos ids,
+    então a i-ésima posição de `tipos`, `etas_s` e `fases_desejadas` descreve o
+    i-ésimo id.
+
+    Attributes:
+        id_semaforo: Cruzamento disputado.
+        t_inicio_s: Instante do primeiro passo do episódio.
+        t_fim_s: Instante do último passo observado.
+        passos: Quantos passos o episódio durou.
+        ids_veiculos: Ids dos VEs em disputa, ordenados.
+        tipos: Tipo de cada VE.
+        etas_s: ETA de cada VE ao cruzamento, na abertura.
+        fases_desejadas: Fase que cada VE demanda.
+        decidivel: Se, na abertura, não havia preempção em curso — ou seja, se a
+            escolha estava em aberto em vez de suspensa pela guarda de oscilação.
+        decidivel_em_algum_passo: Se em algum passo do episódio a escolha esteve
+            em aberto. Distingue o conflito que nasceu sob preempção alheia e se
+            libertou daquele que passou inteiro suspenso.
+        preempcao_em_curso: VE que detinha a preempção na abertura, ou `None`.
+    """
+
+    id_semaforo: str
+    t_inicio_s: float
+    t_fim_s: float
+    passos: int
+    ids_veiculos: tuple[str, ...]
+    tipos: tuple[str, ...]
+    etas_s: tuple[float, ...]
+    fases_desejadas: tuple[int, ...]
+    decidivel: bool
+    decidivel_em_algum_passo: bool
+    preempcao_em_curso: str | None = None
+
+    @property
+    def n_ves(self) -> int:
+        """Quantos VEs disputaram o cruzamento."""
+        return len(self.ids_veiculos)
+
+    @property
+    def duracao_s(self) -> float:
+        """Quanto tempo a disputa durou, em segundos."""
+        return self.t_fim_s - self.t_inicio_s
+
+
+@dataclass(frozen=True)
 class ResultadoExecucao:
     """Tudo o que uma execução produziu, já consolidado.
 
@@ -100,6 +162,7 @@ class ResultadoExecucao:
         violacoes: Invariantes de segurança violados — precisa ser vazio.
         transicoes: Transições de fase (decisão P5).
         avisos: Ocorrências não fatais registradas pelo adaptador.
+        conflitos: Episódios de disputa entre VEs (entrega 10.1).
     """
 
     cenario: str
@@ -119,6 +182,29 @@ class ResultadoExecucao:
     violacoes: tuple[Violacao, ...] = ()
     transicoes: tuple[Transicao, ...] = ()
     avisos: tuple[str, ...] = ()
+    conflitos: tuple[EpisodioConflito, ...] = ()
+
+    # -- agregados de conflito entre VEs (entrega 10.1) ----------------------
+
+    @property
+    def eventos_conflito(self) -> int:
+        """Episódios de disputa entre VEs na execução."""
+        return len(self.conflitos)
+
+    @property
+    def eventos_conflito_decidiveis(self) -> int:
+        """Quantos deles apresentaram uma escolha em aberto, e não suspensa."""
+        return sum(1 for episodio in self.conflitos if episodio.decidivel)
+
+    @property
+    def passos_em_conflito(self) -> int:
+        """Passos de simulação com alguma disputa em curso.
+
+        Serve de contraste com `eventos_conflito`: é o número que se obteria
+        contando por passo, e a diferença entre os dois mostra por que a unidade
+        é o episódio.
+        """
+        return sum(episodio.passos for episodio in self.conflitos)
 
     # -- agregados de latência (RNF01 e H3) ---------------------------------
 
@@ -160,6 +246,33 @@ class ResultadoExecucao:
 
 
 @dataclass
+class _EpisodioAberto:
+    """Episódio de conflito ainda em curso, enquanto os passos se acumulam."""
+
+    abertura: EventoConflito
+    t_fim_s: float
+    passos: int
+    decidivel_em_algum_passo: bool
+
+    def fechar(self) -> EpisodioConflito:
+        """Congela o episódio no formato que vai para o CSV."""
+        ordenadas = sorted(self.abertura.disputas, key=lambda d: d.deteccao.id_veiculo)
+        return EpisodioConflito(
+            id_semaforo=self.abertura.id_semaforo,
+            t_inicio_s=self.abertura.t,
+            t_fim_s=self.t_fim_s,
+            passos=self.passos,
+            ids_veiculos=tuple(disputa.deteccao.id_veiculo for disputa in ordenadas),
+            tipos=tuple(str(disputa.deteccao.tipo) for disputa in ordenadas),
+            etas_s=tuple(disputa.deteccao.eta_s for disputa in ordenadas),
+            fases_desejadas=tuple(disputa.fase_desejada for disputa in ordenadas),
+            decidivel=self.abertura.decidivel,
+            decidivel_em_algum_passo=self.decidivel_em_algum_passo,
+            preempcao_em_curso=self.abertura.preempcao_em_curso,
+        )
+
+
+@dataclass
 class ColetorMetricas:
     """Acumula, sem tocar disco nem banco, o que a execução vai produzir.
 
@@ -167,11 +280,14 @@ class ColetorMetricas:
         cenario: Cenário simulado.
         modo: Braço de comparação.
         seed: Seed do ponto experimental.
+        passo_s: Passo da simulação, em segundos. Define a folga que separa dois
+            episódios de conflito.
     """
 
     cenario: str
     modo: str
     seed: int
+    passo_s: float = 0.1
 
     latencias_ms: list[float] = field(default_factory=list)
     transicoes: list[Transicao] = field(default_factory=list)
@@ -181,6 +297,10 @@ class ColetorMetricas:
     teleportes: int = 0
     comandos_emitidos: int = 0
     preempcoes: int = 0
+    conflitos: list[EpisodioConflito] = field(default_factory=list)
+    _abertos: dict[tuple[str, tuple[str, ...]], _EpisodioAberto] = field(
+        default_factory=dict, repr=False
+    )
 
     def registrar_decisao(self, latencia_ms: float, n_comandos: int) -> None:
         """Anota a latência de uma chamada ao motor e quantos comandos saíram."""
@@ -209,6 +329,50 @@ class ColetorMetricas:
         """Soma colisões e teleportes do passo."""
         self.colisoes += colisoes
         self.teleportes += teleportes
+
+    def registrar_conflitos(self, eventos: Iterable[EventoConflito]) -> None:
+        """Agrega os conflitos observados neste passo em episódios (10.1).
+
+        Chamado **fora** do trecho cronometrado do executor, de propósito: o
+        número que sustenta o RNF01 é a latência do motor, e não pode incluir a
+        contabilidade da instrumentação.
+
+        Um episódio é identificado pelo par (cruzamento, conjunto de VEs). O
+        mesmo par reaparecendo no passo seguinte prolonga o episódio; reaparecer
+        depois de um intervalo maior que a folga abre um episódio novo, porque
+        entre um e outro a disputa deixou de existir.
+
+        Args:
+            eventos: Conflitos publicados pelo motor neste passo.
+        """
+        for evento in eventos:
+            chave = (evento.id_semaforo, evento.ids_veiculos)
+            aberto = self._abertos.get(chave)
+            folga = FOLGA_ENTRE_EPISODIOS_EM_PASSOS * self.passo_s
+
+            if aberto is not None and evento.t - aberto.t_fim_s <= folga:
+                aberto.t_fim_s = evento.t
+                aberto.passos += 1
+                aberto.decidivel_em_algum_passo |= evento.decidivel
+                continue
+
+            if aberto is not None:
+                self.conflitos.append(aberto.fechar())
+            self._abertos[chave] = _EpisodioAberto(
+                abertura=evento,
+                t_fim_s=evento.t,
+                passos=1,
+                decidivel_em_algum_passo=evento.decidivel,
+            )
+
+    def _fechar_conflitos(self) -> tuple[EpisodioConflito, ...]:
+        """Fecha os episódios ainda abertos e devolve todos, em ordem de início."""
+        for aberto in self._abertos.values():
+            self.conflitos.append(aberto.fechar())
+        self._abertos.clear()
+        return tuple(
+            sorted(self.conflitos, key=lambda e: (e.t_inicio_s, e.id_semaforo, e.ids_veiculos))
+        )
 
     def consolidar(
         self,
@@ -252,6 +416,7 @@ class ColetorMetricas:
             violacoes=tuple(self.violacoes),
             transicoes=tuple(self.transicoes),
             avisos=tuple(avisos),
+            conflitos=self._fechar_conflitos(),
         )
 
 
@@ -382,6 +547,9 @@ def gravar_csv(
             "teleportes",
             "violacoes",
             "transicoes",
+            "eventos_conflito",
+            "eventos_conflito_decidiveis",
+            "passos_em_conflito",
         ),
         [
             [
@@ -404,6 +572,9 @@ def gravar_csv(
                 resultado.teleportes,
                 len(resultado.violacoes),
                 len(resultado.transicoes),
+                resultado.eventos_conflito,
+                resultado.eventos_conflito_decidiveis,
+                resultado.passos_em_conflito,
             ]
         ],
     )
@@ -444,6 +615,48 @@ def gravar_csv(
         [
             [*ponto, acesso, fila]
             for acesso, fila in sorted(resultado.fila_maxima_por_acesso.items())
+        ],
+    )
+
+    _anexar(
+        diretorio / ARQUIVO_CONFLITOS,
+        (
+            "id_execucao",
+            "cenario",
+            "modo",
+            "seed",
+            "t_inicio_s",
+            "t_fim_s",
+            "duracao_s",
+            "passos",
+            "id_semaforo",
+            "n_ves",
+            "ids_veiculos",
+            "tipos",
+            "etas_s",
+            "fases_desejadas",
+            "decidivel",
+            "decidivel_em_algum_passo",
+            "preempcao_em_curso",
+        ),
+        [
+            [
+                *ponto,
+                f"{episodio.t_inicio_s:.1f}",
+                f"{episodio.t_fim_s:.1f}",
+                f"{episodio.duracao_s:.1f}",
+                episodio.passos,
+                episodio.id_semaforo,
+                episodio.n_ves,
+                "|".join(episodio.ids_veiculos),
+                "|".join(episodio.tipos),
+                "|".join(f"{eta:.1f}" for eta in episodio.etas_s),
+                "|".join(str(fase) for fase in episodio.fases_desejadas),
+                int(episodio.decidivel),
+                int(episodio.decidivel_em_algum_passo),
+                episodio.preempcao_em_curso or "",
+            ]
+            for episodio in resultado.conflitos
         ],
     )
 
