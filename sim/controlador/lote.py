@@ -74,6 +74,7 @@ from pathlib import Path
 from adapters.configuracao import carregar as carregar_parametros
 from sim.controlador import executor
 from sim.controlador.coletor import (
+    ARQUIVO_CONFLITOS,
     ARQUIVO_EXECUCOES,
     ARQUIVO_LATENCIAS,
     ARQUIVO_TRANSVERSAL,
@@ -85,8 +86,16 @@ from sim.validacao.execucao import validar_execucao
 
 RAIZ = Path(__file__).resolve().parents[2]
 
-#: Os quatro CSV de `context/04` §10, na ordem em que são consolidados.
-ARQUIVOS_CSV = (ARQUIVO_EXECUCOES, ARQUIVO_VE, ARQUIVO_TRANSVERSAL, ARQUIVO_LATENCIAS)
+#: Os CSV de `context/04` §10, na ordem em que são consolidados. O de conflitos
+#: entrou com a entrega 10.1 e segue as mesmas regras dos demais: consolidação,
+#: guarda anti-duplicata e remoção em reexecução.
+ARQUIVOS_CSV = (
+    ARQUIVO_EXECUCOES,
+    ARQUIVO_VE,
+    ARQUIVO_TRANSVERSAL,
+    ARQUIVO_LATENCIAS,
+    ARQUIVO_CONFLITOS,
+)
 
 #: Onde o lote registra o que descartou e o que apagou para reexecutar.
 ARQUIVO_DESCARTES = "descartes.csv"

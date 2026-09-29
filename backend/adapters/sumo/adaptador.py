@@ -61,6 +61,10 @@ TIPO_POR_VTYPE = {
 
 VCLASS_EMERGENCIA = "emergency"
 
+#: Prefixo que o SUMO dá às vias internas de um cruzamento (`:cruzamento_0`).
+#: Um VE nelas está **dentro** do cruzamento — ver `_posicao_na_via`.
+PREFIXO_VIA_INTERNA = ":"
+
 
 @dataclass
 class AdaptadorSumo:
@@ -217,6 +221,7 @@ class AdaptadorSumo:
             rota = self._rotas_ve.get(identificador)
             if rota is None:
                 continue
+            indice = int(dados[tc.VAR_ROUTE_INDEX])
             veiculos.append(
                 VeiculoEmergencia(
                     id=identificador,
@@ -224,11 +229,52 @@ class AdaptadorSumo:
                     posicao=tuple(dados[tc.VAR_POSITION]),  # type: ignore[arg-type]
                     velocidade=float(dados[tc.VAR_SPEED]),
                     rota=rota,
-                    indice_via_atual=int(dados[tc.VAR_ROUTE_INDEX]),
-                    posicao_na_via_m=float(dados[tc.VAR_LANEPOSITION]),
+                    indice_via_atual=indice,
+                    posicao_na_via_m=self._posicao_na_via(
+                        rota, indice, str(dados[tc.VAR_ROAD_ID]), float(dados[tc.VAR_LANEPOSITION])
+                    ),
                 )
             )
         return tuple(veiculos)
+
+    def _posicao_na_via(
+        self, rota: tuple[str, ...], indice: int, via_do_sumo: str, posicao_na_faixa_m: float
+    ) -> float:
+        """Posição ao longo da via da rota, corrigida dentro do cruzamento.
+
+        **Por que não basta ler `VAR_LANEPOSITION`.** Enquanto o veículo
+        atravessa a área interna de um cruzamento, o SUMO o coloca numa faixa
+        interna, cujo identificador começa por `:`. Nesse trecho `VAR_ROUTE_INDEX`
+        ainda aponta para a via que ele **acabou de deixar**, e
+        `VAR_LANEPOSITION` já é medida na faixa interna, recomeçando do zero.
+        Combinar os dois campos crus posiciona o VE no **começo da via anterior**
+        — quase um quarteirão atrás de onde ele está.
+
+        O efeito foi medido na entrega 10.1: a distância do VE ao cruzamento
+        seguinte saltava de 486 m para 492 m e o ETA de 32 s para 63 s, por cerca
+        de um segundo a cada travessia, e a disputa com o outro VE **sumia** da
+        visão do motor nesse intervalo. As 60 disputas do cenário
+        `multiplas_emergencias` apareciam como 120 episódios, uma quebra por
+        disputa, sem exceção.
+
+        A correção trata o veículo como estando **no fim da via atual**, que é a
+        linha de retenção do cruzamento que ele está atravessando. O erro
+        residual é, no máximo, o comprimento da faixa interna (~13 m na malha), e
+        é conservador na direção certa: o VE continua demandando o cruzamento até
+        limpá-lo, que é o que E5 precisa para não soltar a preempção cedo demais.
+
+        Args:
+            rota: Vias da rota do VE.
+            indice: Índice da via atual, como o SUMO o reporta.
+            via_do_sumo: Identificador da via onde o SUMO diz que o VE está.
+            posicao_na_faixa_m: Posição medida na faixa, em metros.
+
+        Returns:
+            A posição ao longo da via `rota[indice]`, em metros.
+        """
+        if not via_do_sumo.startswith(PREFIXO_VIA_INTERNA) or not 0 <= indice < len(rota):
+            return posicao_na_faixa_m
+        return self.malha.topologia.comprimento(rota[indice])
 
     def _acompanhar_entradas_e_saidas(self) -> None:
         """Assina os VEs que entraram e esquece os que saíram.
@@ -253,7 +299,13 @@ class AdaptadorSumo:
             self._rotas_ve[identificador] = tuple(self.cliente.veiculo.getRoute(identificador))
             self.cliente.veiculo.subscribe(
                 identificador,
-                [tc.VAR_POSITION, tc.VAR_SPEED, tc.VAR_LANEPOSITION, tc.VAR_ROUTE_INDEX],
+                [
+                    tc.VAR_POSITION,
+                    tc.VAR_SPEED,
+                    tc.VAR_LANEPOSITION,
+                    tc.VAR_ROUTE_INDEX,
+                    tc.VAR_ROAD_ID,
+                ],
             )
 
         for identificador in self.cliente.simulacao.getArrivedIDList():

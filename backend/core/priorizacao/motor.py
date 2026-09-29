@@ -14,6 +14,7 @@ pelo `CLAUDE.md`: mesma seed, mesma configuração, mesmo resultado.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from core.comandos import Comando, TipoComando, fallback_seguro
@@ -22,7 +23,7 @@ from core.malha import Cruzamento, TopologiaMalha
 from core.modelos import EstadoMalha, EstadoSemaforo, Sinal
 from core.parametros import Parametros
 from core.priorizacao import compensacao as e7
-from core.priorizacao.conflito import Disputa, resolver
+from core.priorizacao.conflito import Disputa, EventoConflito, resolver
 from core.priorizacao.deteccao import dentro_da_janela, detectar, fila_por_faixa
 from core.priorizacao.fases import selecionar_fase
 
@@ -71,10 +72,17 @@ class MotorDecisao:
     Attributes:
         parametros: Parâmetros do algoritmo.
         topologia: Topologia da malha, com fases e geometria.
+        observador_conflito: Chamado uma vez por passo e por cruzamento em que
+            mais de um VE demanda fases distintas (entrega 10.1). É observação
+            pura: não influencia decisão nenhuma, e o motor **não acumula** os
+            eventos — quem quiser contá-los que os guarde. Manter o motor sem
+            esse acúmulo é o que faz a fotografia de estado da bifurcação (10.4)
+            continuar sendo apenas os três dicionários abaixo.
     """
 
     parametros: Parametros
     topologia: TopologiaMalha
+    observador_conflito: Callable[[EventoConflito], None] | None = None
     _preempcoes: dict[str, PreempcaoAtiva] = field(default_factory=dict, repr=False)
     _compensacoes: dict[str, CompensacaoEmCurso] = field(default_factory=dict, repr=False)
     _ultimo_verde: dict[str, dict[int, float]] = field(default_factory=dict, repr=False)
@@ -93,6 +101,7 @@ class MotorDecisao:
         """
         self._observar_verdes(estado)
         disputas = self._levantar_disputas(estado)
+        self._publicar_conflitos(disputas, estado.t)
         comandos: list[Comando] = []
 
         for id_semaforo, estado_semaforo in estado.semaforos.items():
@@ -163,6 +172,39 @@ class MotorDecisao:
                 )
 
         return por_semaforo
+
+    def _publicar_conflitos(self, disputas: dict[str, list[Disputa]], t: float) -> None:
+        """Publica os conflitos deste passo, se houver quem os observe (10.1).
+
+        A publicação fica aqui, e não depois de `resolver`, porque
+        `_decidir_para` pode retornar antes dele pelo timeout de E6 — e um
+        conflito que existiu não pode deixar de ser contado por causa do
+        caminho que a decisão tomou.
+
+        Dois VEs no mesmo cruzamento só disputam se pedirem fases **distintas**:
+        pedidos pela mesma fase são servidos pelo mesmo verde, e `resolver` os
+        devolve em `atendidos_juntos`. Não há o que decidir, então não há evento.
+
+        Args:
+            disputas: Pedidos levantados neste passo, por cruzamento.
+            t: Instante do passo, em segundos.
+        """
+        observador = self.observador_conflito
+        if observador is None:
+            return
+
+        for id_semaforo, pedidos in disputas.items():
+            if len({pedido.fase_desejada for pedido in pedidos}) < 2:
+                continue
+            ativa = self._preempcoes.get(id_semaforo)
+            observador(
+                EventoConflito(
+                    t=t,
+                    id_semaforo=id_semaforo,
+                    disputas=tuple(pedidos),
+                    preempcao_em_curso=ativa.id_veiculo if ativa is not None else None,
+                )
+            )
 
     # -- E3, E5, E6, E7, E8: decisão -----------------------------------------
 

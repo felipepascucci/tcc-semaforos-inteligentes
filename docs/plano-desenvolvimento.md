@@ -403,8 +403,8 @@ convenção declarada, não otimização. Há lacuna genuína a preencher.
 
 | # | Entrega |
 |---|---|
-| 10.1 | **Contagem de conflitos.** Agregado no coletor, coluna nova em `execucoes.csv`, e medição em `multiplas_emergencias`. **Hoje ninguém conta:** `conflito.py` devolve os adiados, mas nada agrega. **Vem primeiro, e decide o resto** — o paradigma viável depende de quantos eventos existem |
-| 10.2 | Cenário de treino mais denso em VEs, **se e só se** 10.1 mostrar que os conflitos são raros. Novos arquivos de demanda, mesma malha |
+| 10.1 | **Contagem de conflitos.** ✅ **MEDIDA em 2026-09-10: 60 disputas em 10 execuções, 56 decidíveis, 6 por execução.** Abaixo do piso de 100 de P19, o que **torna a 10.2 obrigatória**. A instrumentação também expôs um defeito de E1/E2 anterior ao bloco — o VE recuava ~490 m ao atravessar um cruzamento —, corrigido e coberto por regressão. Evidência e números em `context/09` P19 |
+| 10.2 | **Cenário de treino mais denso em VEs — agora obrigatório**, pelo volume medido em 10.1. Novos arquivos de demanda, mesma malha. Precisa **defasar a rotação de tipos entre as duas rotas**: hoje os pares em conflito são sempre do mesmo tipo, e o atributo `tipo` do modelo fica com diferença zero em todo evento |
 | 10.3 | ~~Declaração do objetivo de otimização~~ · **já feita** em 2026-09-10: critério **minimax**, minimizar o tempo do VE mais prejudicado. Registrada em P19 e em `context/00` §5 **antes** de existir treino |
 | 10.4 | **Rotulagem por bifurcação da simulação** — `saveState`/`loadState` no instante do conflito, rodando as duas escolhas até os VEs liberarem a rota, e rotulando pelo minimax. Com **divisão treino/teste por seed** e o treino **fora** do intervalo 1..50 (guarda de P16) |
 | 10.5 | Treino offline (regressão logística par a par sobre diferenças) e **exportação dos pesos como arquivo versionado** |

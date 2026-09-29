@@ -1,0 +1,11 @@
+id_execucao,cenario,modo,seed,versao_codigo,duracao_s,aquecimento_s,veiculos_planejados,veiculos_completos,ves_completos,tempo_medio_travessia_ve_s,paradas_medias_ve,tempo_espera_medio_transversal_s,atraso_total_rede_s,latencia_media_ms,latencia_p95_ms,latencia_p99_ms,latencia_max_ms,colisoes,teleportes,violacoes,transicoes,eventos_conflito,eventos_conflito_decidiveis,passos_em_conflito
+-1,multiplas_emergencias,PREEMPCAO,101,1a0c24b,3600,300,5317,5011,12,231.17,0.17,18.50,233713.97,0.0417,0.1041,0.1317,0.4993,0,0,0,2500,12,9,1325
+-1,multiplas_emergencias,PREEMPCAO,102,1a0c24b,3600,300,5390,5081,11,222.83,0.09,18.65,245514.13,0.0419,0.1004,0.1253,0.3777,0,0,0,2511,12,11,1474
+-1,multiplas_emergencias,PREEMPCAO,103,1a0c24b,3600,300,5288,4970,11,221.42,0.18,17.69,234929.16,0.0403,0.1028,0.1292,0.4058,0,0,0,2489,12,11,1772
+-1,multiplas_emergencias,PREEMPCAO,104,1a0c24b,3600,300,5338,5049,11,234.15,0.36,17.57,262922.02,0.0434,0.1035,0.1312,0.4487,0,0,0,2510,12,10,1478
+-1,multiplas_emergencias,PREEMPCAO,105,1a0c24b,3600,300,5415,5136,11,229.35,0.27,18.20,249120.21,0.0431,0.1038,0.1295,0.5700,0,0,0,2510,12,9,1672
+-1,multiplas_emergencias,PREEMPCAO,106,1a0c24b,3600,300,5294,5004,11,221.27,0.27,18.61,237496.26,0.0404,0.1033,0.1344,0.4157,0,0,0,2505,12,10,1764
+-1,multiplas_emergencias,PREEMPCAO,107,1a0c24b,3600,300,5414,5088,11,214.45,0.00,17.99,217773.02,0.0302,0.0771,0.0965,0.2466,0,0,0,2484,12,12,1469
+-1,multiplas_emergencias,PREEMPCAO,108,1a0c24b,3600,300,5239,4960,12,222.72,0.17,17.38,218751.28,0.0302,0.0772,0.1028,0.4171,0,0,0,2496,12,10,1403
+-1,multiplas_emergencias,PREEMPCAO,109,1a0c24b,3600,300,5320,4973,12,223.55,0.33,17.91,224809.77,0.0302,0.0822,0.1078,0.2241,0,0,0,2485,12,12,1767
+-1,multiplas_emergencias,PREEMPCAO,110,1a0c24b,3600,300,5265,5004,12,225.81,0.17,18.30,239628.58,0.0307,0.0816,0.1057,0.3050,0,0,0,2493,12,9,1409

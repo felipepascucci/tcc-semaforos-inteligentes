@@ -6,8 +6,9 @@ import pytest
 
 from core.comandos import TipoComando
 from core.malha import TopologiaMalha
-from core.modelos import EstadoMalha, EstadoSemaforo, Sinal, TipoVeiculo
+from core.modelos import EstadoMalha, EstadoSemaforo, Sinal, TipoVeiculo, VeiculoEmergencia
 from core.parametros import Parametros
+from core.priorizacao.conflito import EventoConflito
 from core.priorizacao.motor import MotorDecisao
 from tests.core.conftest import (
     FASE_ARTERIAL,
@@ -336,6 +337,137 @@ def test_dois_ves_conflitantes_geram_um_unico_comando_no_cruzamento(
     do_cruzamento = [c for c in comandos if c.id_semaforo == "CRUZ_TESTE_1"]
     assert len(do_cruzamento) == 1
     assert do_cruzamento[0].id_veiculo == "AMB"  # ambulância tem precedência
+
+
+# ---------------------------------------------------------------------------
+# Observação dos conflitos — entrega 10.1
+# ---------------------------------------------------------------------------
+
+
+def _ve_transversal(
+    id_veiculo: str = "BMB",
+    tipo: TipoVeiculo = TipoVeiculo.BOMBEIRO,
+    posicao_na_via_m: float = 410.0,
+) -> VeiculoEmergencia:
+    """Um VE que atravessa `CRUZ_TESTE_1` pela transversal."""
+    return VeiculoEmergencia(
+        id=id_veiculo,
+        tipo=tipo,
+        posicao=(0.0, 0.0),
+        velocidade=10.0,
+        rota=("T1_IN", "T1_OUT"),
+        indice_via_atual=0,
+        posicao_na_via_m=posicao_na_via_m,
+    )
+
+
+def _motor_observado(
+    topologia: TopologiaMalha, parametros: Parametros
+) -> tuple[MotorDecisao, list[EventoConflito]]:
+    """Motor com um buffer de conflitos, como o executor o monta."""
+    eventos: list[EventoConflito] = []
+    motor = MotorDecisao(
+        parametros=parametros, topologia=topologia, observador_conflito=eventos.append
+    )
+    return motor, eventos
+
+
+def test_conflito_entre_fases_distintas_e_publicado(
+    topologia: TopologiaMalha, parametros: Parametros
+) -> None:
+    """A unidade que a 10.1 conta: dois VEs, duas fases, uma escolha."""
+    motor, eventos = _motor_observado(topologia, parametros)
+    ambulancia = construir_ve("AMB", TipoVeiculo.AMBULANCIA, n_vias=4, posicao_na_via_m=410.0)
+
+    motor.avaliar(construir_estado(topologia, t=7.0, veiculos=(ambulancia, _ve_transversal())))
+
+    evento = next(e for e in eventos if e.id_semaforo == "CRUZ_TESTE_1")
+    assert evento.t == 7.0
+    assert evento.ids_veiculos == ("AMB", "BMB")
+    assert evento.decidivel
+    assert evento.preempcao_em_curso is None
+
+
+def test_ves_que_pedem_a_mesma_fase_nao_sao_conflito(
+    topologia: TopologiaMalha, parametros: Parametros
+) -> None:
+    """O mesmo verde serve os dois: `resolver` os devolve em `atendidos_juntos`.
+
+    Contar isso como conflito inflaria o número que decide o paradigma de P19
+    com eventos em que não há escolha nenhuma a fazer.
+    """
+    motor, eventos = _motor_observado(topologia, parametros)
+    primeiro = construir_ve("AMB", TipoVeiculo.AMBULANCIA, n_vias=4, posicao_na_via_m=410.0)
+    segundo = construir_ve("POL", TipoVeiculo.POLICIA, n_vias=4, posicao_na_via_m=380.0)
+
+    motor.avaliar(construir_estado(topologia, veiculos=(primeiro, segundo)))
+
+    assert [e for e in eventos if e.id_semaforo == "CRUZ_TESTE_1"] == []
+
+
+def test_um_unico_ve_nao_gera_evento(topologia: TopologiaMalha, parametros: Parametros) -> None:
+    """Sem disputa não há evento — nem no cruzamento preemptado."""
+    motor, eventos = _motor_observado(topologia, parametros)
+
+    motor.avaliar(construir_estado(topologia, veiculos=(construir_ve(posicao_na_via_m=410.0),)))
+
+    assert eventos == []
+
+
+def test_evento_registra_a_preempcao_em_curso_e_deixa_de_ser_decidivel(
+    topologia: TopologiaMalha, parametros: Parametros
+) -> None:
+    """A guarda de oscilação suspende a escolha, e o evento diz isso.
+
+    É a distinção que separa o episódio treinável do episódio em que a decisão
+    já está tomada por regra rígida acima do modelo (`context/09` P19).
+    """
+    motor, eventos = _motor_observado(topologia, parametros)
+    ambulancia = construir_ve("AMB", TipoVeiculo.AMBULANCIA, n_vias=4, posicao_na_via_m=410.0)
+
+    motor.avaliar(construir_estado(topologia, t=0.0, veiculos=(ambulancia,)))
+    assert motor.preempcao_ativa("CRUZ_TESTE_1") is not None
+    motor.avaliar(construir_estado(topologia, t=1.0, veiculos=(ambulancia, _ve_transversal())))
+
+    evento = next(e for e in eventos if e.t == 1.0)
+    assert evento.preempcao_em_curso == "AMB"
+    assert not evento.decidivel
+
+
+def test_conflito_e_publicado_mesmo_quando_o_timeout_de_e6_corta_a_decisao(
+    topologia: TopologiaMalha, parametros: Parametros
+) -> None:
+    """A publicação precede `resolver`, e é por isso que ela não se perde.
+
+    `_decidir_para` retorna no timeout de E6 antes de chegar a E8. Publicar
+    depois faria a contagem depender do caminho que a decisão tomou, e não da
+    disputa que de fato existiu.
+    """
+    motor, eventos = _motor_observado(topologia, parametros)
+    travado = construir_ve("AMB", TipoVeiculo.AMBULANCIA, n_vias=4, posicao_na_via_m=410.0)
+
+    motor.avaliar(construir_estado(topologia, t=0.0, veiculos=(travado,)))
+    comandos = motor.avaliar(
+        construir_estado(topologia, t=50.0, veiculos=(travado, _ve_transversal()))
+    )
+
+    assert "timeout" in next(c for c in comandos if c.id_semaforo == "CRUZ_TESTE_1").motivo
+    assert [e.t for e in eventos if e.id_semaforo == "CRUZ_TESTE_1"] == [50.0]
+
+
+def test_observador_ausente_nao_muda_a_decisao(
+    topologia: TopologiaMalha, parametros: Parametros
+) -> None:
+    """A instrumentação é observação pura: com e sem ela, os mesmos comandos."""
+    veiculos = (
+        construir_ve("AMB", TipoVeiculo.AMBULANCIA, n_vias=4, posicao_na_via_m=410.0),
+        _ve_transversal(),
+    )
+    estado = construir_estado(topologia, veiculos=veiculos)
+    observado, _ = _motor_observado(topologia, parametros)
+    surdo = MotorDecisao(parametros=parametros, topologia=topologia)
+
+    assert observado.avaliar(estado) == surdo.avaliar(estado)
 
 
 # ---------------------------------------------------------------------------
