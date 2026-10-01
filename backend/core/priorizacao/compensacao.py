@@ -3,12 +3,12 @@
 É a etapa que sustenta **H2**: mitigar em **no mínimo 15%** o impacto negativo nas
 vias transversais (enunciado corrigido em 2026-08-31 — "em até 15%" era um teto,
 não uma meta, e a mitigação medida no piloto o cumpriria). Sem ela o trabalho
-ainda mede H1, mas H2 fica sem evidência — e o `context/08` §2 é explícito: cortar
-E7 obriga a tirar H2 do trabalho, não a deixá-la sem sustentação.
+ainda mede H1, mas H2 fica sem mecanismo que a teste.
 
 `K` e `n_ciclos_compensacao` continuam nos valores de partida de `context/01` §5.3
-e **nunca foram calibrados contra dado real** (pendência P17). O piloto do Bloco 4
-mede mitigação entre -1,0% e +0,6%.
+e **nunca foram calibrados contra dado real**. O piloto do Bloco 4 mede mitigação
+entre -1,0% e +0,6%. A calibração foi decidida em 2026-10-01 (P17): uma rodada,
+em seeds 101..105, com critério declarado antes.
 
 A fórmula é a de `context/01` §5.2::
 

@@ -17,18 +17,9 @@ O pré-projeto define 8 sprints. Abaixo, o que cada uma significa em termos de a
 
 **Ordem de implementação recomendada para o agente**, quando houver liberdade de escolha: 5 → 2 → 3 → 1 → 7 → 4 → 6 → 8. Motivo: banco e núcleo de decisão são pré-requisito de tudo; o dashboard é o item mais visível mas o menos crítico para a validação científica, e é onde mais se perde tempo com detalhe visual.
 
-## 2. Ordem de prioridade se o tempo apertar
+## 2. Escopo
 
-Se for necessário cortar escopo, cortar nesta ordem (do primeiro a ser cortado ao intocável):
-
-1. Deploy real em AWS → manter apenas o diagrama e a justificativa.
-2. Mapa Leaflet no dashboard → substituir por esquema SVG estático da malha.
-3. Compensação pós-evento (E7) → mas então H2 precisa sair do trabalho, não ficar sem evidência.
-4. Cenário `multiplas_emergencias` → reduz a força do trabalho, mas é sacrificável.
-5. Dashboard inteiro → substituir por gráficos gerados pelo `analysis/`. Isso inclui o painel "Central" de ocorrências (P20), que nesse caso vira chamada direta a `POST /ocorrencias` — a regra de confirmação da emergência mora no backend e **não** é cortada junto.
-6. **Nunca cortar:** motor de decisão, invariantes de segurança, matriz de execuções da simulação, análise estatística, protótipo físico funcionando.
-
-O item 6 é o que constitui o TCC. O resto é acabamento.
+O escopo declarado em `00-visao-geral.md` é entregue **por inteiro**: motor de decisão, invariantes de segurança, matriz de execuções, análise estatística, protótipo físico, API, dashboard (incluindo o painel "Central" de P20), compensação E7 e o modelo de P19. Decisão da equipe, 2026-10-01.
 
 ## 3. Convenções de código
 
@@ -89,6 +80,7 @@ docs(context): atualiza pendência P3 após decisão do orientador
 6. **Ao mexer no firmware, verifique se não introduziu `delay()` no loop nem `String` no ATmega.**
 7. **Ao terminar uma tarefa que muda arquitetura, comportamento ou escopo, atualize o arquivo correspondente em `context/` no mesmo commit.** Contexto desatualizado é pior que contexto ausente, porque induz ao erro com confiança.
 8. **Não instale dependência fora da lista de `02-arquitetura-infraestrutura.md` §2** sem registrar a decisão.
+9. **Não proponha redução de escopo** (ver §2). Atraso se resolve no planejamento, não tirando entregas.
 
 ## 5. Artefatos acadêmicos a produzir
 
@@ -120,9 +112,9 @@ Preferir PlantUML a diagrama desenhado à mão: fica versionado, regenerável e 
 | --- | --- | --- |
 | Resultados reais não confirmam H1 (≥30%) | Alto | Rodar experimento piloto **cedo** (Sprint 3), com 5 seeds, para conhecer a ordem de grandeza antes de comprometer o texto |
 | Protótipo trava durante a apresentação | Alto | Teste de 30 min obrigatório; sem `String`; watchdog; ter vídeo gravado de backup |
-| 600 execuções não cabem no prazo | Médio | `libsumo` + paralelismo; reduzir para 30 seeds se necessário, documentando |
+| 600 execuções não cabem no prazo | Médio | `traci` com 6 processos em paralelo: medido no piloto, as 600 levam ~6 h (P15) |
 | Rede da faculdade bloqueia o ESP8266 | Médio | Roteador próprio ou hotspot; testar no local antes |
 | Divergência entre texto do TCC e sistema | Médio | Regra do §4.7: `context/` atualizado no mesmo commit |
-| Escopo cresce (dashboard, AWS, ML) | Alto | Lista de não-escopo em `00-visao-geral.md` §8 é vinculante |
+| Escopo cresce além do declarado | Alto | Lista de não-escopo em `00-visao-geral.md` §8 é vinculante |
 
 O primeiro risco é o mais subestimado. Rodar o piloto cedo custa um dia e evita descobrir na última semana que o texto inteiro precisa ser reescrito.

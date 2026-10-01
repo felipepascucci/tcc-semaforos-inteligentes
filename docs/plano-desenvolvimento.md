@@ -4,14 +4,12 @@
 
 Data-base: **2026-08-24**. Janela de entrega assumida: **3 a 6 meses** → apresentação estimada entre **nov/2026 e jan/2027**, com **congelamento de código 5 dias antes** (regra do `context/02` §9).
 
-Escopo: completo, conforme `context/`. Sem cortes preventivos — a lista de corte do `context/08` §2 fica de reserva, acionada só se um marco atrasar.
+Escopo: completo, conforme `context/` (`context/08` §2).
 
-> **Escopo confirmado em 2026-09-10, após a orientação.** **Nada sai.** Todos os
-> blocos previstos seguem como estão, e o **Bloco 10** — priorização aprendida
-> entre múltiplos VEs, pedido pelo orientador (P19) — é **acrescentado**. A lista
-> de corte do `context/08` §2 **continua sendo reserva**, e a data da banca não é
-> tratada como restrição neste momento. Faltam, portanto, os Blocos 5, 6, 7, 10,
-> 8 e 9 — nessa ordem de execução.
+> **Escopo confirmado em 2026-09-10, após a orientação.** Todos os blocos
+> previstos seguem como estão, e o **Bloco 10** — priorização aprendida entre
+> múltiplos VEs, pedido pelo orientador (P19) — é **acrescentado**. Faltam,
+> portanto, os Blocos 5, 6, 7, 10, 8 e 9 — nessa ordem de execução.
 
 ---
 
@@ -353,9 +351,6 @@ Todas as rotas do `context/01` §7, schemas Pydantic v2, WebSocket com throttle 
 ### Bloco 7 — Dashboard (Sprint 6) · ~2 semanas
 
 React + Vite + TS + Tailwind. Mapa Leaflet, painel de semáforos em tempo real, tela de logs com filtro, painel de métricas com Recharts, login simples. Vitest nos componentes de estado. **Painel "Central" (P20):** abrir ocorrência escolhendo veículo e criticidade, encerrar, e ver quem está em serviço — é a central de despacho simulada.
-
-Primeiro candidato ao corte se algo atrasar (`context/08` §2, item 2 e 5).
-
 ---
 
 ### Bloco 8 — Lote completo (Sprint 7) · ~1 semana + tempo de máquina
@@ -368,7 +363,7 @@ Primeiro candidato ao corte se algo atrasar (`context/08` §2, item 2 e 5).
 > existirem depois de 10.2. **Por isso o Bloco 10 executa antes do Bloco 8**: um
 > braço acrescentado depois obriga a rodar tudo de novo.
 
-> **Bloqueado por P17 e pelo Bloco 10.** ~~P16~~ foi resolvida em 2026-08-31 corrigindo o mecanismo, e ~~P18~~ em 2026-09-10 sem teto numérico. **P17** continua aberta e ainda muda o modelo ou a hipótese, então rodar as 600 antes de decidir significa rodá-las de novo depois. **P19 / Bloco 10** acrescenta um braço à matriz, com a mesma consequência. As 600 rodam com o código de `d63f774` em diante — o piloto de 2026-08-26 foi produzido pelo código anterior e **não** se mistura com elas.
+> **Bloqueado pela execução de P17 e pelo Bloco 10.** ~~P16~~ foi resolvida em 2026-08-31 corrigindo o mecanismo, e ~~P18~~ em 2026-09-10 sem teto numérico. **P17** foi decidida em 2026-10-01, mas a métrica de janela e a calibração de `K`/`n_ciclos_compensacao` ainda precisam ser feitas, e mudam o braço `PREEMPCAO_COMPENSADA` — rodar as 600 antes significa rodá-las de novo depois. **P19 / Bloco 10** acrescenta um braço à matriz, com a mesma consequência. As 600 rodam com o código de `d63f774` em diante — o piloto de 2026-08-26 foi produzido pelo código anterior e **não** se mistura com elas.
 
 **Pareamento por seed é inegociável:** gerar as rotas uma vez por (cenário, seed) e reutilizar em **todos** os modos, inclusive no braço de ML. Sem isso a comparação deixa de ser pareada e perde poder estatístico.
 
@@ -468,13 +463,10 @@ desempate determinístico.
 
 ## Pendências que continuam abertas
 
-> **Atualizado em 2026-09-10, com as respostas da orientação.** P16 e P18 estão
-> **resolvidas**; P11 (3) foi confirmado pela equipe e resta declará-lo no texto;
-> P11 (1) e (2) estão **aguardando as referências** que o orientador ficou de
-> devolver — ele aprovou o método de medir na simulação e justificar o valor
-> medido. **P3 foi revogada:** a banca espera aprendizado de máquina, o que abre
-> **P19** e muda o escopo. Bloqueiam o Bloco 8: **P17** e, agora, o desenho de
-> **P19**.
+> **Atualizado em 2026-10-01.** P11, P15, P16, P18 e P20 estão **fechadas**.
+> **P3 foi revogada:** a banca espera aprendizado de máquina, o que abriu **P19**
+> e o Bloco 10. **P17 foi decidida**, falta executá-la. Bloqueiam o Bloco 8: a
+> execução de **P17** e o Bloco 10.
 
 - ~~**P16** — H1 abaixo da meta em `intenso`.~~ ✅ **Resolvida em 2026-08-31**
   corrigindo o mecanismo, sem tocar em H1: 18,1% → **31,2%**, paradas do VE
@@ -491,20 +483,21 @@ desempate determinístico.
   transversal é tratado qualitativamente, e o objetivo geral foi reescrito de
   "sem degradar de forma inaceitável" para "quantificar o custo que essa
   priorização impõe". Nada muda no código.
-- **P17** — **continua bloqueando o Bloco 8** e continua `DECISÃO DO GRUPO`. O
-  enunciado de H2 foi corrigido para `≥ 15%`, mas o **denominador** e a
-  calibração de `K`/`n_ciclos_compensacao` seguem por fazer — e a correção de P16
-  **aumentou** o custo transversal que E7 deveria mitigar (+24,6% → +43,6% no
-  `intenso`), o que torna P17 mais urgente, não menos.
+- **P17** — ✅ **decidida em 2026-10-01**; a execução **bloqueia o Bloco 8**. E7 e
+  H2 ficam. H2 = mitigação de ≥ 15% do **acréscimo**, em `moderado` e `intenso`,
+  medida na **janela de cada evento**. Falta: declarar a janela e o critério da
+  calibração (commit antes do código), implementar a métrica, calibrar
+  `K`/`n_ciclos_compensacao` uma vez em seeds 101..105 e congelar. Veredito no
+  Bloco 8; abaixo de 15%, H2 é reportada como rejeitada.
 - ~~**P3**~~ — **revogada em 2026-09-10**: o orientador confirmou que a banca
   espera aprendizado de máquina. Virou P19, acima.
 - ~~**P20**~~ ✅ **Decidida em 2026-09-29.** Emergência é estado declarado: a
   preempção exige tag reconhecida **e** ocorrência ativa, aberta pela central de
   despacho (simulada). A relevância entre tipos virou **criticidade da
   ocorrência**, regra acima do modelo de P19, que perde o atributo `tipo`. Núcleo,
-  simulação e banco entregues na P20; API, LCD e painel ficam com os Blocos 6, 5
-  e 7 (entregas 5.9 e as notas dos Blocos 6 e 7). Nenhum número medido muda.
-  **Comunicar ao orientador** a mudança no desenho de P19.
+  simulação e banco entregues na P20 (PR #8); API, LCD e painel ficam com os
+  Blocos 6, 5 e 7 (entregas 5.9 e as notas dos Blocos 6 e 7). Nenhum número
+  medido muda. **Fechada em 2026-10-01.**
 - **P6** — **formato fechado em 2026-08-31**: as tabelas do capítulo 5 do
   pré-projeto migram para uma seção "Resultados esperados" na metodologia,
   rotulada como estimativa preliminar, e o capítulo 5 passa a vir só de
@@ -516,12 +509,12 @@ desempate determinístico.
   verificar os 200 ms sobre o máximo. Fica registrada em `context/06` §6 a opção
   de instrumentar as **100 leituras que o RNF05 já exige**, o que daria a H3 um
   p95 real sem repetição extra.
-- **P15** — deixou de ser urgente. O piloto mediu: com `traci` e 6 processos, as
-  600 execuções do Bloco 8 levariam ~6 h. Cabe na janela sem instalar `libsumo`
-  pelo pip, o que enfraquece o motivo para abrir exceção à regra do `context/09`.
-  Continua aberta como decisão formal, agora com o número na mão.
-- **P4, P11, P12** — ações de redação no texto do TCC. O código já implementa a versão correta; falta a equipe atualizar o documento.
-- **P11 deixou de bloquear execução e ganhou dois itens novos de redação** (Bloco 3): declarar que a demanda transversal é derivada do grau de saturação, e resolver o descompasso entre o nome do cenário `intenso` e sua classificação medida (v/c 0,73). **Este segundo ficou confirmado em 2026-08-31**: o cenário é descrito como *saturação moderada-alta (v/c ≈ 0,73)*, os fluxos e os nomes não mudam, e a tabela da metodologia traz o v/c ao lado do nome. **As três referências continuam pendentes e são pergunta para o orientador**: a faixa de plausibilidade do fluxo de saturação em via urbana, o enquadramento por grau de saturação (os cortes de 0,40 e 0,75), e a confirmação do enquadramento em fluxo interrompido.
+- ~~**P15**~~ ✅ **Fechada em 2026-10-01.** O lote roda com `traci` e processos
+  em paralelo — o piloto mediu ~6 h para as 600 execuções — e `libsumo` **não**
+  é instalado pelo pip. `--libsumo` continua implementado, sem ser o padrão.
+- ~~**P11**~~ ✅ **Fechada em 2026-10-01.** O método (medir o fluxo de saturação
+  na própria malha) foi aprovado pelo orientador. O que resta é redação do
+  capítulo de metodologia, listado em `context/09` P11.
+- **P4, P12** — ações de redação no texto do TCC. O código já implementa a versão correta; falta a equipe atualizar o documento.
 - ~~**P14** — ponto final de medição do RF02.~~ ✅ **Decidida em 2026-08-25:** mede da detecção até o **início da atuação**. O perfil de tempos da bancada e o ciclo de 24 s de P13 ficam inalterados, e o firmware do Bloco 5 já tem contra o que ser escrito.
-- ~~**P15** — `libsumo` no lote.~~ Ver acima: deixou de bloquear o Bloco 8.
 - **P8, P9** — resolvidas por teste de bancada no Bloco 5.

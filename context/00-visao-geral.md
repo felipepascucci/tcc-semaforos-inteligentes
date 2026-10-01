@@ -55,7 +55,7 @@ Ambas são controladas pelo **mesmo motor de decisão** (`backend/core/priorizac
 | ID | Hipótese | Como será testada |
 | --- | --- | --- |
 | H1 | A fusão radar + V2I reduz em **no mínimo 25%** o tempo total de travessia do VE, em cenários de saturação **moderada a intensa**, em relação à temporização estática | Comparação pareada por seed, baseline vs. proposto. O cenário `leve` é medido e discutido, mas **sem meta numérica** |
-| H2 | É possível mitigar em **no mínimo 15%** o impacto negativo nas vias transversais com compensação dinâmica de ciclo pós-evento | Três braços: baseline / preempção sem compensação / preempção com compensação |
+| H2 | É possível mitigar em **no mínimo 15%** o impacto negativo nas vias transversais com compensação dinâmica de ciclo pós-evento | Três braços: baseline / preempção sem compensação / preempção com compensação. Mitigação = fração do **acréscimo** de espera causado pela preempção, medida na **janela de cada evento**, em `moderado` e `intenso` (P17) |
 | H3 | A infraestrutura em borda sustenta latência operacional **fim-a-fim inferior a 200 ms** | Instrumentação `t_deteccao → t_decisao → t_atuacao`, medida no **protótipo**, com **5 repetições** roteirizadas no checklist |
 | **H4** | Uma política aprendida para escolher entre VEs em conflito **reduz o tempo de travessia do VE mais prejudicado**, em cenários com múltiplos VEs, em relação ao desempate determinístico de E8 | Braço `PREEMPCAO_ML` contra `PREEMPCAO`, pareado por seed, nos cenários com múltiplos VEs. Mesmo rigor de H1: Wilcoxon pareado, Cliff's δ e IC 95% por bootstrap |
 
@@ -100,9 +100,9 @@ Ambas são controladas pelo **mesmo motor de decisão** (`backend/core/priorizac
 > - **H2 passa de "em até 15%" para "em no mínimo 15%".** A redação antiga era um
 >   teto, não uma meta: sob ela, a mitigação de −1,0% a +0,6% medida no piloto do
 >   Bloco 4 **cumpriria** a hipótese literalmente. `≥ 15%` é simétrico com H1 e é a
->   única leitura sob a qual H2 pode ser rejeitada. **Continua em aberto o
->   denominador** — se os 15% incidem sobre a espera transversal ou sobre o
->   *acréscimo* que a preempção causou (pendência P17, com recomendação registrada).
+>   única leitura sob a qual H2 pode ser rejeitada. **O denominador foi fixado em
+>   2026-10-01 (P17):** os 15% incidem sobre o *acréscimo* que a preempção causou,
+>   medido na janela de cada evento, em `moderado` e `intenso`.
 > - **A evidência de H3 vem do protótipo, com 5 repetições.** Na simulação
 >   `t_atuacao` é o mesmo passo de `t_decisao` — não há atuação física a
 >   cronometrar —, então o número de H3 só existe na bancada. Com **n = 5 o p95

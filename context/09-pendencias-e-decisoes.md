@@ -29,10 +29,8 @@ histórico; o que cada resposta gerou está no item correspondente.
 
 ### Para a próxima orientação
 
-| Item | O que levar | Natureza |
-| --- | --- | --- |
-| **P20** | O desenho de P19 que ele viu mudou: a relevância por tipo virou **criticidade da ocorrência**, aplicada como regra acima do modelo, e `tipo` saiu dos atributos (5 → 4). E a emergência passou a exigir ocorrência ativa aberta pela central | **Comunicação**, não pedido de decisão — a equipe decidiu em 2026-09-29 |
-| **P11 (1) e (2)** | Cobrar as referências, se não tiverem chegado | Espera |
+Nada pendente. P11 e P20, que estavam nesta lista, foram fechadas pela equipe em
+2026-10-01.
 
 ---
 
@@ -94,7 +92,16 @@ Ver `05-integracao-hardware.md` §1C. Operação fora de especificação. Decidi
 
 ---
 
-## P11 — Fonte de dados de fluxo "típicos de zonas arteriais" · `AÇÃO DA EQUIPE`
+## P11 — Fonte de dados de fluxo "típicos de zonas arteriais" · ✅ **FECHADA em 2026-10-01**
+
+> **Fechada pela equipe.** O método — medir o fluxo de saturação na própria malha
+> e justificar o valor medido, com a literatura como faixa de plausibilidade — foi
+> aprovado pelo orientador em 2026-09-10, e é o que sustenta a calibração. O que
+> sobra é **redação do capítulo de metodologia**, sem bloquear nada: as citações
+> dos itens 1 e 2 e os itens 4 a 6 da lista abaixo (caracterização pelo v/c
+> medido, simplificações da demanda, calibração de `tau`).
+>
+> O registro abaixo é o histórico, mantido como roteiro dessa redação.
 
 A metodologia menciona "dados de fluxo típicos de zonas arteriais" sem citar fonte. Os valores (300–1200 veíc./h) precisam de referência.
 
@@ -251,7 +258,18 @@ externa.
 
 ---
 
-## P15 — `libsumo` para Python não vem com o SUMO no Windows · `DECISÃO DO GRUPO — Bloco 8`
+## P15 — `libsumo` para Python não vem com o SUMO no Windows · ✅ **FECHADA em 2026-10-01**
+
+> **Decisão da equipe: opção 2.** O lote do Bloco 8 roda com **`traci` e
+> processos em paralelo** (`--paralelo 6`), e o `libsumo` **não** é instalado
+> pelo pip. A medição que a opção 3 pedia já existe: o piloto rodou 60 execuções
+> de 3.600 s em ~35 min, o que projeta as 600 do Bloco 8 em ~6 h. Com isso o
+> ganho do `libsumo` é conveniência, não viabilidade, e não justifica abrir
+> exceção à regra de não instalar cliente do SUMO pelo pip (decisão de
+> 2026-08-24). `--libsumo` continua implementado e exercitável no adaptador, para
+> o caso de a máquina de execução mudar; só não é o padrão.
+>
+> O registro abaixo é o histórico da decisão.
 
 Descoberto no Bloco 3, ao exercitar a opção `--libsumo` do executor.
 
@@ -571,7 +589,40 @@ mesmo experimento. As seeds 101..105 são pontos novos, então a guarda de
 
 ---
 
-## P17 — E7 não entrega a mitigação de H2 · `DECISÃO DO GRUPO — ANTES DO BLOCO 8`
+## P17 — E7 não entrega a mitigação de H2 · ✅ **DECIDIDA em 2026-10-01** (execução pendente)
+
+> **Decisão da equipe: manter E7 e H2, fixar a régua agora e calibrar uma vez.**
+> Matar E7 foi considerado e recusado: obrigaria a tirar H2 do trabalho (que está
+> no pré-projeto) com base numa medição feita com `K` nunca calibrado e com uma
+> métrica que pode estar diluindo o efeito.
+>
+> 1. **Denominador: fração do acréscimo.** H2 é atingida quando
+>    `(preempcao − compensada) / (preempcao − fixo) ≥ 15%`. O "impacto negativo"
+>    do enunciado é o acréscimo que a preempção causa; a espera que existiria sem
+>    preempção não é impacto do sistema.
+> 2. **Onde H2 é avaliada: `moderado` e `intenso`**, os mesmos cenários de H1. Em
+>    `leve` o acréscimo é ~0 e a fração fica sem significado; `leve` e
+>    `multiplas_emergencias` são reportados de forma descritiva, sem veredito.
+> 3. **Régua: espera transversal na janela de cada evento**, a mesma janela para
+>    o custo e para a mitigação. A janela cobre a preempção e os ciclos de
+>    compensação que a seguem. A média da hora inteira continua reportada como
+>    métrica secundária. A definição operacional exata da janela é escrita e
+>    commitada **antes** de ser implementada.
+> 4. **Calibração de `K` e `n_ciclos_compensacao`: uma rodada**, com as mesmas
+>    guardas de P16 — critério, valores candidatos e regra de escolha escritos e
+>    commitados antes de rodar; seeds fora de 1..50 (calibração em 101..105);
+>    parâmetros congelados antes do Bloco 8. Não se varre parâmetro depois de ver
+>    o resultado.
+> 5. **O veredito de H2 vem do Bloco 8** (seeds 1..50). Se a mitigação ficar
+>    abaixo de 15%, **H2 é reportada como rejeitada**, com o custo medido e a
+>    constatação de que a compensação não o mitigou nesta forma. E7 e H2
+>    continuam no trabalho nos dois casos.
+>
+> **O que falta é execução, antes do Bloco 8:** (a) declarar a janela e o
+> critério da calibração; (b) implementar a métrica de janela; (c) rodar a
+> calibração; (d) congelar os parâmetros.
+>
+> O registro abaixo é o histórico do problema.
 
 Mesmo piloto. A compensação **roda** — o defeito de no-op foi corrigido no
 Bloco 3 e tem teste de regressão —, mas o efeito medido sobre a espera das vias
@@ -690,11 +741,10 @@ Reapareceu a instabilidade da leitura pelo acréscimo quando o acréscimo é ~0:
 declarada acima, e confirma que a métrica de H2 só se aplica onde a preempção de
 fato custa algo.
 
-> O `08` §2 é explícito: cortar E7 obriga a **tirar H2 do trabalho**, não a
-> deixá-la sem sustentação. Se a calibração não levantar o número, a decisão
-> honesta é reportar o custo transversal medido e declarar que a compensação
-> proposta não o mitigou de forma mensurável neste experimento — o que é um
-> resultado, não um fracasso, desde que dito assim.
+> Se a calibração não levantar o número, a decisão honesta é reportar o custo
+> transversal medido e declarar que a compensação proposta não o mitigou de forma
+> mensurável neste experimento — H2 rejeitada é um resultado, não um fracasso,
+> desde que dito assim.
 
 ---
 
@@ -1130,15 +1180,7 @@ acontecer é o modelo entrar sem avaliação, só para satisfazer a expectativa.
 
 **Nada sai do escopo.** Todos os blocos já previstos seguem como estão, e o de
 aprendizado de máquina é **acrescentado** — ver **Bloco 10** em
-`docs/plano-desenvolvimento.md`. A lista de corte do `08` §2 **continua sendo
-reserva**, não decisão tomada, e a data da banca não é tratada como restrição
-neste momento.
-
-> **Consequência a registrar, sem alarme.** A lista de corte deixa de ser o
-> primeiro instrumento de ajuste, então o que absorve um eventual atraso passa a
-> ser o prazo. Se em algum momento a data apertar, a lista está pronta e a decisão
-> é rápida — é para isso que ela existe. Registrado aqui para que, se a discussão
-> voltar, ela volte com o histórico e não do zero.
+`docs/plano-desenvolvimento.md`. O escopo inteiro é entregue (`08` §2).
 
 ### Recomendação
 
@@ -1173,7 +1215,11 @@ neste momento.
 
 ---
 
-## P20 — Confirmação da emergência e criticidade da ocorrência · ✅ **DECIDIDA em 2026-09-29**
+## P20 — Confirmação da emergência e criticidade da ocorrência · ✅ **FECHADA em 2026-10-01**
+
+> Decidida em 2026-09-29, implementada no núcleo, na simulação e no banco (PR #8)
+> e **fechada pela equipe em 2026-10-01**. API, LCD e painel da central seguem
+> como entregas dos Blocos 6, 5 e 7.
 
 Aberta e decidida pela equipe em 2026-09-29. Responde a duas perguntas que o
 trabalho não respondia, e a segunda mexe no desenho de P19 que estava fechado —
@@ -1305,9 +1351,6 @@ exatamente aí que ela continua valendo.
   disputas o modelo de fato decidiu (`07` §3).
 - **Banco:** tabela nova `ocorrencia`, e `deteccao` ganha `autorizado` e
   `fk_ocorrencia` (`03` §3.2). Entra na lista de P4.
-- **Comunicar ao orientador** na próxima orientação: a mudança no desenho de P19
-  (5 → 4 atributos, criticidade como regra) é da equipe, mas ele aprovou o
-  desenho anterior e precisa saber.
 
 **Frase de defesa:** *"a IA decide quem passa primeiro; se é emergência, e o que
 importa mais, são regras declaradas."*
@@ -1388,6 +1431,11 @@ diferenças) foram verificados.
 
 | Data | Item | Decisão | Justificativa |
 | --- | --- | --- | --- |
+| 2026-10-01 | **Escopo integral** | O escopo declarado em `00-visao-geral.md` é entregue por inteiro. A lista de priorização para redução de escopo do `08` §2 foi **removida** do projeto, junto com as referências a ela. | Decisão da equipe. Atraso se resolve no planejamento, não tirando entregas. |
+| 2026-10-01 | **P17 decidida** — E7 e H2 | E7 e H2 **ficam**. H2 = mitigação de **≥ 15% do acréscimo** causado pela preempção, avaliada em `moderado` e `intenso`, medida na **janela de cada evento** (média horária como secundária). `K` e `n_ciclos_compensacao` são calibrados **uma vez**, em seeds 101..105, com critério commitado antes; o veredito vem do Bloco 8. Abaixo de 15%, H2 é reportada como rejeitada. | Matar E7 tiraria do trabalho uma hipótese do pré-projeto com base numa medição feita com parâmetro nunca calibrado e métrica possivelmente diluída. A régua é fixada enquanto nenhuma leitura atinge a meta, então a escolha não é feita pelo resultado. Uma H2 rejeitada com evidência é resultado; uma H2 removida é lacuna. |
+| 2026-10-01 | **P15 fechada** — cliente do lote | **Opção 2:** lote com `traci` e processos em paralelo; `libsumo` não é instalado pelo pip. `--libsumo` segue implementado, sem ser o padrão. | O piloto mediu ~6 h para as 600 execuções com `traci` e 6 processos: cabe na janela. Sem ganho de viabilidade, não há razão para abrir exceção à regra de 2026-08-24 (cliente do SUMO só de `%SUMO_HOME%/tools`). |
+| 2026-10-01 | **P11 fechada** | Fechada pela equipe. O método de medir o fluxo de saturação na própria malha foi aprovado pelo orientador em 2026-09-10. O restante — citações da faixa de plausibilidade e do enquadramento por v/c, e os itens 4 a 6 — é redação da metodologia. | Nada no código ou nas execuções depende mais de P11; mantê-la aberta só misturava pendência de redação com pendência de decisão. |
+| 2026-10-01 | **P20 fechada** | Implementada e mergeada (PR #8). API, LCD e painel ficam nos Blocos 6, 5 e 7. | Decisão de 2026-09-29 executada; não sobra decisão em aberto. |
 | 2026-09-29 | **P20** — confirmação da emergência e criticidade | **Emergência é estado declarado:** preempção exige tag reconhecida **e** ocorrência ativa, aberta pela central de despacho (simulada). **Relevância é criticidade da ocorrência** (1 `RISCO_VIDA`, 2 `RISCO_COLETIVO`, 3 `URGENCIA`), aplicada como **regra acima do modelo**: o ML de P19 decide só entre VEs de mesmo nível, e `tipo` sai dos atributos. No braço determinístico, a criticidade entra na frente da chave de E8 sem outra mudança. Detecção acústica da sirene recusada; chave do giroflex como trabalho futuro. | O CTB (art. 29, VII) já define emergência como estado de serviço, não como propriedade do veículo — declarar é mais simples, auditável e sem falso negativo estatístico do que inferir. Sob minimax em tempo o peso de `tipo` não carregaria relevância, então os critérios da equipe só chegam à decisão como norma. Nos cenários do experimento a criticidade segue o tipo, na mesma ordem de `prioridade_tipo`: nenhum número medido muda. Ver P20. |
 | 2026-08-24 | **P1** — meta de redução (20% vs 30%) | H1 reformulada e **condicionada à saturação**: *"redução ≥ 25% no tempo total de travessia do VE em cenários de saturação moderada a intensa"*. O cenário `leve` é analisado e discutido separadamente, sem meta numérica. | A Tabela 1 do próprio pré-projeto mostra 8,3% em fluxo leve — nenhuma meta única sobrevive aos quatro cenários. Condicionar à saturação é fisicamente coerente (com a via livre há pouco tempo perdido a recuperar) e mais defensável que uma meta única. |
 | 2026-08-24 | **P2** — latência (100 ms vs 200 ms) | **Duas métricas distintas, ambas instrumentadas e ambas mantidas no texto.** RNF01 = *latência de decisão* (< 100 ms): do estado recebido à emissão do comando, software puro, medida com `perf_counter()`. H3 = *latência fim-a-fim* (< 200 ms): de `t_deteccao` a `t_atuacao`, incluindo rede e atuação física. | Não são o mesmo número medindo a mesma coisa; o conflito era aparente. A tabela `metrica_latencia` já prevê os três carimbos (`t_deteccao`, `t_decisao`, `t_atuacao`), então a separação sai de graça. Reportar p95 e p99 de ambas, nunca só a média. |
@@ -1412,7 +1460,7 @@ diferenças) foram verificados.
 | 2026-08-25 | **Demanda transversal é derivada, não escolhida** (Bloco 3) | Cada aproximação transversal recebe o fluxo que a coloca no **mesmo grau de saturação** da arterial, calculado a partir do fluxo de saturação medido: 135 / 314 / 539 veíc./h nos três cenários. | As alternativas eram piores. Repetir o fluxo nominal da arterial (1.200) numa via de uma faixa daria v/c > 1,5: fila que não dissipa, gridlock e execução inválida por `04` §12. Uma fração fixa declarada ("metade da arterial") seria exatamente o número sem lastro que o encaminhamento de P11 existe para eliminar. Derivar mantém a malha inteira no regime que caracteriza o cenário, que é o que a condição de H1 exige. Escolha confirmada com a equipe. |
 | 2026-08-25 | **`tau` calibrado em `veiculos.typ.xml`** (Bloco 3) | `tau` do carro passa de 1,0 s (padrão do SUMO) para **1,6 s**, e o do ônibus para 1,8 s. Critério **declarado antes do ajuste**: levar o headway do carro ao valor correspondente ao centro da faixa de plausibilidade (1.800 veíc./h/faixa a 16,7 m/s ⇒ 2,0 s ⇒ `tau` = 2,0 − 7/16,7 = 1,58). O valor que vale para o TCC é o **medido depois**, não o alvo. | Com `tau = 1,0` a primeira medição deu ~2.400 veíc./h/faixa, fora da faixa de plausibilidade — e não por ruído: no modelo de car-following do SUMO o headway em regime é `tau + (minGap + length)/v`, que com aqueles valores dá exatamente 1,42 s. O modelo reproduzia fielmente um parâmetro irreal. `tau` não era declarado em lugar nenhum do `context/` (o `04` §4 fixa `accel`, `decel`, `sigma`, `length` e `maxSpeed`, não ele), então não houve contradição com o escopo — houve o preenchimento de uma lacuna, pelo procedimento que o próprio plano prescreve para valor fora de esquadro. **Consequência:** mexer em `tau`, `minGap`, `length`, `accel` ou `decel` obriga a remedir a saturação e regerar a tabela de cenários e os arquivos de fluxo, nessa ordem. |
 | 2026-08-25 | **`ESTENDER_VERDE` conta a partir de agora** (defeito do Bloco 2, achado no Bloco 3) | `core/priorizacao/fases.py` interpretava `duracao_s` como duração **total** do verde, contada do início dele; passa a contar **a partir do instante do comando**, com o teto de `verde_max` ainda ancorado no início (I5 preservado). | O motor calcula `duracao_s = eta + margem`, que é tempo a partir de agora. Sob a leitura antiga, o comando virava seu oposto assim que o verde já durava mais que o pedido: pedir "segure mais 9 s para o VE passar" fechava o verde imediatamente. Efeito medido antes e depois, mesma seed e mesmo cenário: **6 paradas e 409 s de travessia → 0 parada e 313 s**. Nenhum teste unitário pegava — todos exercitavam extensões a partir de verdes recém-abertos. É a semântica de `PRE,<fase>,<dur_s>` do protocolo serial, então firmware e simulação voltam a concordar. |
-| 2026-08-25 | **E7 passa a ser executada, e não só calculada** (defeito do Bloco 2, achado no Bloco 3) | O motor calculava `PlanoCompensacao`, guardava e **nada nunca o aplicava**. Passa a emitir `ESTENDER_VERDE` com o restante da duração planejada a cada fase que abre, enquanto a compensação vigora. O comando sai **sem** `id_veiculo`, e a máquina de estados só marca `em_preempcao` quando há VE associado. | Os braços `PREEMPCAO` e `PREEMPCAO_COMPENSADA` saíam com resultados **idênticos até o último dígito** — E7 era um no-op e H2 não tinha mecanismo nenhum por trás. O `08` §2 é explícito: cortar E7 obriga a tirar H2 do trabalho, não a deixá-la sem sustentação. A distinção por `id_veiculo` importa porque `em_preempcao` viaja para `estado_semaforo_amostra`: sem ela, os dois ciclos de compensação seriam contabilizados como preempção e o custo transversal que H2 mede seria atribuído ao evento errado. Coberto por `test_compensacao_estende_de_fato_o_verde_das_fases`. |
+| 2026-08-25 | **E7 passa a ser executada, e não só calculada** (defeito do Bloco 2, achado no Bloco 3) | O motor calculava `PlanoCompensacao`, guardava e **nada nunca o aplicava**. Passa a emitir `ESTENDER_VERDE` com o restante da duração planejada a cada fase que abre, enquanto a compensação vigora. O comando sai **sem** `id_veiculo`, e a máquina de estados só marca `em_preempcao` quando há VE associado. | Os braços `PREEMPCAO` e `PREEMPCAO_COMPENSADA` saíam com resultados **idênticos até o último dígito** — E7 era um no-op e H2 não tinha mecanismo nenhum por trás — hipótese sem mecanismo não tem como ser testada. A distinção por `id_veiculo` importa porque `em_preempcao` viaja para `estado_semaforo_amostra`: sem ela, os dois ciclos de compensação seriam contabilizados como preempção e o custo transversal que H2 mede seria atribuído ao evento errado. Coberto por `test_compensacao_estende_de_fato_o_verde_das_fases`. |
 | 2026-08-25 | **Tráfego de fundo é passante, sem conversões** (Bloco 3) | Todo veículo de fundo entra por uma fronteira e sai pela oposta, em linha reta. As únicas conversões do experimento são as duas do VE. | Além da simplicidade, há razão metodológica: sem conversões o fluxo de cada aproximação é exatamente o fluxo declarado do cenário, e o v/c **derivado** e o **medido** passam a medir a mesma coisa — que é o que a verificação de `04` §12 item 4 confronta. Com conversões, a demanda se redistribuiria segundo uma matriz origem-destino que o pré-projeto não fornece, e inventá-la cairia na armadilha que P11 existe para evitar. **Limitação a declarar no texto:** as conversões permissivas à esquerda existem na rede mas não são exercitadas pelo tráfego de fundo. |
 | 2026-08-25 | **`queue.xml` sai do padrão; `summary` agregado a 60 s** (Bloco 3) | O SUMO grava `queue` e `summary` a cada passo. Com passo de 0,1 s, a primeira execução completa (3.600 s) produziu **77 MB de `queue.xml`** e 10 MB de `summary.xml`. `queue-output` passa a ser opcional (`--saida-detalhada`) e `summary` passa a agregar a cada 60 s. | Nas 600 execuções do Bloco 8 seriam ~46 GB só de fila, num disco de estudante — e para um dado **redundante**: os detectores E2 já medem fila com agregação de 300 s, e o coletor já acumula a fila máxima por aproximação em memória. É a mesma aritmética de P5 e da latência detalhada: volume bruto não é gratuito, e o que sustenta as hipóteses são os agregados. A saída bruta por execução caiu de ~88 MB para ~1,5 MB. Só apareceu ao rodar a primeira execução de 3.600 s de ponta a ponta — as de verificação, mais curtas, não davam a escala do problema. |
 | 2026-08-25 | **`latencias.csv` detalhado só em execução exemplar** (Bloco 3) | Uma linha por decisão apenas nas execuções marcadas como exemplares; as demais gravam só os percentis, em `execucoes.csv`. | Mesma aritmética que levou à decisão P5: são 36.000 decisões por execução, o que daria mais de 20 milhões de linhas nas 600 do Bloco 8. Os percentis — que são o que RNF01 e H3 exigem (`04` §9.3) — vão em toda execução. |

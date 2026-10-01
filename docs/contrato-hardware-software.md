@@ -535,7 +535,7 @@ Sete pendências resolvidas em 2026-08-24, registradas com justificativa em `con
 
 | **P14** ponto final do RF02 | Mede da detecção **até o início da atuação** — o amarelo já é a alteração, marcada pelo `ACK`. Medir até o verde final faria o RF02 absorver o RF03 e embutir o verde mínimo (invariante I4) no número. Perfil de tempos e ciclo de 24 s **inalterados** — §7 |
 
-Continuam abertas: **P4, P6, P11, P12** (redação do texto do TCC) e **P8, P9** (§12).
+Continuam abertas: **P4, P6, P12** (redação do texto do TCC) e **P8, P9** (§12).
 
 ---
 
@@ -577,7 +577,7 @@ Fechados na rodada de 2026-08-24: pinagem confirmada, P10 resolvida, e o conjunt
 | 6 | Divisão: quem reescreve o firmware do UNO, quem faz o NodeMCU | Equipe | pendente |
 | 7 | **UIDs reais das tags**, para os seeds | Hardware | assim que o RC522 ler |
 | 8 | ~~Decisão **P3** comunicada ao Prof. Marco Gomes~~ | Equipe | ✅ **comunicada** — e revogada em 10/09 (P19) |
-| 9 | Mudança no desenho de P19 por P20 (criticidade como regra, `tipo` fora do modelo) comunicada ao orientador | Equipe | pendente |
+| 9 | ~~Mudança no desenho de P19 por P20 comunicada ao orientador~~ | Equipe | ✅ **P20 fechada em 01/10** |
 
 ---
 

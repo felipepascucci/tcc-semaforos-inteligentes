@@ -820,8 +820,7 @@ def _pendencias(
             "  (0,7) e `n_ciclos_compensacao` (2) de `parametros.yaml` foram escolhidos",
             "  como ponto de partida e **nunca foram calibrados contra dado real**; este",
             "  piloto é o primeiro insumo para calibrá-los. Enquanto o número não subir,",
-            "  H2 tem mecanismo mas não tem evidência, e o `context/08` §2 é explícito:",
-            "  cortar E7 obriga a tirar H2 do trabalho, não a deixá-la sem sustentação.",
+            "  H2 tem mecanismo mas não tem evidência.",
         ]
 
     if not saude.segura:
