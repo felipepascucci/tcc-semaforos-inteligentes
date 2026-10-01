@@ -129,7 +129,7 @@ def test_snapshot_e_serializavel_e_completo() -> None:
     devolta = json.loads(json.dumps(instantaneo))
 
     assert devolta["raio_deteccao_m"] == 500
-    assert devolta["ganho_compensacao_k"] == 0.7
+    assert devolta["ganho_compensacao_k"] == 1.0
     assert devolta["prioridade_tipo"] == ["AMBULANCIA", "BOMBEIRO", "POLICIA"]
 
 

@@ -42,8 +42,13 @@ all_red_s: 2.0
 preempcao_timeout_s: 45.0
 
 # --- E7: compensação pós-evento (H2) --------------------------------------
-n_ciclos_compensacao: 2
-ganho_compensacao_k: 0.7
+# CONGELADOS pela calibração de P17 (2026-10-01), rodada única sobre a grade
+# declarada antes do código (context/09 P17). Dados em
+# analysis/data/calibracao_p17/. Eram 0.7 e 2, valores de partida nunca
+# calibrados. Mudar estes números exige nova calibração declarada — não ajuste
+# à mão depois de ver o Bloco 8.
+n_ciclos_compensacao: 3
+ganho_compensacao_k: 1.0
 
 # --- E8: conflito entre múltiplos VEs -------------------------------------
 prioridade_tipo: [AMBULANCIA, BOMBEIRO, POLICIA]

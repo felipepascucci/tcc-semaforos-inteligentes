@@ -42,8 +42,9 @@ def hardware() -> dict[str, Any]:
         ("amarelo_s", 3.0),
         ("all_red_s", 2.0),
         ("preempcao_timeout_s", 45.0),
-        ("n_ciclos_compensacao", 2),
-        ("ganho_compensacao_k", 0.7),
+        # Calibrados em P17 (2026-10-01); eram 2 e 0.7.
+        ("n_ciclos_compensacao", 3),
+        ("ganho_compensacao_k", 1.0),
         ("velocidade_min_estimativa_ms", 4.0),
         ("prioridade_tipo", ["AMBULANCIA", "BOMBEIRO", "POLICIA"]),
     ],
