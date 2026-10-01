@@ -589,7 +589,7 @@ mesmo experimento. As seeds 101..105 são pontos novos, então a guarda de
 
 ---
 
-## P17 — E7 não entrega a mitigação de H2 · ✅ **DECIDIDA em 2026-10-01** (execução pendente)
+## P17 — E7 não entrega a mitigação de H2 · ✅ **FECHADA em 2026-10-01** (calibrada e congelada; veredito no Bloco 8)
 
 > **Decisão da equipe: manter E7 e H2, fixar a régua agora e calibrar uma vez.**
 > Matar E7 foi considerado e recusado: obrigaria a tirar H2 do trabalho (que está
@@ -634,7 +634,9 @@ mesmo experimento. As seeds 101..105 são pontos novos, então a guarda de
 > calibração~~ (feito, ver "Critério da calibração" no fim desta pendência);
 > ~~(b) dar ao lote um jeito de variar `K` e `n_ciclos_compensacao` sem editar
 > `parametros.yaml`~~ (feito: `--ajuste` no lote e `sim/calibracao/compensacao.py`);
-> (c) rodar a calibração; (d) congelar os parâmetros.
+> ~~(c) rodar a calibração; (d) congelar os parâmetros~~ (feito em 2026-10-01:
+> `K = 1,0`, `n = 3`, pontuação +6,2%; ver "Resultado da calibração" no fim desta
+> pendência). **P17 está executada; o veredito de H2 vem do Bloco 8.**
 >
 > O registro abaixo é o histórico do problema.
 
@@ -829,6 +831,59 @@ vai para o texto.
 indica a direção, e por isso a grade é bilateral. O que se afirma de antemão é só
 que a segurança (I1–I5) não pode ser afetada: E7 age por `ESTENDER_VERDE`,
 limitado por `verde_max_s` e pela guarda de I5 do motor.
+
+### Resultado da calibração · 2026-10-01
+
+Rodada única, código `ba44b27`, 170 execuções de 3.600 s, **170 válidas**: zero
+colisão, teleporte ou violação de I1–I5 em todas. Dados em
+`analysis/data/calibracao_p17/` (`resultado_calibracao.csv`,
+`baselines_calibracao.csv` e uma subpasta por combinação). Reproduzível com
+`python -m sim.calibracao.compensacao --so-avaliar`.
+
+| Cenário | Espera `FIXO` | Espera `PREEMPCAO` | Custo |
+| --- | ---: | ---: | ---: |
+| `moderado` | 15,54 s | 18,13 s | +16,6% |
+| `intenso` | 16,12 s | 24,72 s | +53,3% |
+
+| K | n | M `moderado` | M `intenso` | Pontuação |
+| ---: | ---: | ---: | ---: | ---: |
+| 0,25 | 1 | −4,6% | +5,1% | +0,3% |
+| 0,5 | 1 | −10,0% | +6,6% | −1,7% |
+| 0,7 | 1 | −15,8% | +10,5% | −2,6% |
+| 1,0 | 1 | −12,2% | +5,7% | −3,2% |
+| 1,5 | 1 | −17,8% | +8,1% | −4,9% |
+| 0,25 | 2 | −10,0% | −0,8% | −5,4% |
+| 0,5 | 2 | −11,7% | +3,6% | −4,1% |
+| 0,7 | 2 | −8,2% | +5,0% | −1,6% |
+| 1,0 | 2 | −11,2% | +10,8% | −0,2% |
+| 1,5 | 2 | −5,3% | +9,3% | +2,0% |
+| 0,25 | 3 | −12,5% | +8,8% | −1,8% |
+| 0,5 | 3 | −11,9% | +10,3% | −0,8% |
+| 0,7 | 3 | −1,9% | +4,8% | +1,4% |
+| **1,0** | **3** | **+0,9%** | **+11,7%** | **+6,2%** |
+| 1,5 | 3 | 0,0% | −2,0% | −1,0% |
+
+**Escolhida pela regra: `K = 1,0`, `n = 3`**, congelada em `parametros.yaml` num
+commit próprio. Pontuação **+6,2%**, abaixo da meta de 15%. Pela regra de
+parada, não há segunda rodada.
+
+**A escolha não indica que a calibração achou uma alavanca**, e o texto precisa
+dizer isso. Com 5 seeds, o desvio-padrão de `M` entre seeds tem mediana de 26%
+no `moderado` e 15% no `intenso`. O erro-padrão da média fica em ~12% e ~7%, e
+o da pontuação em ~7%. Todas as 15 combinações ficam dentro de cerca de um
+erro-padrão de zero. Não há tendência com `K` nem com `n`, e combinações
+vizinhas trocam de sinal ((1,0; 3) dá +6,2%; (1,5; 3) dá −1,0%). O padrão
+estável é por cenário: a compensação quase sempre piora o `moderado` e ajuda
+pouco o `intenso`.
+
+**Efeito no VE, reportado como o critério manda:** com a escolhida, a travessia
+do VE no braço compensado fica em 314,2 s no `moderado` e 397,8 s no `intenso`,
+contra 311,7 s e 387,6 s em `PREEMPCAO` (+0,8% e +2,6%).
+
+**Consequência para H2:** o mais provável é ela sair rejeitada no Bloco 8. Se
+sair, é um resultado bem sustentado: a compensação proposta foi testada com
+parâmetros calibrados por procedimento declarado antes, e não reduziu de forma
+mensurável o custo transversal que a preempção causa.
 
 ---
 
@@ -1516,6 +1571,7 @@ diferenças) foram verificados.
 | Data | Item | Decisão | Justificativa |
 | --- | --- | --- | --- |
 | 2026-10-01 | **Escopo integral** | O escopo declarado em `00-visao-geral.md` é entregue por inteiro. A lista de priorização para redução de escopo do `08` §2 foi **removida** do projeto, junto com as referências a ela. | Decisão da equipe. Atraso se resolve no planejamento, não tirando entregas. |
+| 2026-10-01 | **P17 executada** — calibração de E7 | Rodada única, 170 execuções válidas. Escolhida pela regra declarada: **`K = 1,0`, `n_ciclos_compensacao = 3`**, pontuação +6,2%, abaixo da meta de 15%. Congelada em `parametros.yaml`. | A regra de parada manda congelar mesmo abaixo da meta. As 15 combinações ficam dentro de cerca de um erro-padrão de zero (~7% na pontuação), sem tendência com `K` nem com `n`: a calibração não achou alavanca, e isso vai para o texto. Veredito de H2 no Bloco 8. |
 | 2026-10-01 | **P17 decidida** — E7 e H2 | E7 e H2 **ficam**. H2 = mitigação de **≥ 15% do acréscimo** causado pela preempção, avaliada em `moderado` e `intenso`, sobre a **espera média transversal da hora** (uma janela por evento foi decidida e revertida no mesmo dia: com este denominador ela não muda a razão). `K` e `n_ciclos_compensacao` são calibrados **uma vez**, em seeds 101..105, com critério commitado antes; o veredito vem do Bloco 8. Abaixo de 15%, H2 é reportada como rejeitada. | Matar E7 tiraria do trabalho uma hipótese do pré-projeto com base numa medição feita com parâmetro nunca calibrado e métrica possivelmente diluída. A régua é fixada enquanto nenhuma leitura atinge a meta, então a escolha não é feita pelo resultado. Uma H2 rejeitada com evidência é resultado; uma H2 removida é lacuna. |
 | 2026-10-01 | **P15 fechada** — cliente do lote | **Opção 2:** lote com `traci` e processos em paralelo; `libsumo` não é instalado pelo pip. `--libsumo` segue implementado, sem ser o padrão. | O piloto mediu ~6 h para as 600 execuções com `traci` e 6 processos: cabe na janela. Sem ganho de viabilidade, não há razão para abrir exceção à regra de 2026-08-24 (cliente do SUMO só de `%SUMO_HOME%/tools`). |
 | 2026-10-01 | **P11 fechada** | Fechada pela equipe. O método de medir o fluxo de saturação na própria malha foi aprovado pelo orientador em 2026-09-10. O restante — citações da faixa de plausibilidade e do enquadramento por v/c, e os itens 4 a 6 — é redação da metodologia. | Nada no código ou nas execuções depende mais de P11; mantê-la aberta só misturava pendência de redação com pendência de decisão. |

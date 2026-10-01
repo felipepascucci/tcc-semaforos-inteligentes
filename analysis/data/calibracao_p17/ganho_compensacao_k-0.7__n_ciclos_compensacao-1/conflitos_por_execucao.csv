@@ -1,0 +1,1 @@
+id_execucao,cenario,modo,seed,t_inicio_s,t_fim_s,duracao_s,passos,id_semaforo,n_ves,ids_veiculos,tipos,criticidades,etas_s,fases_desejadas,mesmo_nivel,decidivel,decidivel_em_algum_passo,preempcao_em_curso
