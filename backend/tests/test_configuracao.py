@@ -157,6 +157,7 @@ def _escrever(diretorio: Path, **alteracoes: object) -> Path:
         ({"vermelho_max_s": 10.0}, "I5 é violável por construção"),
         ({"prioridade_tipo": ["AMBULANCIA", "AMBULANCIA"]}, "tipo repetido"),
         ({"prioridade_tipo": ["HELICOPTERO"]}, "tipo de veículo desconhecido"),
+        ({"ganho_compensacao_k": -0.5}, "ganho_compensacao_k não pode ser negativo"),
     ],
 )
 def test_configuracao_incoerente_falha_na_carga(

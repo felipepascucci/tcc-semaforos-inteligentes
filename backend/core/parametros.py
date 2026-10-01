@@ -172,6 +172,11 @@ class Parametros:
             problemas.append("prioridade_tipo tem tipo repetido")
         if self.n_ciclos_compensacao < 0:
             problemas.append("n_ciclos_compensacao não pode ser negativo")
+        if self.ganho_compensacao_k < 0:
+            problemas.append(
+                "ganho_compensacao_k não pode ser negativo — E7 tiraria verde de quem "
+                "ficou esperando, em vez de devolver"
+            )
         if self.vermelho_max_s <= self.verde_max_s:
             problemas.append(
                 f"vermelho_max_s ({self.vermelho_max_s}) precisa ser maior que "

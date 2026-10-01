@@ -322,3 +322,72 @@ def test_resumo_separa_validas_de_descartadas() -> None:
     )
     assert len(resumo.validas) == 1
     assert len(resumo.descartadas) == 2
+
+
+# --- ajustes de parâmetro (calibração de P17) -------------------------------
+
+_AJUSTE = (("ganho_compensacao_k", 1.5),)
+
+
+def test_ponto_sem_ajuste_consolida_no_destino_de_sempre(tmp_path: Path) -> None:
+    assert _ponto().destino(tmp_path) == tmp_path
+    assert str(_ponto()) == "leve/FIXO/seed=1"
+
+
+def test_ponto_com_ajuste_consolida_na_subpasta_da_combinacao(tmp_path: Path) -> None:
+    """Os CSV não têm coluna de parâmetro: combinações no mesmo arquivo se confundiriam."""
+    ponto = lote.Ponto("leve", "PREEMPCAO_COMPENSADA", 1, _AJUSTE)
+    assert ponto.destino(tmp_path) == tmp_path / "ganho_compensacao_k-1.5"
+    assert str(ponto).endswith("/ganho_compensacao_k-1.5")
+
+
+def test_mesmo_ponto_com_ajustes_diferentes_sao_pontos_diferentes() -> None:
+    a = lote.Ponto("leve", "PREEMPCAO_COMPENSADA", 1, (("ganho_compensacao_k", 0.5),))
+    b = lote.Ponto("leve", "PREEMPCAO_COMPENSADA", 1, (("ganho_compensacao_k", 1.0),))
+    assert a != b
+    assert a.pasta != b.pasta
+
+
+def test_matriz_propaga_os_ajustes() -> None:
+    pontos = lote.matriz(["leve"], ["PREEMPCAO_COMPENSADA"], [1, 2], _AJUSTE)
+    assert all(ponto.ajustes == _AJUSTE for ponto in pontos)
+
+
+def test_um_exemplar_por_combinacao() -> None:
+    pontos = lote.matriz(["leve"], ["PREEMPCAO_COMPENSADA"], [1, 2]) + lote.matriz(
+        ["leve"], ["PREEMPCAO_COMPENSADA"], [1, 2], _AJUSTE
+    )
+    assert len(lote.exemplares(pontos)) == 2
+
+
+def test_analisar_ajustes() -> None:
+    assert lote.analisar_ajustes(["n_ciclos_compensacao=3", "ganho_compensacao_k=0.5"]) == (
+        ("ganho_compensacao_k", 0.5),
+        ("n_ciclos_compensacao", 3.0),
+    )
+    with pytest.raises(ValueError, match="NOME=VALOR"):
+        lote.analisar_ajustes(["ganho_compensacao_k"])
+    with pytest.raises(ValueError, match="não numérico"):
+        lote.analisar_ajustes(["ganho_compensacao_k=alto"])
+
+
+def test_rodar_recusa_ajuste_com_banco(tmp_path: Path) -> None:
+    ponto = lote.Ponto("leve", "PREEMPCAO_COMPENSADA", 1, _AJUSTE)
+    with pytest.raises(ValueError, match="execucao_simulacao"):
+        lote.rodar([ponto], saida=tmp_path, persistir=True)
+
+
+def test_duplicata_e_conferida_no_destino_da_combinacao(tmp_path: Path) -> None:
+    """O ponto já consolidado na subpasta da combinação também é recusado."""
+    ponto = lote.Ponto("leve", "PREEMPCAO_COMPENSADA", 1, _AJUSTE)
+    _dados_com(ponto.destino(tmp_path), [("leve", "PREEMPCAO_COMPENSADA", 1)])
+    with pytest.raises(lote.PontoJaConsolidadoError):
+        lote.rodar([ponto], saida=tmp_path, persistir=False)
+
+
+def test_mesmo_ponto_na_raiz_nao_bloqueia_a_combinacao(tmp_path: Path) -> None:
+    """A linha sem ajuste na raiz é outro experimento, não duplicata."""
+    _dados_com(tmp_path, [("leve", "PREEMPCAO_COMPENSADA", 1)])
+    ponto = lote.Ponto("leve", "PREEMPCAO_COMPENSADA", 1, _AJUSTE)
+    grupos = lote._por_destino([ponto], tmp_path)
+    assert all(lote.pontos_ja_no_csv(d, m) == () for d, m in grupos.items())

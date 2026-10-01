@@ -632,8 +632,9 @@ mesmo experimento. As seeds 101..105 são pontos novos, então a guarda de
 >
 > **O que falta é execução, antes do Bloco 8:** ~~(a) declarar o critério da
 > calibração~~ (feito, ver "Critério da calibração" no fim desta pendência);
-> (b) dar ao lote um jeito de variar `K` e `n_ciclos_compensacao` sem editar
-> `parametros.yaml`; (c) rodar a calibração; (d) congelar os parâmetros.
+> ~~(b) dar ao lote um jeito de variar `K` e `n_ciclos_compensacao` sem editar
+> `parametros.yaml`~~ (feito: `--ajuste` no lote e `sim/calibracao/compensacao.py`);
+> (c) rodar a calibração; (d) congelar os parâmetros.
 >
 > O registro abaixo é o histórico do problema.
 
