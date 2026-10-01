@@ -33,6 +33,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from adapters.sumo.adaptador import PARAMETRO_CRITICIDADE
+from core.modelos import Criticidade
 from sim.calibracao import cenarios as calibracao
 from sim.demanda.fluxos import rotas_de_emergencia
 
@@ -61,6 +63,9 @@ class Partida:
         rota: Id da rota.
         instante_s: Instante de partida, em segundos.
         emergencia: Se é veículo de emergência.
+        criticidade: Criticidade da ocorrência que o VE atende (P20). Vai para o
+            arquivo como `<param key="criticidade">`, que é o que o adaptador lê
+            para saber que o VE está em serviço. `None` no tráfego de fundo.
     """
 
     id_veiculo: str
@@ -68,6 +73,7 @@ class Partida:
     rota: str
     instante_s: float
     emergencia: bool = False
+    criticidade: Criticidade | None = None
 
 
 def _rotas_e_fluxos(arquivo: Path) -> tuple[dict[str, str], list[dict[str, str]]]:
@@ -131,11 +137,26 @@ def partidas_de_emergencia(configuracao: Mapping[str, Any], nome_cenario: str) -
     entra sempre nos mesmos instantes, encontrando um trânsito diferente a cada
     seed. O tipo também é fixo por rodízio, porque o tipo define a prioridade em
     E8 e precisa ser o mesmo nos três braços.
+
+    A **criticidade** da ocorrência roda em passo com o tipo (P20): a i-ésima
+    entrada de `criticidades` acompanha a i-ésima de `tipos`. Nos cenários do
+    experimento isso atribui a cada VE a ocorrência típica do seu tipo.
+
+    Raises:
+        ValueError: se `criticidades` e `tipos` tiverem tamanhos diferentes — o
+            rodízio sairia de fase em silêncio — ou se houver nível fora da escala.
     """
     emergencias = configuracao["emergencias"]
     execucao = configuracao["execucao"]
     intervalo = float(emergencias["intervalo_s"])
     tipos = [str(tipo).lower() for tipo in emergencias["tipos"]]
+    criticidades = [Criticidade(int(nivel)) for nivel in emergencias["criticidades"]]
+    if len(criticidades) != len(tipos):
+        raise ValueError(
+            f"emergencias.criticidades tem {len(criticidades)} entradas e "
+            f"emergencias.tipos tem {len(tipos)}: o rodízio é em passo, e precisa "
+            "de uma criticidade por tipo (P20)"
+        )
     aquecimento = float(execucao["aquecimento_s"])
     duracao = float(execucao["duracao_s"])
 
@@ -150,6 +171,7 @@ def partidas_de_emergencia(configuracao: Mapping[str, Any], nome_cenario: str) -
                 rota=rota,
                 instante_s=instante,
                 emergencia=True,
+                criticidade=criticidades[indice % len(criticidades)],
             )
             indice += 1
             instante += intervalo
@@ -173,17 +195,32 @@ def _cabecalho(nome_cenario: str, seed: int, quantos: int, quantos_ves: int) -> 
 """
 
 
-def gerar(nome_cenario: str, seed: int, destino: Path | None = None) -> Path:
-    """Materializa o arquivo de rotas de um ponto experimental.
+def _elemento_vehicle(partida: Partida) -> str:
+    """O `<vehicle>` de uma partida.
 
-    Args:
-        nome_cenario: Cenário de `cenarios.yaml`.
-        seed: Seed do experimento. Mesma seed, mesmo arquivo.
-        destino: Caminho de saída. Padrão:
-            `sim/saida/rotas/<cenario>_<seed>.rou.xml`.
+    O VE ganha o `<param>` de criticidade (P20) como elemento filho. O parâmetro
+    não altera a dinâmica do SUMO; só diz ao adaptador que o VE está em serviço.
+    """
+    abertura = (
+        f'    <vehicle id="{partida.id_veiculo}" type="{partida.tipo}" '
+        f'route="{partida.rota}" depart="{partida.instante_s:.2f}" '
+        f'departLane="free" departSpeed="max"'
+    )
+    if partida.criticidade is None:
+        return abertura + "/>"
+    return (
+        f"{abertura}>\n"
+        f'        <param key="{PARAMETRO_CRITICIDADE}" value="{int(partida.criticidade)}"/>\n'
+        "    </vehicle>"
+    )
 
-    Returns:
-        O caminho escrito.
+
+def conteudo(nome_cenario: str, seed: int) -> str:
+    """O texto do arquivo de rotas de um ponto experimental, sem escrever nada.
+
+    Determinístico: mesma seed, mesmo cenário e mesmo código produzem o mesmo
+    texto, byte a byte. É o que permite a `garantir()` saber se um arquivo em
+    cache ainda é o que o código atual geraria.
 
     Raises:
         KeyError: se o cenário não tiver arquivo de fluxo mapeado.
@@ -210,17 +247,30 @@ def gerar(nome_cenario: str, seed: int, destino: Path | None = None) -> Path:
         if identificador in usadas
     ]
     linhas.append("")
-    linhas += [
-        f'    <vehicle id="{partida.id_veiculo}" type="{partida.tipo}" '
-        f'route="{partida.rota}" depart="{partida.instante_s:.2f}" '
-        f'departLane="free" departSpeed="max"/>'
-        for partida in partidas
-    ]
+    linhas += [_elemento_vehicle(partida) for partida in partidas]
     linhas += ["", "</routes>"]
+    return "\n".join(linhas) + "\n"
 
-    destino = destino or SAIDA / f"{nome_cenario}_{seed}.rou.xml"
+
+def gerar(nome_cenario: str, seed: int, destino: Path | None = None) -> Path:
+    """Materializa o arquivo de rotas de um ponto experimental.
+
+    Args:
+        nome_cenario: Cenário de `cenarios.yaml`.
+        seed: Seed do experimento. Mesma seed, mesmo arquivo.
+        destino: Caminho de saída. Padrão:
+            `sim/saida/rotas/<cenario>_<seed>.rou.xml`.
+
+    Returns:
+        O caminho escrito.
+
+    Raises:
+        KeyError: se o cenário não tiver arquivo de fluxo mapeado.
+    """
+    texto = conteudo(nome_cenario, seed)
+    destino = destino or caminho_das_rotas(nome_cenario, seed)
     destino.parent.mkdir(parents=True, exist_ok=True)
-    destino.write_text("\n".join(linhas) + "\n", encoding="utf-8")
+    destino.write_text(texto, encoding="utf-8")
     return destino
 
 
@@ -230,13 +280,26 @@ def caminho_das_rotas(nome_cenario: str, seed: int) -> Path:
 
 
 def garantir(nome_cenario: str, seed: int) -> Path:
-    """Devolve o arquivo de rotas, gerando-o se ainda não existir.
+    """Devolve o arquivo de rotas, (re)gerando-o se não for o que o código atual geraria.
 
-    Reaproveitar o arquivo existente **é** o pareamento: os três modos chamam
-    isto e recebem o mesmo caminho.
+    Os três modos chamam isto e recebem o mesmo caminho com o mesmo conteúdo —
+    é o pareamento. Como a geração é determinística, **regenerar não quebra o
+    pareamento**: produz os mesmos bytes.
+
+    **Por que não basta o arquivo existir (P20).** O cache em `sim/saida/rotas/`
+    sobrevive a mudanças no gerador. Com a P20, arquivos antigos ficaram sem o
+    parâmetro `criticidade` — e o adaptador trata VE sem ele como fora de
+    serviço. Reaproveitá-los rodaria o lote inteiro **sem preempção nenhuma**, sem
+    erro. Comparar com o conteúdo esperado fecha essa classe de falha para
+    qualquer mudança futura no gerador, não só esta.
     """
     caminho = caminho_das_rotas(nome_cenario, seed)
-    return caminho if caminho.is_file() else gerar(nome_cenario, seed)
+    esperado = conteudo(nome_cenario, seed)
+    if caminho.is_file() and caminho.read_text(encoding="utf-8") == esperado:
+        return caminho
+    caminho.parent.mkdir(parents=True, exist_ok=True)
+    caminho.write_text(esperado, encoding="utf-8")
+    return caminho
 
 
 def main(argumentos: list[str] | None = None) -> int:

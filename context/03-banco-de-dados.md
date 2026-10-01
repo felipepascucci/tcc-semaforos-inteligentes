@@ -21,6 +21,9 @@ Nunca renomeie uma coluna existente sem sinalizar que isso exige correção no d
 ┌───────────────────┐        ┌──────────────────┐
 │ VEICULO_EMERGENCIA│──1:N──▶│    TAG_RFID      │
 └─────────┬─────────┘        └──────────────────┘
+          │ 1:N              ┌──────────────────┐
+          ├─────────────────▶│   OCORRENCIA     │  (P20: no máximo 1 aberta por VE)
+          │                  └──────────────────┘
           │
           │ N                ┌──────────────────┐
           │                  │ DISPOSITIVO_IOT  │
@@ -141,6 +144,20 @@ CREATE TABLE dispositivo_iot (
     status         status_operacao NOT NULL DEFAULT 'ATIVO'
 );
 
+-- P20 (2026-09-29): a emergência é estado declarado pela central de despacho,
+-- não propriedade do veículo. Sem ocorrência aberta, a tag é reconhecida mas
+-- não preempta. A criticidade é ordinal (1 = mais crítico) e decide E8 antes do tipo.
+CREATE TABLE ocorrencia (
+    id_ocorrencia  SERIAL PRIMARY KEY,
+    fk_veiculo     INT NOT NULL REFERENCES veiculo_emergencia(id_veiculo),
+    criticidade    SMALLINT NOT NULL CHECK (criticidade BETWEEN 1 AND 3),
+    descricao      VARCHAR(200),
+    origem         VARCHAR(20) NOT NULL DEFAULT 'CENTRAL',  -- CENTRAL | OPERADOR
+    aberta_em      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    encerrada_em   TIMESTAMPTZ,
+    CHECK (encerrada_em IS NULL OR encerrada_em >= aberta_em)
+);
+
 CREATE TABLE deteccao (
     id_deteccao     BIGSERIAL PRIMARY KEY,
     id_correlacao   UUID NOT NULL,
@@ -149,6 +166,8 @@ CREATE TABLE deteccao (
     fk_veiculo      INT REFERENCES veiculo_emergencia(id_veiculo),
     uid_bruto       VARCHAR(32),
     reconhecido     BOOLEAN NOT NULL,
+    autorizado      BOOLEAN NOT NULL DEFAULT false,  -- P20: reconhecido E com ocorrência ativa
+    fk_ocorrencia   INT REFERENCES ocorrencia(id_ocorrencia),
     rssi            SMALLINT,
     sequencia       INT,
     recebido_em     TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -220,6 +239,11 @@ CREATE INDEX idx_log_inicio            ON log_prioridade (timestamp_inicio DESC)
 CREATE INDEX idx_amostra_exec_t        ON estado_semaforo_amostra (fk_execucao, t_simulacao);
 CREATE INDEX idx_deteccao_uid_tempo    ON deteccao (uid_bruto, recebido_em DESC);
 CREATE INDEX idx_metrica_exec          ON metrica_simulacao (id_execucao);
+
+-- P20: no máximo UMA ocorrência aberta por veículo. É o banco, e não o código,
+-- que impede duas criticidades concorrentes para o mesmo VE.
+CREATE UNIQUE INDEX uq_ocorrencia_aberta_por_veiculo
+    ON ocorrencia (fk_veiculo) WHERE encerrada_em IS NULL;
 ```
 
 **Decisão P5 (2026-08-24) — resolvida.** Amostrar a 10 Hz daria ~173 milhões de linhas; a 1 Hz, ~17 M. Ambas inviáveis numa máquina de estudante. A solução adotada:
@@ -254,6 +278,9 @@ Consequência para o coletor: ele mantém a fase corrente de cada TLS em memóri
 - 3 veículos de emergência (uma ambulância, um bombeiro, uma viatura) com placas fictícias no padrão Mercosul.
 - 2 tags RFID vinculadas (UIDs reais lidos na bancada — preencher após o primeiro teste do RC522).
 - 2 dispositivos IoT: `LEITOR_CRUZ_01` e `CTRL_PROTO_01`.
+- **Nenhuma ocorrência** — de propósito (P20). O sistema sobe sem VE em serviço,
+  e a demonstração começa pela negação: a tag da ambulância é reconhecida e não
+  preempta até o operador abrir a ocorrência no painel "Central".
 
 ## 6. DER para o TCC
 

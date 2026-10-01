@@ -23,7 +23,7 @@ RAIZ = Path(__file__).resolve().parents[3]
 
 pytestmark = pytest.mark.banco
 
-TABELAS_ESPERADAS = 12
+TABELAS_ESPERADAS = 13  # 12 do Bloco 1 + `ocorrencia` (P20)
 ENUMS_ESPERADOS = {
     "estado_sinal",
     "tipo_veiculo",
@@ -38,6 +38,7 @@ INDICES_ESPERADOS = {
     "idx_amostra_exec_t",
     "idx_deteccao_uid_tempo",
     "idx_metrica_exec",
+    "uq_ocorrencia_aberta_por_veiculo",
 }
 
 
@@ -48,7 +49,7 @@ def _configuracao(url: str) -> Config:
     return configuracao
 
 
-def test_schema_tem_as_12_tabelas_de_context_03(engine: Engine) -> None:
+def test_schema_tem_as_13_tabelas_de_context_03(engine: Engine) -> None:
     consulta = text(
         "SELECT table_name FROM information_schema.tables "
         "WHERE table_schema = 'public' AND table_name <> 'alembic_version'"

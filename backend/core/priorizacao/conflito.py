@@ -7,9 +7,18 @@ duas.**
 
 Ordem de desempate, exatamente como em `context/01` §5.2:
 
+0. Maior criticidade da ocorrência — `RISCO_VIDA > RISCO_COLETIVO > URGENCIA` (P20).
 1. Maior prioridade por tipo — configurável, padrão `AMBULANCIA > BOMBEIRO > POLICIA`.
 2. Menor ETA ao cruzamento.
 3. Preempção já em curso vence, o que evita oscilação entre dois pedidos empatados.
+
+**O critério 0 só entra na frente; o resto da chave não muda.** Nos cenários do
+experimento cada VE atende a ocorrência típica do seu tipo (ambulância → 1,
+bombeiro → 2, polícia → 3), na mesma ordem de `prioridade_tipo`, e então a
+decisão é idêntica à de antes da P20 — há teste de propriedade garantindo isso.
+A criticidade passa a decidir sozinha quando ela diverge do tipo, que é o caso que
+os critérios da equipe existem para cobrir: um incêndio com vítima não espera por
+uma ambulância com caso leve.
 """
 
 from __future__ import annotations
@@ -92,9 +101,10 @@ class Resolucao:
     motivo: str = ""
 
 
-def _chave_de_desempate(disputa: Disputa, parametros: Parametros) -> tuple[int, float, int]:
-    """Chave de ordenação: menor vence, na ordem 1 → 2 → 3 de `context/01` §5.2."""
+def _chave_de_desempate(disputa: Disputa, parametros: Parametros) -> tuple[int, int, float, int]:
+    """Chave de ordenação: menor vence, na ordem 0 → 1 → 2 → 3 de `context/01` §5.2."""
     return (
+        int(disputa.deteccao.criticidade),
         parametros.indice_prioridade(disputa.deteccao.tipo),
         disputa.deteccao.eta_s,
         0 if disputa.ja_em_curso else 1,
@@ -159,7 +169,12 @@ def _motivo(vencedor: Disputa, adiados: Iterable[Disputa], parametros: Parametro
         return base
 
     perdedor = lista[0].deteccao
-    if parametros.indice_prioridade(veiculo.tipo) < parametros.indice_prioridade(perdedor.tipo):
+    if veiculo.criticidade < perdedor.criticidade:
+        criterio = (
+            f"criticidade {int(veiculo.criticidade)} sobre {int(perdedor.criticidade)} "
+            f"de {perdedor.id_veiculo}"
+        )
+    elif parametros.indice_prioridade(veiculo.tipo) < parametros.indice_prioridade(perdedor.tipo):
         criterio = f"prioridade de tipo sobre {perdedor.tipo}"
     elif veiculo.eta_s < perdedor.eta_s:
         criterio = f"menor ETA que {perdedor.id_veiculo} ({perdedor.eta_s:.1f}s)"

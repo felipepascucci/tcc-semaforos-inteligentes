@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from core.modelos import EstadoSemaforo, TipoVeiculo, VeiculoEmergencia
+from core.modelos import Criticidade, EstadoSemaforo, TipoVeiculo, VeiculoEmergencia
 from core.parametros import Parametros
 from core.priorizacao.deteccao import (
     calcular_eta_s,
@@ -73,6 +73,7 @@ def test_ve_proximo_em_linha_reta_mas_fora_da_rota_nao_e_detectado(
     fora_da_rota = VeiculoEmergencia(
         id="VE_FORA_DA_ROTA",
         tipo=TipoVeiculo.AMBULANCIA,
+        criticidade=Criticidade.RISCO_VIDA,
         posicao=(100.0, 0.0),  # perto no mapa
         velocidade=10.0,
         rota=("T1_OUT",),  # mas já saindo do cruzamento

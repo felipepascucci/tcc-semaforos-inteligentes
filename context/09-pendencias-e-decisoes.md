@@ -27,11 +27,18 @@ histórico; o que cada resposta gerou está no item correspondente.
 > A resposta a P3 não confirma o que a equipe havia decidido — ela o inverte, e
 > com isso muda o escopo declarado do trabalho. Ver **P19**.
 
+### Para a próxima orientação
+
+| Item | O que levar | Natureza |
+| --- | --- | --- |
+| **P20** | O desenho de P19 que ele viu mudou: a relevância por tipo virou **criticidade da ocorrência**, aplicada como regra acima do modelo, e `tipo` saiu dos atributos (5 → 4). E a emergência passou a exigir ocorrência ativa aberta pela central | **Comunicação**, não pedido de decisão — a equipe decidiu em 2026-09-29 |
+| **P11 (1) e (2)** | Cobrar as referências, se não tiverem chegado | Espera |
+
 ---
 
 ## P4 — Tabelas novas no banco precisam entrar no texto · `AÇÃO DA EQUIPE`
 
-`03-banco-de-dados.md` adiciona: `fase_semaforo`, `tag_rfid`, `dispositivo_iot`, `deteccao`, `execucao_simulacao`, `estado_semaforo_amostra`, `metrica_latencia`, `metrica_via_transversal`.
+`03-banco-de-dados.md` adiciona: `fase_semaforo`, `tag_rfid`, `dispositivo_iot`, `deteccao`, `execucao_simulacao`, `estado_semaforo_amostra`, `metrica_latencia`, `metrica_via_transversal` — e, desde 2026-09-29 (P20), `ocorrencia`, com as colunas `autorizado` e `fk_ocorrencia` em `deteccao`.
 
 O capítulo 4 do TCC precisa ser reescrito para incluí-las, e o DER regerado.
 
@@ -972,11 +979,18 @@ aprenda; é uma que ele não consegue violar.
 Regressão logística par a par. Exporta como **um vetor de pesos** — meia dúzia de
 números em arquivo versionado, com inferência em Python puro dentro de `core/`.
 
-#### Entrada — cinco diferenças
+#### Entrada — ~~cinco~~ quatro diferenças
+
+> **Alterado em 2026-09-29 por P20: `tipo` saiu.** A versão abaixo previa `tipo`
+> como atributo, "para que o peso aprendido dissesse quanto a precedência de
+> fato pesa". Sob o rótulo minimax **em tempo** isso não acontece: o tempo não
+> enxerga relevância, e o peso só capturaria diferenças de dinâmica entre os
+> `vType`. A relevância passou a ser **criticidade da ocorrência**, aplicada como
+> regra acima do modelo — o modelo decide só entre VEs de mesmo nível. Ver P20.
 
 | Atributo (por VE, entra como diferença) | Por quê |
 | --- | --- |
-| `tipo` | Codifica a precedência atual (`AMBULANCIA > BOMBEIRO > POLICIA`) como atributo, e não como regra fixa — o peso aprendido dirá quanto ela de fato pesa |
+| ~~`tipo`~~ | ~~Codifica a precedência atual como atributo~~ — **removido por P20**; a precedência virou regra (criticidade) |
 | `eta_s` | Quando cada um chega |
 | `velocidade_ms` | **Substitui `distancia_m`.** ETA já é distância dividida por velocidade: carregar os dois seria quase colinear, e o que agrega informação é a velocidade |
 | `fila_no_acesso` | Já chega ao motor pelos detectores E2, e é o que P16 mostrou ser decisivo |
@@ -1063,9 +1077,13 @@ entrega **10.1** agora tem número, e as três consequências são estas:
    só para treinar. O cenário de treino precisa de mais VEs por hora — novos
    arquivos de demanda, mesma malha. **O cenário declarado continua sendo o de
    avaliação.**
-   - **E ele precisa defasar a rotação de tipos entre as duas rotas**, pelo
+   - ~~**E ele precisa defasar a rotação de tipos entre as duas rotas**, pelo
      achado dos pares sempre do mesmo tipo. Sem par misto, o atributo `tipo` é
-     zero em todo evento e seu peso não existe.
+     zero em todo evento e seu peso não existe.~~ **Deixou de valer em
+     2026-09-29 (P20):** `tipo` não é mais atributo. O que o cenário de treino
+     precisa é de **volume de disputas de mesmo nível de criticidade** — o
+     domínio do modelo — e de alguns pares de nível misto, só para exercitar a
+     regra que as decide. As 60 disputas da 10.1 são todas de mesmo nível.
    - Vale reavaliar também a densidade de **disputas por VE**: hoje toda disputa
      acontece no mesmo cruzamento, porque as duas rotas se cruzam uma única vez.
      Rotas que se cruzem em mais de um ponto rendem mais eventos pelo mesmo custo
@@ -1075,7 +1093,7 @@ entrega **10.1** agora tem número, e as três consequências são estas:
    Bloco 8 (guarda de P16). Com 6 disputas por seed e sem dispersão entre seeds,
    *quantas* seeds importa mais do que *quais*.
 3. **Regularização e número de atributos.** Com poucas dezenas de eventos por
-   conjunto, cinco atributos são muitos. A decisão fica para depois da 10.2, com
+   conjunto, ~~cinco~~ quatro atributos (P20) ainda são muitos. A decisão fica para depois da 10.2, com
    o volume do cenário novo na mão.
 
 > **A dependência que se podia afirmar antes de medir se confirmou:** o volume
@@ -1155,6 +1173,211 @@ neste momento.
 
 ---
 
+## P20 — Confirmação da emergência e criticidade da ocorrência · ✅ **DECIDIDA em 2026-09-29**
+
+Aberta e decidida pela equipe em 2026-09-29. Responde a duas perguntas que o
+trabalho não respondia, e a segunda mexe no desenho de P19 que estava fechado —
+por isso o registro vem **antes** do código, como em P16.
+
+### Lacuna 1 — o semáforo não sabia se há emergência de fato
+
+Até aqui, **identidade era emergência.** A tag RFID resolvia para
+`veiculo_emergencia` e a preempção vinha junto; na simulação, todo veículo de
+`vClass="emergency"` era tratado como em atendimento. Uma ambulância voltando
+para a base, sem paciente, abriria o corredor verde do mesmo jeito.
+
+**Detecção acústica da sirene foi considerada e recusada.** Identificar a
+frequência da sirene no meio da cidade é suscetível a ruído de fundo, eco entre
+prédios, sirene de outra via e veículo parado com a sirene ligada — e o erro não
+deixa trilha auditável: não há como explicar na banca *por que* o sistema
+concedeu ou negou a prioridade num caso específico.
+
+**A saída é tratar a emergência como estado declarado, não inferido.** A âncora
+é legal: o **CTB (Lei 9.503/1997), art. 29, VII** só concede prioridade ao VE
+*"quando em serviço de urgência"* e identificado pelos dispositivos de alarme. Ou
+seja, a própria lei define emergência como um **estado de serviço**, não como
+uma propriedade do veículo.
+
+**Decisão: acionamento pela central de despacho.** O backend mantém a
+**ocorrência ativa** de cada VE — aberta pela central quando despacha, encerrada
+quando o atendimento termina. A preempção exige **dois fatores**:
+
+1. **Identidade** — tag reconhecida, de veículo ativo (o que já existia);
+2. **Estado** — ocorrência aberta para aquele veículo.
+
+Tag reconhecida sem ocorrência não preempta: o LCD mostra `SEM OCORRENCIA`, e a
+tentativa é registrada em `deteccao` com `autorizado = false`. Um motorista não
+consegue se autoautorizar, e o operador vê no dashboard quem está em serviço.
+
+- **A regra é determinística, e de propósito sem ML.** Confirmação de emergência
+  é autenticação e segurança: precisa ser auditável e não pode ter falso
+  negativo estatístico. O RNF05 pede 95% de precisão na identificação, e uma
+  regra declarada entrega isso por construção. A IA do trabalho fica em E8, onde
+  há lacuna genuína (P19).
+- **A chave do giroflex** — o sinal elétrico de sirene e luz ligadas, que é o
+  que os sistemas comerciais de preempção usam para ativar o emissor — é a
+  implementação de campo equivalente, registrada como **trabalho futuro**. Ela
+  espelharia o art. 29 literalmente, mas exige mudança de firmware e não
+  fornece a criticidade, que é o que a lacuna 2 pede.
+- **A central é simulada** (painel no dashboard ou endpoint). Integração real
+  com SAMU, Corpo de Bombeiros ou PM continua fora de escopo (`00` §8).
+- **Na simulação, a mesma regra.** O `vClass` diz *que* o veículo é de
+  emergência; o parâmetro SUMO `criticidade`, escrito na rota gerada, diz que
+  ele *está em serviço*. Sem o parâmetro, o adaptador não o entrega ao motor e
+  ele trafega como veículo comum.
+
+### Lacuna 2 — a relevância de cada tipo não chegava ao modelo
+
+A equipe fixou os critérios de relevância por tipo:
+
+| Tipo | Foco |
+| --- | --- |
+| Ambulância | Vida humana e urgência médica — suporte básico ou avançado, paciente em risco iminente de morte ou instabilidade grave |
+| Bombeiro | Segurança pública — incêndio, resgate estrutural, sinistro que ameaça a coletividade ou o meio ambiente |
+| Polícia | Ordem pública — ocorrência em andamento, perseguição, preservação da ordem |
+
+**Achado ao confrontar isso com P19:** o rótulo decidido é o **minimax em
+tempo**. O tempo não sabe que a ambulância leva uma vida — sob esse rótulo, o
+peso aprendido para `tipo` só capturaria diferenças de dinâmica entre os
+`vType`, e **não** relevância. Os critérios acima nunca chegariam ao modelo. E o
+minimax ponderado por tipo, que os levaria até o rótulo, já tinha sido recusado
+em P19 por exigir pesos numéricos sem lastro.
+
+**Decisão: criticidade como regra acima do modelo.** *O que importa mais* é
+decisão normativa, e não se aprende de dado de trânsito; *quem passa primeiro
+entre dois igualmente importantes* é otimização, e isso se aprende. Separar as
+duas é o que dá papel preciso aos critérios da equipe.
+
+**A criticidade vem da ocorrência, não do tipo.** Uma ambulância com paciente em
+parada cardíaca não é igual a uma com caso leve, e um incêndio com vítima presa
+não pode perder para qualquer ambulância. A central atribui o nível ao abrir a
+ocorrência, orientada pela escala:
+
+| Nível | `Criticidade` | Ambulância | Bombeiro | Polícia |
+| --- | --- | --- | --- | --- |
+| 1 | `RISCO_VIDA` | Suporte avançado; paciente em risco iminente de morte ou instabilidade grave | Incêndio ou resgate com vítima | Ocorrência em andamento com risco à vida |
+| 2 | `RISCO_COLETIVO` | Suporte básico, paciente estável | Sinistro que ameaça coletividade ou meio ambiente, sem vítima confirmada | Crime em andamento, perseguição |
+| 3 | `URGENCIA` | Deslocamento de urgência sem paciente crítico | Apoio, prevenção | Preservação da ordem pública |
+
+A escala é **ordinal** — só a ordem importa — e é por isso que não introduz
+número mágico: não há peso a justificar, só precedência.
+
+### Ordem de decisão em E8, por braço
+
+**Braço `PREEMPCAO` (E8 determinístico, baseline de H4).** A chave passa a ser
+`(criticidade, prioridade_tipo, eta_s, preempcao_em_curso)` — a chave anterior,
+com a criticidade na frente e **nenhuma outra mudança**.
+
+**Braço `PREEMPCAO_ML` (entrega 10.6):**
+
+1. **Criticidade — regra.** O nível estritamente mais crítico vence, inclusive
+   sobre preempção em curso.
+2. **Guarda de oscilação — regra, já decidida em P19.** Dentro do mesmo nível, a
+   preempção em curso vence.
+3. **Modelo**, sobre `(eta_s, velocidade_ms, fila_no_acesso,
+   cruzamentos_restantes)` — **quatro** atributos; `tipo` saiu.
+
+**Por que a criticidade pode passar por cima da preempção em curso sem gerar
+oscilação:** A só toma o verde de B se `crit(A) < crit(B)`, e então B nunca o
+toma de volta. A troca é monotônica, com no máximo duas por episódio (3 → 2 → 1),
+e cada troca passa pela transição segura de E5, que continua garantindo I4 e I5.
+A guarda de P19 existe contra a tempestade de trocas entre **iguais**, e é
+exatamente aí que ela continua valendo.
+
+### Consequências
+
+- **Nenhum número já medido muda.** Nos cenários do experimento, cada VE atende
+  a ocorrência típica do seu tipo (AMB → 1, BOMB → 2, POL → 3), na mesma ordem de
+  `prioridade_tipo`. O braço `PREEMPCAO` decide exatamente como antes, e os
+  cenários de um VE só não têm conflito. **Verificado** reexecutando a matriz da
+  10.1 com o código novo — ver o registro de implementação abaixo.
+- **Simplificação a declarar no texto:** na simulação a criticidade é atribuída
+  pelo cenário, não por uma ocorrência real. É ameaça à validade de construção
+  (`07` §7).
+- **10.2** deixa de precisar defasar a rotação de tipos — `tipo` não é mais
+  atributo. Passa a precisar de **volume de pares de mesmo nível**, que é o
+  domínio do modelo, e de alguns pares mistos para exercitar a regra.
+- **10.4** bifurca só as disputas de mesmo nível; as mistas a regra decide, e não
+  há rótulo a aprender.
+- **10.5** treina sobre quatro atributos.
+- **H4** não muda de enunciado, mas os braços só podem diferir nas disputas de
+  mesmo nível. A análise é estratificada por `mesmo_nivel` e declara quantas
+  disputas o modelo de fato decidiu (`07` §3).
+- **Banco:** tabela nova `ocorrencia`, e `deteccao` ganha `autorizado` e
+  `fk_ocorrencia` (`03` §3.2). Entra na lista de P4.
+- **Comunicar ao orientador** na próxima orientação: a mudança no desenho de P19
+  (5 → 4 atributos, criticidade como regra) é da equipe, mas ele aprovou o
+  desenho anterior e precisa saber.
+
+**Frase de defesa:** *"a IA decide quem passa primeiro; se é emergência, e o que
+importa mais, são regras declaradas."*
+
+### Registro de implementação · 2026-09-29
+
+**Núcleo, simulação e banco entregues; API, LCD e painel ficam com os blocos
+donos** (5.9, e as notas dos Blocos 6 e 7 em `docs/plano-desenvolvimento.md`).
+
+| Onde | O quê |
+| --- | --- |
+| `core/modelos.py` | `Criticidade` (IntEnum, 1 = mais crítico) e `VeiculoEmergencia.criticidade`, **obrigatório** |
+| `core/priorizacao/conflito.py` | Chave de E8 `(criticidade, tipo, ETA, em curso)`; `motivo` nomeia a criticidade quando ela decide |
+| `core/autorizacao.py` (novo) | `autorizar()` pura: `TAG_DESCONHECIDA`, `VEICULO_INATIVO`, `SEM_OCORRENCIA`, `AUTORIZADO` |
+| `adapters/sumo/adaptador.py` | Lê o parâmetro `criticidade` uma vez, na partida; VE sem ele não é assinado e gera aviso; valor fora da escala falha alto |
+| `sim/demanda/gerar_rotas.py` + `cenarios.yaml` | `criticidades: [1, 2, 3]` em passo com `tipos`, escritas como `<param>`; listas de tamanhos diferentes são recusadas |
+| `sim/controlador/coletor.py` | `conflitos_por_execucao.csv` ganha `criticidades` e `mesmo_nivel` |
+| `analysis/resumo_conflitos.py` | Separa mesmo nível de nível misto; o volume "treinável" passa a ser decidível **e** de mesmo nível |
+| Banco | Migration `3f9c2a71d5e8`: tabela `ocorrencia`, índice único parcial, `deteccao.autorizado` e `fk_ocorrencia`; repositório `app/repositories/ocorrencia.py`; `db/schema.sql` regerado |
+
+**Dois defeitos latentes encontrados no caminho, e corrigidos** — nenhum é da
+P20, os dois a teriam tornado perigosa:
+
+1. **`garantir()` reaproveitava arquivo de rotas em cache sem conferir o
+   conteúdo.** Os 48 arquivos de `sim/saida/rotas/` eram anteriores à P20, sem o
+   parâmetro `criticidade`: o próximo lote trataria **todos** os VEs como fora de
+   serviço e rodaria sem preempção nenhuma, sem erro. Passa a reaproveitar só o
+   arquivo idêntico ao que o código atual geraria; a geração é determinística,
+   então regenerar não quebra o pareamento. Vale para qualquer mudança futura no
+   gerador.
+2. **CSV sem guarda de cabeçalho.** O coletor e `consolidar()` acrescentavam
+   linhas a um CSV existente sem comparar colunas — o risco que P19 registrou.
+   Passam a falhar com `CabecalhoDivergenteError`, e `consolidar()` confere tudo
+   antes de escrever qualquer arquivo. Consequência a saber: `analysis/data/` na
+   raiz tem o `execucoes.csv` do piloto, de 22 colunas, então **consolidar ali o
+   código atual agora falha alto** em vez de corromper em silêncio — o Bloco 8
+   precisa de `--saida` própria, que é o que P16 e P19 já recomendavam.
+
+**E um defeito da própria P20, achado ao revalidar antes do commit:**
+`encerrar_ocorrencia()` carimbava `encerrada_em` com o relógio da aplicação,
+enquanto `aberta_em` vem do `now()` do Postgres. Com o banco em contêiner poucos
+milissegundos adiantado, um encerramento logo após a abertura caía *antes* dela e
+o `CHECK ck_ocorrencia_encerra_depois_de_abrir` o recusava — dois testes falharam
+numa rodada e passaram em outra. Os dois carimbos passaram a vir do relógio do
+banco, com regressão que abre e encerra vinte vezes seguidas. É o tipo de falha
+que a restrição no banco existe para expor: sem o `CHECK`, o histórico teria
+gravado atendimentos que terminam antes de começar.
+
+**Verificação de não regressão — o resultado que sustenta "nenhum número muda":**
+
+| Verificação | Resultado |
+| --- | --- |
+| Matriz da 10.1 (`multiplas_emergencias`, `PREEMPCAO`, seeds 101..110) com o código novo, contra `analysis/data/bloco10_conflitos/` | **Zero diferenças** em `execucoes.csv` (10 linhas, 20 colunas), `ve_por_execucao.csv` (114 × 11), `transversal_por_execucao.csv` (320 × 6) e `conflitos_por_execucao.csv` (60 × 17). As **mesmas 60 disputas, 56 decidíveis**, todas `mesmo_nivel = 1` (1+1, 2+2 e 3+3, vinte de cada) |
+| `moderado`, `PREEMPCAO` e `PREEMPCAO_COMPENSADA`, seed 101, código de `main` (`8c296a0`) contra o novo | **Zero diferenças** em execuções, VEs (11 linhas) e transversal (64) |
+| Latência de decisão | Excluída da comparação: é relógio de parede, não reproduzível pela seed (decisão de 2026-08-26) |
+
+A corrida de verificação **não** foi gravada em `analysis/data/`: é regressão,
+não experimento.
+
+`mypy --strict` e `ruff` limpos. **342 testes** na execução padrão — que inclui
+os de banco, com Postgres efêmero — e **23** na suíte `sumo`. Novos:
+`test_autorizacao.py`, `tests/db/test_ocorrencia.py`, a regressão da ambulância
+sem ocorrência em `test_adaptador.py`, o teste de propriedade que garante que a
+criticidade típica decide como a chave anterior, e os de cache e cabeçalho.
+`docker compose up` aplica a migration sem passo manual; o ciclo
+`upgrade → downgrade → upgrade` e a comparação ORM × schema (autogenerate, zero
+diferenças) foram verificados.
+
+---
+
 ## P12 — Ordem das sprints alterada · `REGISTRO`
 
 `08-roadmap-e-convencoes.md` §1 antecipa o banco de dados (Sprint 5 do texto) porque a Sprint 2 já precisa persistir. Registrar a alteração no capítulo de metodologia, com a justificativa — mudança de plano justificada é normal em processo iterativo e demonstra maturidade; mudança silenciosa parece descuido.
@@ -1165,6 +1388,7 @@ neste momento.
 
 | Data | Item | Decisão | Justificativa |
 | --- | --- | --- | --- |
+| 2026-09-29 | **P20** — confirmação da emergência e criticidade | **Emergência é estado declarado:** preempção exige tag reconhecida **e** ocorrência ativa, aberta pela central de despacho (simulada). **Relevância é criticidade da ocorrência** (1 `RISCO_VIDA`, 2 `RISCO_COLETIVO`, 3 `URGENCIA`), aplicada como **regra acima do modelo**: o ML de P19 decide só entre VEs de mesmo nível, e `tipo` sai dos atributos. No braço determinístico, a criticidade entra na frente da chave de E8 sem outra mudança. Detecção acústica da sirene recusada; chave do giroflex como trabalho futuro. | O CTB (art. 29, VII) já define emergência como estado de serviço, não como propriedade do veículo — declarar é mais simples, auditável e sem falso negativo estatístico do que inferir. Sob minimax em tempo o peso de `tipo` não carregaria relevância, então os critérios da equipe só chegam à decisão como norma. Nos cenários do experimento a criticidade segue o tipo, na mesma ordem de `prioridade_tipo`: nenhum número medido muda. Ver P20. |
 | 2026-08-24 | **P1** — meta de redução (20% vs 30%) | H1 reformulada e **condicionada à saturação**: *"redução ≥ 25% no tempo total de travessia do VE em cenários de saturação moderada a intensa"*. O cenário `leve` é analisado e discutido separadamente, sem meta numérica. | A Tabela 1 do próprio pré-projeto mostra 8,3% em fluxo leve — nenhuma meta única sobrevive aos quatro cenários. Condicionar à saturação é fisicamente coerente (com a via livre há pouco tempo perdido a recuperar) e mais defensável que uma meta única. |
 | 2026-08-24 | **P2** — latência (100 ms vs 200 ms) | **Duas métricas distintas, ambas instrumentadas e ambas mantidas no texto.** RNF01 = *latência de decisão* (< 100 ms): do estado recebido à emissão do comando, software puro, medida com `perf_counter()`. H3 = *latência fim-a-fim* (< 200 ms): de `t_deteccao` a `t_atuacao`, incluindo rede e atuação física. | Não são o mesmo número medindo a mesma coisa; o conflito era aparente. A tabela `metrica_latencia` já prevê os três carimbos (`t_deteccao`, `t_decisao`, `t_atuacao`), então a separação sai de graça. Reportar p95 e p99 de ambas, nunca só a média. |
 | 2026-09-10 | **P3 REVOGADA** — a banca espera ML | A decisão de 2026-08-24 (abaixo) **deixa de valer na parte que excluía aprendizado de máquina**. O orientador confirmou que a banca espera ML e indicou o ponto: decidir **qual VE é priorizado** quando há mais de uma emergência simultânea, hoje o desempate determinístico de E8. Abre **P19**. Continua valendo que o **restante** do motor é agente reativo determinístico — o ML entra em um ponto delimitado, não substitui o motor —, e que Q-learning para E7 segue como trabalho futuro. | A decisão P3 foi tomada em 2026-08-24 com a ressalva expressa de **"comunicar ao orientador — a expectativa do avaliador pesa aqui"**. Comunicada, a expectativa se revelou oposta à suposição. Registrar a revogação com data e motivo é o que separa mudança de escopo justificada de descuido (mesmo princípio de P12); apagar a decisão anterior esconderia que a equipe raciocinou antes de decidir, o que é justamente o que sustenta a defesa. |

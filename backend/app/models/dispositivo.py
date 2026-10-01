@@ -24,6 +24,7 @@ from app.models.base import Base
 from app.models.enums import STATUS_OPERACAO, StatusOperacao
 
 if TYPE_CHECKING:
+    from app.models.ocorrencia import Ocorrencia
     from app.models.semaforo import Semaforo
     from app.models.veiculo import VeiculoEmergencia
 
@@ -78,6 +79,11 @@ class Deteccao(Base):
     fk_veiculo: Mapped[int | None] = mapped_column(ForeignKey("veiculo_emergencia.id_veiculo"))
     uid_bruto: Mapped[str | None] = mapped_column(String(32))
     reconhecido: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    # P20: reconhecido E com ocorrência ativa. Uma tag reconhecida sem ocorrência
+    # é gravada com `autorizado = false` — é o registro da ambulância que tentou
+    # abrir o corredor sem estar em serviço.
+    autorizado: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    fk_ocorrencia: Mapped[int | None] = mapped_column(ForeignKey("ocorrencia.id_ocorrencia"))
     rssi: Mapped[int | None] = mapped_column(SmallInteger)
     # Contador monotônico do ESP8266, reiniciado no boot. Serve para descartar
     # duplicatas e detectar reordenação — não é relógio (context/01 §7).
@@ -88,6 +94,10 @@ class Deteccao(Base):
 
     dispositivo: Mapped[DispositivoIot | None] = relationship()
     veiculo: Mapped[VeiculoEmergencia | None] = relationship()
+    ocorrencia: Mapped[Ocorrencia | None] = relationship()
 
     def __repr__(self) -> str:
-        return f"<Deteccao {self.uid_bruto} reconhecido={self.reconhecido}>"
+        return (
+            f"<Deteccao {self.uid_bruto} reconhecido={self.reconhecido} "
+            f"autorizado={self.autorizado}>"
+        )

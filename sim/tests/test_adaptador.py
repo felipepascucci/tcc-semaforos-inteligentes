@@ -53,8 +53,13 @@ def _comando(area: Path) -> list[str]:
     ]
 
 
-def _rodar(controlar: bool, area: Path):  # tipos vêm de módulos sob demanda
-    """Roda os 60 s e devolve (adaptador, transições, comandos, estados, verificador)."""
+def _rodar(controlar: bool, area: Path, ao_iniciar=None):  # tipos vêm de módulos sob demanda
+    """Roda os 60 s e devolve (adaptador, transições, comandos, estados, verificador).
+
+    `ao_iniciar`, se dado, recebe o adaptador logo depois de o SUMO subir — é
+    por onde um teste acrescenta veículos via TraCI sem alterar o cenário
+    compartilhado.
+    """
     from adapters.configuracao import carregar
     from adapters.sumo import topologia as topologia_sumo
     from adapters.sumo.adaptador import AdaptadorSumo
@@ -76,6 +81,8 @@ def _rodar(controlar: bool, area: Path):  # tipos vêm de módulos sob demanda
 
     adaptador.iniciar(_comando(area))
     try:
+        if ao_iniciar is not None:
+            ao_iniciar(adaptador)
         while adaptador.cliente.tempo() < DURACAO_S:
             t = adaptador.passo()
             estado = adaptador.ler_estado(t)
@@ -124,8 +131,32 @@ def test_ve_e_detectado_pela_classe_e_nao_pelo_nome(tmp_path: Path) -> None:
 
     veiculo = com_ve[0].veiculos_emergencia[0]
     assert veiculo.tipo.value == "AMBULANCIA"
+    assert veiculo.criticidade == 1  # o <param> de teste_60s.rou.xml (P20)
     assert veiculo.rota[0] == "A1_L0"
     assert veiculo.posicao_na_via_m >= 0.0
+
+
+def test_ve_sem_ocorrencia_nao_chega_ao_motor(tmp_path: Path) -> None:
+    """P20 — ser VE não é estar em serviço.
+
+    Uma segunda ambulância entra na mesma rota, mas **sem** o parâmetro
+    `criticidade`: é a ambulância voltando para a base. Ela tem `vClass`
+    emergência e mesmo assim nunca aparece em `veiculos_emergencia` — trafega
+    como veículo comum, e fica um aviso na execução.
+    """
+    sem_ocorrencia = "teste_ve_sem_ocorrencia"
+
+    def acrescentar(adaptador) -> None:  # tipo vem de módulo importado sob demanda
+        adaptador.cliente.veiculo.add(
+            sem_ocorrencia, "TESTE_ARTERIAL", typeID="ambulancia", depart="now"
+        )
+
+    adaptador, _, _, estados, _ = _rodar(controlar=True, area=tmp_path, ao_iniciar=acrescentar)
+
+    vistos = {veiculo.id for estado in estados for veiculo in estado.veiculos_emergencia}
+    assert "teste_ve_0" in vistos, "o VE em serviço precisa continuar sendo visto"
+    assert sem_ocorrencia not in vistos
+    assert any(sem_ocorrencia in aviso for aviso in adaptador.avisos)
 
 
 def test_ve_nunca_anda_para_tras_ao_atravessar_um_cruzamento(tmp_path: Path) -> None:

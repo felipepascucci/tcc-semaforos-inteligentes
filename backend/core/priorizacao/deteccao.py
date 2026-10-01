@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from core.malha import Movimento, TopologiaMalha
-from core.modelos import EstadoSemaforo, TipoVeiculo, VeiculoEmergencia
+from core.modelos import Criticidade, EstadoSemaforo, TipoVeiculo, VeiculoEmergencia
 from core.parametros import Parametros
 
 
@@ -21,7 +21,8 @@ class DeteccaoVE:
 
     Attributes:
         id_veiculo: Veículo detectado.
-        tipo: Tipo do veículo, usado no desempate de E8.
+        tipo: Tipo do veículo — segundo critério do desempate de E8.
+        criticidade: Criticidade da ocorrência — primeiro critério de E8 (P20).
         id_semaforo: Cruzamento que ele vai atravessar.
         distancia_m: Distância **ao longo da rota** até a linha de retenção.
         eta_s: Tempo estimado de chegada, em segundos.
@@ -30,6 +31,7 @@ class DeteccaoVE:
 
     id_veiculo: str
     tipo: TipoVeiculo
+    criticidade: Criticidade
     id_semaforo: str
     distancia_m: float
     eta_s: float
@@ -126,6 +128,7 @@ def detectar(
             DeteccaoVE(
                 id_veiculo=veiculo.id,
                 tipo=veiculo.tipo,
+                criticidade=veiculo.criticidade,
                 id_semaforo=id_semaforo,
                 distancia_m=distancia_m,
                 eta_s=calcular_eta_s(

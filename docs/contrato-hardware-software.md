@@ -64,6 +64,8 @@ Quem traduz comando abstrato em ação concreta é um adaptador: `adapters/sumo/
  │                                              │
  │   [API FastAPI]        ◀── t_deteccao        │
  │    resolve UID → veículo, valida token       │
+ │    ocorrência ativa? (P20) — sem ela, para   │
+ │    aqui: "SEM OCORRENCIA", sem preempção     │
  │         │                                    │
  │         ▼                                    │
  │   [MotorDecisao.avaliar()]  ◀── t_decisao    │
@@ -377,15 +379,36 @@ t=0        t=2        t=4  t=5                              t=12
 // Resposta
 {
   "reconhecido": true,
+  "autorizado": true,                 // P20: reconhecido E com ocorrência ativa
   "id_veiculo": 3,
   "tipo": "AMBULANCIA",
+  "criticidade": 1,                   // da ocorrência: 1 RISCO_VIDA, 2 RISCO_COLETIVO, 3 URGENCIA
   "acao": "PREEMPCAO_SOLICITADA",
   "id_log": 1187,
   "mensagem_lcd": "AMBULANCIA\nPRIORIDADE ATIVA"
 }
+
+// Resposta — tag reconhecida, veículo SEM ocorrência aberta (P20)
+{
+  "reconhecido": true,
+  "autorizado": false,
+  "id_veiculo": 3,
+  "tipo": "AMBULANCIA",
+  "criticidade": null,
+  "acao": "SEM_OCORRENCIA",
+  "id_log": null,
+  "mensagem_lcd": "SEM OCORRENCIA\nSEM PRIORIDADE"
+}
 ```
 
 Header obrigatório: `X-Device-Token`, validado contra `dispositivo_iot.token_hash`. UID ausente de `tag_rfid` ou com `ativo = false` → **HTTP 403** e registro da tentativa em `deteccao`.
+
+**Emergência é estado declarado, não propriedade da tag (P20, 2026-09-29).** A
+tag prova *quem* é o veículo; a **ocorrência ativa**, aberta pela central de
+despacho (simulada pelo painel "Central" do dashboard), prova que ele *está em
+serviço* — a mesma exigência do CTB, art. 29, VII. Tag reconhecida sem ocorrência
+recebe **HTTP 200** com `acao = "SEM_OCORRENCIA"`: a credencial é válida, só não há
+atendimento. Nada muda no firmware — ele continua imprimindo `mensagem_lcd`.
 
 **O firmware não decide o texto do LCD** — imprime o que vier em `mensagem_lcd`. Mantém a regra do §2 e permite mudar mensagens sem regravar o ESP.
 
@@ -400,6 +423,7 @@ Bombeiro:     "BOMBEIROS       "  /  "PRIORIDADE ATIVA"
 Polícia:      "POLICIA         "  /  "PRIORIDADE ATIVA"
 Liberado:     "VIA LIBERADA    "  /  "CICLO NORMAL    "
 Não autoriz.: "TAG DESCONHECIDA"  /  "ACESSO NEGADO   "
+Sem serviço:  "SEM OCORRENCIA  "  /  "SEM PRIORIDADE  "
 Sem rede:     "SEM CONEXAO     "  /  "MODO LOCAL      "
 ```
 
@@ -502,7 +526,8 @@ Sete pendências resolvidas em 2026-08-24, registradas com justificativa em `con
 | --- | --- |
 | **P1** meta de redução | H1 passa a ser **≥ 25% em saturação moderada e intensa**. Cenário leve medido e discutido, sem meta — a Tabela 1 do pré-projeto já mostrava 8,3% ali |
 | **P2** latência | Duas métricas distintas, ambas mantidas — §10 |
-| **P3** o que é a "IA" | **Agente reativo com otimização determinística baseada em conhecimento** (Russell & Norvig, já na bibliografia). ML como trabalho futuro explícito. **Falta comunicar ao orientador** |
+| ~~**P3** o que é a "IA"~~ | ~~Agente reativo determinístico; ML como trabalho futuro~~ — **revogada em 2026-09-10**: o orientador confirmou que a banca espera ML, que entra para escolher entre VEs em conflito (P19, Bloco 10). O restante do motor continua agente reativo determinístico |
+| **P20** emergência de fato | **Preempção exige tag reconhecida E ocorrência ativa**, aberta pela central de despacho (simulada). Tag sem ocorrência → HTTP 200, `SEM_OCORRENCIA`, LCD `SEM OCORRENCIA` — §8. A criticidade da ocorrência (1..3) decide entre VEs antes do tipo. Decidida em 2026-09-29 |
 | **P5** volume de dados | Banco grava só **transições de fase**, e só de execuções exemplares. 173 M de linhas → centenas de milhares |
 | **P7** o radar inexistente | Declarar no texto que o **RFID emula** radar + V2I; fusão de sensores validada só em simulação. Sem sensor adicional |
 | **P10** resistores nos LEDs | **Módulos já têm resistores integrados.** Pior caso ~80 mA para 4 LEDs. Sem restrição elétrica — §12 |
@@ -530,6 +555,7 @@ Detalhado em [`docs/plano-desenvolvimento.md`](plano-desenvolvimento.md).
 | 7 | Dashboard React | ~2 semanas |
 | 8 | Lote completo — 600 execuções | ~1 semana + máquina |
 | 9 | Análise estatística, tabelas, figuras, diagramas | ~2 semanas |
+| 10 | **Priorização aprendida entre VEs** (P19) — executado **antes** do Bloco 8 | ~2 a 3 semanas |
 
 O Bloco 4 está deslocado de propósito: o maior risco do projeto é descobrir na última semana que os resultados reais não sustentam as hipóteses. Rodar 5 seeds cedo custa três dias e elimina esse risco.
 
@@ -550,7 +576,8 @@ Fechados na rodada de 2026-08-24: pinagem confirmada, P10 resolvida, e o conjunt
 | 5 | ~~Ponto final de medição do RF02~~ | Equipe | ✅ **fechado 25/08** — P14: mede até o **início da atuação**; perfil de tempos inalterado |
 | 6 | Divisão: quem reescreve o firmware do UNO, quem faz o NodeMCU | Equipe | pendente |
 | 7 | **UIDs reais das tags**, para os seeds | Hardware | assim que o RC522 ler |
-| 8 | Decisão **P3** comunicada ao Prof. Marco Gomes | Equipe | pendente |
+| 8 | ~~Decisão **P3** comunicada ao Prof. Marco Gomes~~ | Equipe | ✅ **comunicada** — e revogada em 10/09 (P19) |
+| 9 | Mudança no desenho de P19 por P20 (criticidade como regra, `tipo` fora do modelo) comunicada ao orientador | Equipe | pendente |
 
 ---
 

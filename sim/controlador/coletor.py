@@ -97,8 +97,8 @@ class EpisodioConflito:
     Os atributos dos VEs são os da **abertura** do episódio: é o instante em que
     a escolha se apresenta pela primeira vez, e portanto o instante que a
     rotulagem por bifurcação (10.4) vai usar. As tuplas seguem a ordem dos ids,
-    então a i-ésima posição de `tipos`, `etas_s` e `fases_desejadas` descreve o
-    i-ésimo id.
+    então a i-ésima posição de `tipos`, `criticidades`, `etas_s` e
+    `fases_desejadas` descreve o i-ésimo id.
 
     Attributes:
         id_semaforo: Cruzamento disputado.
@@ -107,6 +107,7 @@ class EpisodioConflito:
         passos: Quantos passos o episódio durou.
         ids_veiculos: Ids dos VEs em disputa, ordenados.
         tipos: Tipo de cada VE.
+        criticidades: Criticidade da ocorrência de cada VE (P20).
         etas_s: ETA de cada VE ao cruzamento, na abertura.
         fases_desejadas: Fase que cada VE demanda.
         decidivel: Se, na abertura, não havia preempção em curso — ou seja, se a
@@ -123,6 +124,7 @@ class EpisodioConflito:
     passos: int
     ids_veiculos: tuple[str, ...]
     tipos: tuple[str, ...]
+    criticidades: tuple[int, ...]
     etas_s: tuple[float, ...]
     fases_desejadas: tuple[int, ...]
     decidivel: bool
@@ -133,6 +135,16 @@ class EpisodioConflito:
     def n_ves(self) -> int:
         """Quantos VEs disputaram o cruzamento."""
         return len(self.ids_veiculos)
+
+    @property
+    def mesmo_nivel(self) -> bool:
+        """Se todos os VEs da disputa têm a mesma criticidade (P20).
+
+        Só essas disputas são decididas pelo modelo de P19: entre níveis
+        diferentes, a regra de criticidade decide nos dois braços. É por esta
+        propriedade que a análise de H4 se estratifica (`context/07` §3.3.1).
+        """
+        return len(set(self.criticidades)) <= 1
 
     @property
     def duracao_s(self) -> float:
@@ -264,6 +276,7 @@ class _EpisodioAberto:
             passos=self.passos,
             ids_veiculos=tuple(disputa.deteccao.id_veiculo for disputa in ordenadas),
             tipos=tuple(str(disputa.deteccao.tipo) for disputa in ordenadas),
+            criticidades=tuple(int(disputa.deteccao.criticidade) for disputa in ordenadas),
             etas_s=tuple(disputa.deteccao.eta_s for disputa in ordenadas),
             fases_desejadas=tuple(disputa.fase_desejada for disputa in ordenadas),
             decidivel=self.abertura.decidivel,
@@ -491,9 +504,49 @@ def _ler_tripinfo(
 # ---------------------------------------------------------------------------
 
 
+class CabecalhoDivergenteError(ValueError):
+    """Um CSV existente tem cabeçalho diferente das linhas que se quer acrescentar."""
+
+
+def cabecalho_do_csv(caminho: Path) -> list[str] | None:
+    """Colunas da primeira linha de um CSV, ou `None` se o arquivo não existir."""
+    if not caminho.is_file():
+        return None
+    with caminho.open(encoding="utf-8", newline="") as arquivo:
+        return next(csv.reader(arquivo), [])
+
+
+def exigir_mesmo_cabecalho(destino: Path, cabecalho: Sequence[str]) -> None:
+    """Recusa acrescentar linhas a um CSV cujo cabeçalho é outro.
+
+    Sem esta guarda, linhas com colunas a mais entram num arquivo antigo em
+    silêncio, cada valor debaixo da coluna errada — e o consumidor lê números
+    plausíveis do lugar errado. É o risco que P19 registrou quando
+    `execucoes.csv` ganhou três colunas, e que a P20 repetiria em
+    `conflitos_por_execucao.csv`.
+
+    Raises:
+        CabecalhoDivergenteError: se o arquivo existe e o cabeçalho difere.
+    """
+    existente = cabecalho_do_csv(destino)
+    if existente is not None and existente != list(cabecalho):
+        faltam = [coluna for coluna in cabecalho if coluna not in existente]
+        sobram = [coluna for coluna in existente if coluna not in cabecalho]
+        raise CabecalhoDivergenteError(
+            f"{destino}: o cabeçalho existente difere do novo "
+            f"(novas: {faltam or '-'}; só no existente: {sobram or '-'}). "
+            "Grave numa pasta nova (--saida) em vez de misturar os formatos."
+        )
+
+
 def _anexar(destino: Path, cabecalho: Sequence[str], linhas: Sequence[Sequence[object]]) -> None:
-    """Acrescenta linhas a um CSV, criando o cabeçalho se o arquivo for novo."""
+    """Acrescenta linhas a um CSV, criando o cabeçalho se o arquivo for novo.
+
+    Raises:
+        CabecalhoDivergenteError: se o arquivo existe com outro cabeçalho.
+    """
     destino.parent.mkdir(parents=True, exist_ok=True)
+    exigir_mesmo_cabecalho(destino, cabecalho)
     novo = not destino.is_file()
     with destino.open("a", encoding="utf-8", newline="") as arquivo:
         escritor = csv.writer(arquivo)
@@ -633,8 +686,10 @@ def gravar_csv(
             "n_ves",
             "ids_veiculos",
             "tipos",
+            "criticidades",
             "etas_s",
             "fases_desejadas",
+            "mesmo_nivel",
             "decidivel",
             "decidivel_em_algum_passo",
             "preempcao_em_curso",
@@ -650,8 +705,10 @@ def gravar_csv(
                 episodio.n_ves,
                 "|".join(episodio.ids_veiculos),
                 "|".join(episodio.tipos),
+                "|".join(str(nivel) for nivel in episodio.criticidades),
                 "|".join(f"{eta:.1f}" for eta in episodio.etas_s),
                 "|".join(str(fase) for fase in episodio.fases_desejadas),
+                int(episodio.mesmo_nivel),
                 int(episodio.decidivel),
                 int(episodio.decidivel_em_algum_passo),
                 episodio.preempcao_em_curso or "",

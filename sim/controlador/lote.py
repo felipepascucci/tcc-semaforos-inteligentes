@@ -80,6 +80,8 @@ from sim.controlador.coletor import (
     ARQUIVO_TRANSVERSAL,
     ARQUIVO_VE,
     DADOS,
+    cabecalho_do_csv,
+    exigir_mesmo_cabecalho,
 )
 from sim.demanda import gerar_rotas
 from sim.validacao.execucao import validar_execucao
@@ -394,6 +396,21 @@ def remover_dos_csv(destino: Path, pontos: Iterable[Ponto]) -> dict[str, int]:
     return removidas
 
 
+def _verificar_cabecalhos(pastas: Sequence[Path], destino: Path) -> None:
+    """Confere, antes de escrever, que todo CSV parcial casa com o do destino.
+
+    Cada parcial é comparado com o arquivo já existente em `destino` e com o
+    primeiro parcial do mesmo nome — o que cobre tanto o destino antigo quanto
+    execuções de versões diferentes do código misturadas na mesma matriz.
+    """
+    for nome in ARQUIVOS_CSV:
+        parciais = [pasta / nome for pasta in pastas if (pasta / nome).is_file()]
+        for parcial in parciais:
+            cabecalho = cabecalho_do_csv(parcial) or []
+            exigir_mesmo_cabecalho(destino / nome, cabecalho)
+            exigir_mesmo_cabecalho(parciais[0], cabecalho)
+
+
 def consolidar(pastas: Sequence[Path], destino: Path) -> dict[str, int]:
     """Junta os CSV parciais das execuções válidas num só conjunto.
 
@@ -403,8 +420,15 @@ def consolidar(pastas: Sequence[Path], destino: Path) -> dict[str, int]:
 
     Returns:
         Quantas linhas de dados cada arquivo recebeu.
+
+    Raises:
+        CabecalhoDivergenteError: se um CSV de `destino` já existe com outro
+            cabeçalho, ou se as execuções trazem cabeçalhos diferentes entre si.
+            A checagem roda para **todos** os arquivos antes de qualquer escrita,
+            para que a falha não deixe a consolidação pela metade.
     """
     destino.mkdir(parents=True, exist_ok=True)
+    _verificar_cabecalhos(pastas, destino)
     contagem: dict[str, int] = {}
 
     for nome in ARQUIVOS_CSV:

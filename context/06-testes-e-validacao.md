@@ -34,6 +34,9 @@ Cada RF/RNF vira pelo menos um teste automatizado. Esta tabela é a rastreabilid
 | RNF04 | POST sem `X-Device-Token` válido → 401; UID não cadastrado → 403 | Códigos corretos | `test_seguranca.py` |
 | RNF05 | Taxa de reconhecimento de tag ≥ 95% em 100 leituras | Medição manual em bancada | Checklist HW |
 | RNF07 | `core/` não importa framework nem I/O | Teste de arquitetura via AST | `test_arquitetura.py` |
+| RF01 (P20) | Tag reconhecida **sem** ocorrência ativa não é autorizada; com ocorrência, é, e carrega a criticidade | Os quatro desfechos de `autorizar()`: tag desconhecida, veículo inativo, sem ocorrência, autorizado | `test_autorizacao.py` |
+| RF01 (P20) | Na simulação, VE sem o parâmetro `criticidade` não chega ao motor | Veículo de `vClass` emergência inserido sem o parâmetro fica fora de `veiculos_emergencia` | `sim/tests/test_adaptador.py` (marca `sumo`) |
+| E8 (P20) | Criticidade vence tipo; no mesmo nível, a ordem antiga (tipo → ETA → em curso) é preservada | Bombeiro nível 1 vence ambulância nível 2; com criticidade espelhando o tipo, a decisão é idêntica à da chave anterior (Hypothesis) | `test_conflito.py` |
 
 `test_arquitetura.py` é barato e evita a erosão da regra principal do §1 de `01-arquitetura-sistema.md`. Vale a pena.
 
@@ -150,8 +153,9 @@ Executar e registrar antes da apresentação. Marcar data, executor e resultado.
 | 1 | Ciclo fixo alterna corretamente as **4 fases** (ciclo de 24 s, decisão P13) por 5 min sem travar | ☐ |
 | 2 | Nenhuma combinação com verdes conflitantes em 5 min de observação — sob *split phasing* I1 é `contar_verdes() <= 1` | ☐ |
 | 3 | Toda transição verde→vermelho passa por amarelo | ☐ |
-| 4 | Tag da ambulância reconhecida em 100 aproximações (≥ 95 sucessos) | ☐ |
+| 4 | Tag da ambulância reconhecida em 100 aproximações (≥ 95 sucessos) — **com ocorrência aberta**, para que cada leitura também exercite a preempção | ☐ |
 | 5 | Tag não cadastrada gera negação e não preempta | ☐ |
+| 5b | **P20** — tag cadastrada **sem ocorrência aberta** → LCD `SEM OCORRENCIA`, nenhuma preempção, tentativa gravada em `deteccao` com `autorizado = false` | ☐ |
 | 6 | LCD atualiza em < 1 s após a leitura | ☐ |
 | 7 | Preempção ocorre em < 3 s da leitura da tag | ☐ |
 | 7b | **H3** — `latencia_total_ms` < 200 ms em **5 repetições**, com mín/mediana/máx registrados | ☐ |
@@ -177,5 +181,5 @@ Item 12 é o que pega: sketches com `String` travam depois de ~20 min. Rodar ess
 ## 7. Estratégia de dados de teste
 
 - **Fixtures determinísticas** para testes unitários — `EstadoMalha` construído à mão, sem SUMO.
-- **Cenário curto** (`sim/config/teste_60s.sumocfg`) para testes de integração: 60 s, 1 VE, 2 cruzamentos. Roda em segundos.
+- **Cenário curto** (`sim/config/teste_60s.sumocfg`) para testes de integração: 60 s, 1 VE, 2 cruzamentos. Roda em segundos. O VE de `teste_60s.rou.xml` é escrito à mão e por isso traz o `<param key="criticidade">` explicitamente (P20) — sem ele o adaptador o trataria como fora de serviço.
 - **Banco de teste** efêmero via `testcontainers` ou schema separado, nunca o banco de desenvolvimento.

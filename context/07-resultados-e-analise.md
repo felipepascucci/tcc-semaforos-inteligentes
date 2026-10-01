@@ -80,6 +80,21 @@ Para cada comparação, os quatro juntos:
 
 Uma redução de 2 s pode ser estatisticamente significativa e operacionalmente irrelevante. Reportar só o p-valor esconde exatamente isso, e é o tipo de coisa que um arguidor atento questiona.
 
+### 3.3.1 H4 é estratificada por nível de criticidade (P20)
+
+Os braços `PREEMPCAO` e `PREEMPCAO_ML` só podem decidir diferente quando os VEs
+em disputa têm a **mesma** criticidade — entre níveis diferentes, a regra de
+criticidade decide nos dois braços, igual. Comparar H4 sobre todas as disputas
+diluiria o efeito do modelo com casos em que ele não atuou, pelo mesmo mecanismo
+que P17 suspeita na métrica de H2.
+
+A análise de H4 reporta, portanto: (1) quantas disputas houve e **quantas eram de
+mesmo nível** (coluna `mesmo_nivel` de `conflitos_por_execucao.csv`), que é o n
+de escolhas em que o modelo de fato atuou; (2) o teste pareado sobre o tempo do VE
+mais prejudicado, com a unidade de análise do §3.1. Declarar o denominador é o que
+impede a pergunta "quantas vezes o modelo decidiu alguma coisa?" de ficar sem
+resposta na arguição.
+
 ### 3.4 Correção para múltiplas comparações
 
 São 4 cenários × várias métricas. Aplicar **Holm-Bonferroni** e reportar p bruto e p ajustado. Mencionar a correção no texto — mostra rigor metodológico.
@@ -128,8 +143,13 @@ Todos devem ser zero. Se não forem, isso é o achado mais importante do trabalh
 | H2 | Mitigação **≥ 15%** do impacto (decisão de 2026-08-31; denominador a declarar — ver P17) | — | — |
 | H3 | Latência **fim-a-fim** < 200 ms, sobre o **máximo** de 5 repetições de bancada (n declarado) | — | — |
 | RNF01 | Latência de **decisão** < 100 ms (p95) | — | — |
+| H4 | `PREEMPCAO_ML` reduz o tempo do VE mais prejudicado em relação a `PREEMPCAO`, nos cenários com múltiplos VEs — **direcional, sem meta percentual** (P19); n de disputas de mesmo nível declarado (P20, §3.3.1) | — | FAVORÁVEL / NULO |
 
-As duas últimas linhas são métricas distintas — ver decisão P2. Reportar as duas separadamente, com p95 **e** p99.
+A linha de H4 faltava nesta tabela desde que a hipótese foi formulada (P19,
+2026-09-10); acrescentada em 2026-09-29. "NULO" é veredito legítimo — P19 o
+declarou antes de qualquer treino.
+
+As linhas de H3 e RNF01 são métricas distintas — ver decisão P2. Reportar as duas separadamente, com p95 **e** p99.
 
 "PARCIAL" é um veredito legítimo e provavelmente o mais realista: H1 pode se confirmar em fluxo intenso e não em fluxo leve — o que faz todo sentido físico, já que com a via livre há pouco tempo a economizar. Essa discussão é justamente o que dá substância ao capítulo.
 
@@ -158,6 +178,7 @@ F6 é a que prova visualmente que as transições foram seguras — amarelo e al
 4. **Latência (H3)** — T2, F2, comparação simulação vs. hardware.
 5. **Impacto transversal (H2)** — T3, F4.
 6. **Segurança** — T5, F6.
+6b. **Priorização entre VEs (H4)** — disputas por nível de criticidade, escolhas de fato decididas pelo modelo, e a comparação `PREEMPCAO_ML` × `PREEMPCAO` (§3.3.1).
 7. **Validação no protótipo físico** — checklist, comparação qualitativa com a simulação.
 8. **Discussão** — por que os resultados são o que são; limitações; ameaças à validade.
 9. **Síntese das hipóteses** — T6.
@@ -168,7 +189,7 @@ Antecipar isto na discussão desarma boa parte das perguntas da banca:
 
 - **Validade interna:** parâmetros do modelo de car-following (Krauss) não calibrados com dados reais de São Paulo; `speedFactor` do VE é uma escolha de modelagem que influencia diretamente o ganho medido.
 - **Validade externa:** malha sintética, não uma região real; resultados não são transferíveis diretamente para um corredor específico da cidade.
-- **Validade de construção:** o RFID do protótipo substitui radar + V2I reais; a latência medida em bancada com Wi-Fi local não representa uma rede urbana com interferência e múltiplos saltos.
+- **Validade de construção:** o RFID do protótipo substitui radar + V2I reais; a latência medida em bancada com Wi-Fi local não representa uma rede urbana com interferência e múltiplos saltos. **E a criticidade dos VEs na simulação é atribuída pelo cenário, seguindo o tipo** (P20), e não por ocorrências reais com a distribuição de gravidade de uma central de despacho; e a própria central é simulada.
 - **Validade de conclusão:** n = 50 por célula é adequado para efeitos médios a grandes, mas pode não detectar efeitos pequenos; a correção para múltiplas comparações reduz o poder.
 - **Comportamento humano:** o SUMO não modela motoristas cedendo passagem ao ouvir a sirene — comportamento que, no mundo real, já produz parte do ganho atribuído aqui ao sistema. Isso **superestima** o benefício marginal da preempção e precisa ser dito.
 

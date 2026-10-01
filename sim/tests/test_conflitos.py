@@ -12,12 +12,15 @@ from __future__ import annotations
 import csv
 from pathlib import Path
 
-from core.modelos import TipoVeiculo
+import pytest
+
+from core.modelos import Criticidade, TipoVeiculo
 from core.priorizacao.conflito import Disputa, EventoConflito
 from core.priorizacao.deteccao import DeteccaoVE
 from sim.controlador.coletor import (
     ARQUIVO_CONFLITOS,
     ARQUIVO_EXECUCOES,
+    CabecalhoDivergenteError,
     ColetorMetricas,
     gravar_csv,
 )
@@ -30,12 +33,14 @@ def _disputa(
     tipo: TipoVeiculo = TipoVeiculo.AMBULANCIA,
     fase: int = 1,
     eta_s: float = 12.0,
+    criticidade: Criticidade = Criticidade.RISCO_VIDA,
 ) -> Disputa:
     """Um pedido de preempção artificial, com valores redondos."""
     return Disputa(
         deteccao=DeteccaoVE(
             id_veiculo=id_veiculo,
             tipo=tipo,
+            criticidade=criticidade,
             id_semaforo="CRUZ_TESTE_1",
             distancia_m=120.0,
             eta_s=eta_s,
@@ -175,6 +180,38 @@ def test_atributos_sao_os_da_abertura_e_nao_os_do_ultimo_passo() -> None:
     assert episodio.fases_desejadas == (1, 2)
 
 
+def _episodio_entre(critica_a: Criticidade, critica_b: Criticidade) -> object:
+    coletor = _coletor()
+    coletor.registrar_conflitos(
+        [
+            EventoConflito(
+                t=3.0,
+                id_semaforo="CRUZ_TESTE_1",
+                disputas=(
+                    _disputa("BMB", TipoVeiculo.BOMBEIRO, fase=2, criticidade=critica_b),
+                    _disputa("AMB", TipoVeiculo.AMBULANCIA, fase=1, criticidade=critica_a),
+                ),
+            )
+        ]
+    )
+    return _consolidar(coletor)[0]
+
+
+def test_episodio_guarda_a_criticidade_de_cada_ve() -> None:
+    """P20 — na ordem dos ids, como as demais tuplas."""
+    episodio = _episodio_entre(Criticidade.RISCO_VIDA, Criticidade.URGENCIA)
+
+    assert episodio.criticidades == (1, 3)  # type: ignore[attr-defined]
+    assert not episodio.mesmo_nivel  # type: ignore[attr-defined]
+
+
+def test_disputa_de_mesmo_nivel_e_a_que_o_modelo_decide() -> None:
+    """Entre níveis diferentes a regra decide; no mesmo nível, o modelo de P19."""
+    episodio = _episodio_entre(Criticidade.RISCO_COLETIVO, Criticidade.RISCO_COLETIVO)
+
+    assert episodio.mesmo_nivel  # type: ignore[attr-defined]
+
+
 def test_episodio_suspenso_que_se_liberta_fica_marcado() -> None:
     """Nasceu sob preempção alheia e virou escolha em aberto no passo seguinte."""
     coletor = _coletor()
@@ -234,8 +271,33 @@ def test_csv_de_conflitos_traz_uma_linha_por_episodio(tmp_path: Path) -> None:
     assert primeira["cenario"] == "teste"
     assert primeira["ids_veiculos"] == "AMB|BMB"
     assert primeira["fases_desejadas"] == "1|2"
+    assert primeira["criticidades"] == "1|1"
+    assert primeira["mesmo_nivel"] == "1"
     assert primeira["decidivel"] == "1"
     assert primeira["preempcao_em_curso"] == ""
+
+
+def test_csv_existente_com_outro_cabecalho_e_recusado(tmp_path: Path) -> None:
+    """Colunas novas não entram em arquivo antigo — nem em silêncio, nem pela metade.
+
+    É o formato de `analysis/data/bloco10_conflitos/`, anterior à P20: sem a
+    guarda, cada valor novo cairia debaixo da coluna errada.
+    """
+    antigo = tmp_path / ARQUIVO_CONFLITOS
+    antigo.write_text(
+        "id_execucao,cenario,modo,seed,t_inicio_s,t_fim_s,duracao_s,passos,id_semaforo,"
+        "n_ves,ids_veiculos,tipos,etas_s,fases_desejadas,decidivel,"
+        "decidivel_em_algum_passo,preempcao_em_curso\n",
+        encoding="utf-8",
+    )
+    coletor = _coletor()
+    coletor.registrar_conflitos([_evento(t=1.0)])
+    resultado = coletor.consolidar(
+        tripinfo=Path("nao_existe.xml"), duracao_s=60.0, veiculos_planejados=0
+    )
+
+    with pytest.raises(CabecalhoDivergenteError, match="criticidades"):
+        gravar_csv(resultado, diretorio=tmp_path)
 
 
 def test_execucoes_csv_ganha_as_tres_colunas_da_contagem(tmp_path: Path) -> None:

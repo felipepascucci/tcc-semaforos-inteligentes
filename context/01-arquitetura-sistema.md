@@ -44,7 +44,8 @@ SUMO (passo t)
   ▼
 AdaptadorSUMO coleta EstadoMalha
   │  - posição/velocidade de todos os veículos
-  │  - VEs ativos e suas rotas
+  │  - VEs ativos e suas rotas — só os EM SERVIÇO: vClass de emergência
+  │    E parâmetro `criticidade` na rota gerada (P20)
   │  - fase atual e tempo decorrido de cada TLS
   ▼
 MotorDecisao.avaliar(EstadoMalha) -> list[Comando]
@@ -68,6 +69,9 @@ NodeMCU lê UID -> POST /api/v1/deteccoes  (Wi-Fi)   [t_deteccao]
   ▼
 API resolve UID -> veiculo_emergencia (tabela tag_rfid)
   ▼
+API consulta ocorrência ativa do veículo (tabela ocorrencia) -> core.autorizacao.autorizar()
+  │  sem ocorrência: resposta "SEM_OCORRENCIA", deteccao.autorizado = false, SEM preempção
+  ▼  com ocorrência: o VE entra no EstadoMalha com a criticidade da ocorrência (P20)
 MotorDecisao.avaliar(...) -> Comando(PREEMPTAR, tls=CRUZ_01, fase=EIXO_A)  [t_decisao]
   ▼
 AdaptadorHardware -> serial USB -> "PRE,1,20\n"
@@ -96,10 +100,16 @@ Então: **NodeMCU → Wi-Fi → Backend → USB serial → Arduino UNO**. O note
 ### 5.1 Estruturas de entrada
 
 ```python
+class Criticidade(IntEnum):    # P20 — menor = mais crítico
+    RISCO_VIDA = 1
+    RISCO_COLETIVO = 2
+    URGENCIA = 3
+
 @dataclass(frozen=True)
 class VeiculoEmergencia:
     id: str
     tipo: TipoVeiculo          # AMBULANCIA | BOMBEIRO | POLICIA
+    criticidade: Criticidade   # da ocorrência ativa (P20) — obrigatório
     posicao: tuple[float, float]
     velocidade: float          # m/s
     rota: tuple[str, ...]      # ids de vias, em ordem
@@ -143,6 +153,21 @@ class EstadoMalha:
 > A topologia estática (fases, matriz de conflito, comprimento das vias) **não**
 > está nestas estruturas: ela vive em `core/malha.py` e é injetada no motor na
 > construção. Estado é o que muda a cada passo; topologia é configuração.
+
+> **`criticidade` — campo novo, P20 (2026-09-29).** Vem da ocorrência ativa do
+> VE, e é **obrigatório**: um valor padrão daria prioridade silenciosa a quem não
+> a declarou. Um VE só chega a `EstadoMalha` se estiver **em serviço**, e quem
+> garante isso é quem monta o estado, não o motor:
+>
+> - **hardware** — o serviço de `/deteccoes` chama `core/autorizacao.autorizar()`,
+>   função pura que exige tag reconhecida, veículo ativo **e** ocorrência aberta;
+> - **simulação** — o adaptador só entrega VE cuja rota gerada traz o parâmetro
+>   SUMO `criticidade`. O `vClass` diz *que* é VE; o parâmetro diz que *está em
+>   serviço*.
+>
+> A regra fica fora do motor porque depende de dado que o motor não tem (o
+> cadastro de ocorrências), e fica em `core/` porque precisa ser a mesma nos dois
+> modos e testável sem banco.
 
 ### 5.2 Etapas
 
@@ -210,11 +235,28 @@ onde `DEFICIT_TOTAL` é o tempo de verde que o acesso deixou de receber durante 
 
 **E8 — Conflito entre múltiplos VEs.** Cenário obrigatório de teste. Regra de desempate, em ordem:
 
+0. **Maior criticidade da ocorrência** — `RISCO_VIDA` (1) > `RISCO_COLETIVO` (2) > `URGENCIA` (3). Acrescentado por P20, em 2026-09-29.
 1. Maior prioridade por tipo — configurável, padrão: `AMBULANCIA > BOMBEIRO > POLICIA`.
 2. Menor ETA ao cruzamento.
 3. Preempção já em curso vence (evita oscilação/thrashing).
 
 Se dois VEs demandam fases conflitantes no mesmo TLS, **um espera**. Nunca conceder as duas. Registrar em `log_prioridade` com `status_execucao = 'CONFLITO_ADIADO'`.
+
+> **Criticidade — P20, 2026-09-29.** Os critérios de relevância por tipo
+> (ambulância: vida humana; bombeiro: coletividade e meio ambiente; polícia:
+> ordem pública) viraram uma escala **da ocorrência**, não do tipo, porque uma
+> ambulância com caso leve não pode passar na frente de um incêndio com vítima:
+>
+> | Nível | `Criticidade` | Ambulância | Bombeiro | Polícia |
+> | --- | --- | --- | --- | --- |
+> | 1 | `RISCO_VIDA` | Suporte avançado; risco iminente de morte ou instabilidade grave | Incêndio ou resgate com vítima | Ocorrência em andamento com risco à vida |
+> | 2 | `RISCO_COLETIVO` | Suporte básico, paciente estável | Sinistro que ameaça coletividade ou meio ambiente | Crime em andamento, perseguição |
+> | 3 | `URGENCIA` | Deslocamento sem paciente crítico | Apoio, prevenção | Preservação da ordem pública |
+>
+> No **braço determinístico** o item 0 só entra na frente da chave antiga, sem
+> mexer no resto. Nos cenários do experimento cada VE atende a ocorrência típica
+> do seu tipo (AMB → 1, BOMB → 2, POL → 3), na mesma ordem de `prioridade_tipo` —
+> então a decisão é a mesma de antes, e nenhum número medido muda.
 
 > **E8 é o ponto onde entra o aprendizado de máquina** (pendência **P19**, aberta
 > em 2026-09-10 por decisão do orientador). O desempate acima é lexicográfico e
@@ -227,8 +269,16 @@ Se dois VEs demandam fases conflitantes no mesmo TLS, **um espera**. Nunca conce
 > ```
 > score = w · (x_A − x_B)      escolhe A se score > 0, senão B
 >
-> x = (tipo, eta_s, velocidade_ms, fila_no_acesso, cruzamentos_restantes)
+> x = (eta_s, velocidade_ms, fila_no_acesso, cruzamentos_restantes)
 > ```
+>
+> **`tipo` saiu do vetor em 2026-09-29 (P20).** Sob o rótulo minimax em tempo, o
+> peso de `tipo` não carregaria relevância — o tempo não sabe que a ambulância
+> leva uma vida. A relevância virou **criticidade**, e no braço `PREEMPCAO_ML` a
+> ordem é: (1) criticidade, regra — o nível mais crítico vence, inclusive sobre
+> preempção em curso; (2) guarda de oscilação, regra — no mesmo nível, a
+> preempção em curso vence; (3) o modelo. A troca por criticidade não oscila:
+> A só toma de B se `crit(A) < crit(B)`, e B nunca toma de volta.
 >
 > **Comparação par a par sobre diferenças**, com torneio para três ou mais VEs. As
 > diferenças não são conveniência: elas garantem `score(B,A) = −score(A,B)` **por
@@ -298,6 +348,10 @@ velocidade_min_estimativa_ms: 4.0
 prioridade_tipo: [AMBULANCIA, BOMBEIRO, POLICIA]
 ```
 
+> `prioridade_tipo` passou a ser o **segundo** critério de E8 (P20): antes dele
+> vem a criticidade da ocorrência. A escala de criticidade é enum ordinal em
+> `core/modelos.py`, não parâmetro — não há número a calibrar, só precedência.
+
 > No protótipo físico os tempos são reduzidos para caber numa demonstração de bancada. Perfil separado em `parametros.hardware.yaml` (decisão de 2026-08-24, após P13):
 >
 > ```yaml
@@ -341,6 +395,9 @@ Base: `/api/v1`. Documentação automática em `/docs` (FastAPI).
 | `DELETE` | `/semaforos/{id}/preempcao` | Cancela preempção ativa |
 | `GET` | `/veiculos` | Cadastro de VEs |
 | `POST` | `/veiculos` | Cadastra VE + tag |
+| `POST` | `/ocorrencias` | Central abre ocorrência: `id_veiculo`, `criticidade` (1..3), `descricao` (P20) |
+| `POST` | `/ocorrencias/{id}/encerramento` | Central encerra a ocorrência; o VE deixa de ter prioridade |
+| `GET` | `/ocorrencias?ativas=true` | Ocorrências abertas — o painel "Central" do dashboard |
 | `GET` | `/logs/prioridade` | Logs paginados, com filtros |
 | `POST` | `/simulacoes` | Dispara execução de cenário |
 | `GET` | `/simulacoes/{id}` | Status e métricas da execução |
@@ -365,13 +422,35 @@ Base: `/api/v1`. Documentação automática em `/docs` (FastAPI).
 ```json
 {
   "reconhecido": true,
+  "autorizado": true,
   "id_veiculo": 3,
   "tipo": "AMBULANCIA",
+  "criticidade": 1,
   "acao": "PREEMPCAO_SOLICITADA",
   "id_log": 1187,
   "mensagem_lcd": "AMBULANCIA\nPRIORIDADE ATIVA"
 }
 ```
+
+**Tag reconhecida sem ocorrência ativa (P20)** — HTTP **200**, porque a
+credencial é válida e só falta o serviço. O **403** continua reservado à tag
+desconhecida ou inativa.
+
+```json
+{
+  "reconhecido": true,
+  "autorizado": false,
+  "id_veiculo": 3,
+  "tipo": "AMBULANCIA",
+  "criticidade": null,
+  "acao": "SEM_OCORRENCIA",
+  "id_log": null,
+  "mensagem_lcd": "SEM OCORRENCIA\nSEM PRIORIDADE"
+}
+```
+
+A decisão entre os dois casos é de `core/autorizacao.autorizar()`, pura, e a
+tentativa negada é gravada em `deteccao` com `autorizado = false`.
 
 `timestamp_dispositivo` é `millis()` do ESP8266 — sem sincronia com o relógio do servidor. Serve apenas para detectar reordenação e para calcular *deltas* dentro do dispositivo. **A latência oficial é medida com o relógio do servidor.** `sequencia` é um contador monotônico para descartar duplicatas (o RC522 lê a mesma tag várias vezes por segundo).
 
@@ -412,6 +491,7 @@ backend/
 │   │   ├── fases.py            # E4, E5
 │   │   ├── compensacao.py      # E7
 │   │   └── conflito.py         # E8
+│   ├── autorizacao.py          # P20: tag + ocorrência ativa -> em serviço?
 │   ├── seguranca.py            # invariantes I1..I5
 │   ├── modelos.py              # dataclasses de estado
 │   └── comandos.py             # tipos de comando abstratos

@@ -69,7 +69,7 @@ def sessao(fabrica_sessao: sessionmaker[Session], engine: Engine) -> Iterator[Se
     """
     tabelas = (
         "metrica_latencia, log_prioridade, metrica_simulacao, metrica_via_transversal, "
-        "estado_semaforo_amostra, deteccao, execucao_simulacao, dispositivo_iot, "
+        "estado_semaforo_amostra, deteccao, ocorrencia, execucao_simulacao, dispositivo_iot, "
         "tag_rfid, fase_semaforo, veiculo_emergencia, semaforo"
     )
     with engine.begin() as conexao:

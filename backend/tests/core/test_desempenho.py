@@ -26,6 +26,7 @@ from core.malha import TopologiaMalha
 from core.modelos import EstadoMalha, EstadoSemaforo, Sinal, TipoVeiculo, VeiculoEmergencia
 from core.priorizacao.motor import MotorDecisao
 from tests.core.conftest import (
+    CRITICIDADE_TIPICA,
     FASE_TRANSVERSAL,
     construir_parametros,
     construir_topologia,
@@ -141,6 +142,7 @@ def test_multiplos_ves_nao_estouram_o_orcamento() -> None:
             VeiculoEmergencia(
                 id=f"VE_{indice}",
                 tipo=tipos[indice % 3],
+                criticidade=CRITICIDADE_TIPICA[tipos[indice % 3]],
                 posicao=(0.0, 0.0),
                 velocidade=10.0,
                 rota=tuple(f"E{i}" for i in range(9)),

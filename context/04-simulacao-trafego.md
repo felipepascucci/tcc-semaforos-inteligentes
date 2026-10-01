@@ -134,7 +134,16 @@ Três detalhes da construção que valem registro:
 >
 > **Consequência operacional:** mexer em `tau`, `minGap`, `length`, `accel` ou `decel` obriga a rodar, nesta ordem, `python -m sim.calibracao.fluxo_saturacao`, `python -m sim.calibracao.cenarios` e `python -m sim.demanda.gerar_fluxos`. Sem isso o v/c passa a descrever uma malha que não é a que roda.
 
-`vClass="emergency"` é importante: o SUMO reconhece a classe e permite comportamentos específicos. **É por ela — e não por convenção de id — que o adaptador identifica o VE.** `speedFactor="1.3"` modela o VE trafegando acima do limite, como acontece na prática. `jmIgnoreFoe*` modela a passagem cautelosa em vermelho — **usar com parcimônia e documentar**, porque afeta diretamente a comparação: se o VE do baseline já ignora sinal vermelho, o ganho medido da preempção cai. Recomendação: manter `jmIgnoreFoeProb` **igual nos dois braços** para que a comparação seja justa, e discutir isso na seção de metodologia.
+`vClass="emergency"` é importante: o SUMO reconhece a classe e permite comportamentos específicos. **É por ela — e não por convenção de id — que o adaptador identifica o VE.**
+
+> **Ser VE não é estar em serviço — P20 (2026-09-29).** O `vClass` diz *que* o
+> veículo é de emergência; o parâmetro `<param key="criticidade" value="N"/>`,
+> escrito por `sim/demanda/gerar_rotas.py` em cada VE da rota gerada, diz que ele
+> *está atendendo uma ocorrência*, e com qual criticidade (1 `RISCO_VIDA`,
+> 2 `RISCO_COLETIVO`, 3 `URGENCIA`). O adaptador lê o parâmetro **uma vez, na
+> partida**, e um VE sem ele **não é entregue ao motor**: trafega como veículo
+> comum, com um aviso na execução. É a mesma regra da bancada, onde a tag sem
+> ocorrência aberta não preempta. O parâmetro não altera a dinâmica do SUMO. `speedFactor="1.3"` modela o VE trafegando acima do limite, como acontece na prática. `jmIgnoreFoe*` modela a passagem cautelosa em vermelho — **usar com parcimônia e documentar**, porque afeta diretamente a comparação: se o VE do baseline já ignora sinal vermelho, o ganho medido da preempção cai. Recomendação: manter `jmIgnoreFoeProb` **igual nos dois braços** para que a comparação seja justa, e discutir isso na seção de metodologia.
 
 ## 5. Cenários experimentais
 
@@ -146,6 +155,15 @@ Três detalhes da construção que valem registro:
 | `moderado` | 0,42 | moderada | 700 | Medir ganho operacional |
 | `intenso` | 0,73 | moderada-**alta** | 1200 | Testar eficiência crítica |
 | `multiplas_emergencias` | 0,42 | moderada | 700 | Validar resolução de conflitos (2 VEs simultâneos em cruzamentos compartilhados) |
+
+> **Criticidade dos VEs nos cenários — P20 (2026-09-29).** `emergencias` ganhou
+> `criticidades: [1, 2, 3]`, que roda **em passo** com `tipos: [AMBULANCIA,
+> BOMBEIRO, POLICIA]`: cada VE atende a ocorrência típica do seu tipo. É
+> **simplificação declarada** — numa central real o nível vem da ocorrência, e
+> não do tipo — e tem uma consequência deliberada: como essa ordem coincide com
+> `prioridade_tipo`, o E8 determinístico decide exatamente como antes da P20, e
+> nenhum número medido muda. O gerador recusa listas de tamanhos diferentes. O
+> cenário de treino da 10.2 é que vai desacoplar criticidade de tipo.
 
 > **A coluna de saturação era declarada e passou a ser medida** (decisão de
 > 2026-08-25, `context/09`). Os fluxos e os nomes dos cenários **não mudaram** —
@@ -221,7 +239,14 @@ Rodar os três é o que permite isolar o efeito da compensação. Comparar apena
 >
 > As chegadas seguem processo de **Poisson** (intervalos exponenciais). Intervalos constantes produziriam um tráfego artificialmente regular, que forma menos fila para o mesmo fluxo médio — e subestimaria justamente o efeito que o trabalho quer medir.
 >
-> **Os VEs partem nos mesmos instantes em toda seed**, e com o mesmo rodízio de tipos. A seed varia o tráfego de fundo; o VE encontra um trânsito diferente a cada seed. Misturar as duas fontes de variação impediria atribuir a diferença medida ao controle.
+> **Os VEs partem nos mesmos instantes em toda seed**, e com o mesmo rodízio de tipos e de criticidades (P20).
+>
+> **O cache de rotas só é reaproveitado se for idêntico ao que o código atual
+> geraria** (P20, 2026-09-29). Antes, `garantir()` reaproveitava qualquer arquivo
+> que existisse em `sim/saida/rotas/` — e os arquivos anteriores à P20, sem o
+> parâmetro `criticidade`, fariam o lote rodar sem preempção nenhuma, sem erro.
+> Como a geração é determinística, regenerar produz os mesmos bytes: o pareamento
+> continua garantido, agora também contra mudanças no gerador. A seed varia o tráfego de fundo; o VE encontra um trânsito diferente a cada seed. Misturar as duas fontes de variação impediria atribuir a diferença medida ao controle.
 
 ```bash
 python -m sim.controlador.lote \
@@ -363,6 +388,21 @@ analysis/data/
 > (`eventos_conflito`, `eventos_conflito_decidiveis`, `passos_em_conflito`) vão em
 > `execucoes.csv` de toda execução, e `python -m analysis.resumo_conflitos` lê os
 > dois. Cenários de um VE só produzem zero linhas, o que é resultado e não falha.
+>
+> **Duas colunas novas em 2026-09-29 (P20):** `criticidades` (uma por VE, na
+> ordem de `ids_veiculos`) e `mesmo_nivel` (1 se todos os VEs da disputa têm a
+> mesma criticidade). Só as disputas de mesmo nível são decididas pelo modelo de
+> P19 — as demais a regra de criticidade decide nos dois braços —, então é essa
+> coluna que a análise de H4 estratifica. Os dados de
+> `analysis/data/bloco10_conflitos/` são anteriores e não a têm; o resumo os lê
+> assim mesmo, marcando a informação como indisponível.
+>
+> **Nenhum CSV aceita linhas com cabeçalho diferente do seu** (P20). Tanto o
+> coletor, ao escrever a pasta de uma execução, quanto `consolidar()`, ao juntar
+> as execuções em `analysis/data/`, comparam o cabeçalho antes de escrever e
+> falham com `CabecalhoDivergenteError` se ele mudou. Antes, acrescentar linhas de
+> 25 colunas a um `execucoes.csv` de 22 corrompia o arquivo em silêncio — o risco
+> que P19 registrou ao ganhar três colunas, e que este acréscimo repetiria.
 
 > **`descartes.csv` é entregue pelo lote** (Bloco 4). Só execução **válida** entra
 > nos cinco primeiros arquivos; a que `validar_execucao()` reprova fica na
