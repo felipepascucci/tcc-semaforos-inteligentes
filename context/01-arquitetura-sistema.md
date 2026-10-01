@@ -233,9 +233,10 @@ onde `DEFICIT_TOTAL` é o tempo de verde que o acesso deixou de receber durante 
 > compensação atua por ~140 s depois de cada evento, com um VE a cada 10 min.
 > Calibrar contra uma métrica que dilui é calibrar contra ruído.
 >
-> **Decidido em 2026-10-01 (P17):** H2 passa a ser medida na janela de cada
-> evento, e `K`/`N_CICLOS_COMPENSACAO` são calibrados uma vez, em seeds
-> 101..105, com critério commitado antes. Ver `09` P17.
+> **Decidido em 2026-10-01 (P17):** a suspeita de diluição não se sustenta. Com
+> H2 medida como fração do *acréscimo*, os períodos sem evento se cancelam e a
+> média horária não enviesa a razão. `K`/`N_CICLOS_COMPENSACAO` são calibrados
+> uma vez, em seeds 101..105, pela grade e regra declaradas em `09` P17.
 
 **E8 — Conflito entre múltiplos VEs.** Cenário obrigatório de teste. Regra de desempate, em ordem:
 

@@ -363,7 +363,7 @@ React + Vite + TS + Tailwind. Mapa Leaflet, painel de semáforos em tempo real, 
 > existirem depois de 10.2. **Por isso o Bloco 10 executa antes do Bloco 8**: um
 > braço acrescentado depois obriga a rodar tudo de novo.
 
-> **Bloqueado pela execução de P17 e pelo Bloco 10.** ~~P16~~ foi resolvida em 2026-08-31 corrigindo o mecanismo, e ~~P18~~ em 2026-09-10 sem teto numérico. **P17** foi decidida em 2026-10-01, mas a métrica de janela e a calibração de `K`/`n_ciclos_compensacao` ainda precisam ser feitas, e mudam o braço `PREEMPCAO_COMPENSADA` — rodar as 600 antes significa rodá-las de novo depois. **P19 / Bloco 10** acrescenta um braço à matriz, com a mesma consequência. As 600 rodam com o código de `d63f774` em diante — o piloto de 2026-08-26 foi produzido pelo código anterior e **não** se mistura com elas.
+> **Bloqueado pela execução de P17 e pelo Bloco 10.** ~~P16~~ foi resolvida em 2026-08-31 corrigindo o mecanismo, e ~~P18~~ em 2026-09-10 sem teto numérico. **P17** foi decidida em 2026-10-01, mas a calibração de `K`/`n_ciclos_compensacao` ainda precisa ser feita, e mudam o braço `PREEMPCAO_COMPENSADA` — rodar as 600 antes significa rodá-las de novo depois. **P19 / Bloco 10** acrescenta um braço à matriz, com a mesma consequência. As 600 rodam com o código de `d63f774` em diante — o piloto de 2026-08-26 foi produzido pelo código anterior e **não** se mistura com elas.
 
 **Pareamento por seed é inegociável:** gerar as rotas uma vez por (cenário, seed) e reutilizar em **todos** os modos, inclusive no braço de ML. Sem isso a comparação deixa de ser pareada e perde poder estatístico.
 
@@ -485,10 +485,10 @@ desempate determinístico.
   priorização impõe". Nada muda no código.
 - **P17** — ✅ **decidida em 2026-10-01**; a execução **bloqueia o Bloco 8**. E7 e
   H2 ficam. H2 = mitigação de ≥ 15% do **acréscimo**, em `moderado` e `intenso`,
-  medida na **janela de cada evento**. Falta: declarar a janela e o critério da
-  calibração (commit antes do código), implementar a métrica, calibrar
-  `K`/`n_ciclos_compensacao` uma vez em seeds 101..105 e congelar. Veredito no
-  Bloco 8; abaixo de 15%, H2 é reportada como rejeitada.
+  sobre a espera média transversal da hora. Critério da calibração **declarado**
+  (grade de 15 combinações de `K` e `n_ciclos_compensacao`, seeds 101..105, uma
+  rodada). Falta: permitir variar os parâmetros no lote, rodar e congelar.
+  Veredito no Bloco 8; abaixo de 15%, H2 é reportada como rejeitada.
 - ~~**P3**~~ — **revogada em 2026-09-10**: o orientador confirmou que a banca
   espera aprendizado de máquina. Virou P19, acima.
 - ~~**P20**~~ ✅ **Decidida em 2026-09-29.** Emergência é estado declarado: a
