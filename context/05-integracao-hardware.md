@@ -59,7 +59,11 @@ Porta: `COM4` · Placa: NodeMCU 1.0 (ESP-12E Module).
 [Tag S50] --RFID--> [NodeMCU: leitura UID]
                           │ HTTP POST /api/v1/deteccoes  (Wi-Fi)
                           ▼
-                  [Backend FastAPI + MotorDecisao]
+                  [Backend FastAPI]
+                          │ tag reconhecida? ocorrência ativa? (P20)
+                          │   não -> "SEM OCORRENCIA", sem preempção
+                          ▼   sim -> VE com a criticidade da ocorrência
+                  [MotorDecisao]
                           │ comando abstrato
                           ▼
                   [bridge/ — pyserial]
@@ -185,8 +189,15 @@ Bombeiro:    "BOMBEIROS       "  /  "PRIORIDADE ATIVA"
 Polícia:     "POLICIA         "  /  "PRIORIDADE ATIVA"
 Liberado:    "VIA LIBERADA    "  /  "CICLO NORMAL    "
 Não autoriz: "TAG DESCONHECIDA"  /  "ACESSO NEGADO   "
+Sem serviço: "SEM OCORRENCIA  "  /  "SEM PRIORIDADE  "
 Sem rede:    "SEM CONEXAO     "  /  "MODO LOCAL      "
 ```
+
+**"Sem serviço" (P20, 2026-09-29)** é a tag **reconhecida** de um veículo que não
+tem ocorrência aberta pela central — uma ambulância voltando para a base, por
+exemplo. Não é credencial inválida (essa é "TAG DESCONHECIDA", com HTTP 403): a
+resposta é HTTP 200 com `acao = "SEM_OCORRENCIA"`, e o firmware só imprime o que
+vier em `mensagem_lcd`, sem lógica nova.
 
 ## 6. A ponte (`bridge/`)
 
@@ -216,7 +227,8 @@ bridge/
 Para a apresentação, um roteiro determinístico em `bridge/demo.py`:
 
 1. Sistema em ciclo normal — mostrar as 4 fases se sucedendo, uma aproximação verde por vez.
-2. Aproximar a tag da ambulância → LCD muda, o semáforo da aproximação do VE vai para verde com transição segura (amarelo → all-red → verde), dashboard acende o alerta.
+1b. **Emergência é estado declarado (P20).** Aproximar a tag da ambulância **sem ocorrência aberta** → LCD `SEM OCORRENCIA`, o semáforo não muda, a tentativa aparece no dashboard. Abrir a ocorrência no painel "Central" do dashboard (criticidade 1, `RISCO_VIDA`). É a resposta, na bancada, à pergunta "como o semáforo sabe que a emergência é real?".
+2. Aproximar a tag da ambulância (agora com ocorrência aberta) → LCD muda, o semáforo da aproximação do VE vai para verde com transição segura (amarelo → all-red → verde), dashboard acende o alerta.
 3. Mostrar o log de priorização aparecendo em tempo real no dashboard, com a latência medida.
 4. Após a passagem, mostrar a compensação nas transversais.
 5. Aproximar uma tag não cadastrada → `ACESSO NEGADO`, sem preempção, tentativa registrada.

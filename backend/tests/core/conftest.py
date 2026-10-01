@@ -14,13 +14,29 @@ from __future__ import annotations
 import pytest
 
 from core.malha import Cruzamento, Fase, TopologiaMalha
-from core.modelos import EstadoMalha, EstadoSemaforo, Sinal, TipoVeiculo, VeiculoEmergencia
+from core.modelos import (
+    Criticidade,
+    EstadoMalha,
+    EstadoSemaforo,
+    Sinal,
+    TipoVeiculo,
+    VeiculoEmergencia,
+)
 from core.parametros import Parametros
 
 COMPRIMENTO_VIA_M = 500.0
 
 FASE_ARTERIAL = 1
 FASE_TRANSVERSAL = 2
+
+#: A atribuição dos cenários do experimento (`sim/config/cenarios.yaml`, P20):
+#: cada VE atende a ocorrência típica do seu tipo. Espelha a ordem padrão de
+#: `prioridade_tipo`, e é por isso que o E8 da P20 decide como o anterior.
+CRITICIDADE_TIPICA: dict[TipoVeiculo, Criticidade] = {
+    TipoVeiculo.AMBULANCIA: Criticidade.RISCO_VIDA,
+    TipoVeiculo.BOMBEIRO: Criticidade.RISCO_COLETIVO,
+    TipoVeiculo.POLICIA: Criticidade.URGENCIA,
+}
 
 
 def construir_topologia(
@@ -121,11 +137,16 @@ def construir_ve(
     indice_via_atual: int = 0,
     posicao_na_via_m: float = 0.0,
     velocidade: float = 10.0,
+    criticidade: Criticidade | None = None,
 ) -> VeiculoEmergencia:
-    """Um VE percorrendo o corredor arterial de ponta a ponta."""
+    """Um VE percorrendo o corredor arterial de ponta a ponta.
+
+    Sem `criticidade`, usa a típica do tipo — a mesma atribuição dos cenários.
+    """
     return VeiculoEmergencia(
         id=id_veiculo,
         tipo=tipo,
+        criticidade=criticidade if criticidade is not None else CRITICIDADE_TIPICA[tipo],
         posicao=(0.0, 0.0),
         velocidade=velocidade,
         rota=tuple(f"E{i}" for i in range(n_vias)),
@@ -155,6 +176,15 @@ def construir_estado(
         for id_cruzamento, cruzamento in topologia.cruzamentos.items()
     }
     return EstadoMalha(t=t, semaforos=semaforos, veiculos_emergencia=veiculos)
+
+
+def construir_cruzamento() -> Cruzamento:
+    """`CRUZ_TESTE_1` da malha padrão — para testes que não podem usar fixture.
+
+    Os testes com Hypothesis rodam o corpo muitas vezes por chamada, e uma
+    fixture de escopo de função seria reaproveitada entre os exemplos.
+    """
+    return construir_topologia().cruzamento("CRUZ_TESTE_1")
 
 
 @pytest.fixture

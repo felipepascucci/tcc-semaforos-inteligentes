@@ -11,6 +11,7 @@ from core.parametros import Parametros
 from core.priorizacao.conflito import EventoConflito
 from core.priorizacao.motor import MotorDecisao
 from tests.core.conftest import (
+    CRITICIDADE_TIPICA,
     FASE_ARTERIAL,
     FASE_TRANSVERSAL,
     construir_estado,
@@ -239,6 +240,29 @@ def test_preempcao_expira_no_timeout(motor: MotorDecisao, topologia: TopologiaMa
     assert motor.preempcao_ativa("CRUZ_TESTE_1") is None
 
 
+def test_ocorrencia_encerrada_no_meio_da_preempcao_libera_o_cruzamento(
+    topologia: TopologiaMalha,
+) -> None:
+    """P20 — a central encerra a ocorrência com o VE ainda na aproximação.
+
+    Quem monta o `EstadoMalha` deixa de entregar o VE (ele não está mais em
+    serviço), e o motor libera o cruzamento pelo caminho normal de E6, sem
+    esperar o timeout. Não há caminho novo no motor: o VE simplesmente some,
+    e a transição de volta ao ciclo continua sendo a transição segura de sempre.
+    """
+    motor = MotorDecisao(construir_parametros(n_ciclos_compensacao=0), topologia)
+    em_servico = construir_ve(n_vias=4, posicao_na_via_m=410.0, velocidade=10.0)
+    motor.avaliar(construir_estado(topologia, t=0.0, veiculos=(em_servico,)))
+    assert motor.preempcao_ativa("CRUZ_TESTE_1") is not None
+
+    comandos = motor.avaliar(construir_estado(topologia, t=1.0, veiculos=()))
+
+    comando = next(c for c in comandos if c.id_semaforo == "CRUZ_TESTE_1")
+    assert comando.tipo is TipoComando.LIBERAR
+    assert "timeout" not in comando.motivo
+    assert motor.preempcao_ativa("CRUZ_TESTE_1") is None
+
+
 # ---------------------------------------------------------------------------
 # I5 — starvation é responsabilidade do motor (contrato §9)
 # ---------------------------------------------------------------------------
@@ -323,6 +347,7 @@ def test_dois_ves_conflitantes_geram_um_unico_comando_no_cruzamento(
     bombeiro = VeiculoEmergencia(
         id="BMB",
         tipo=TipoVeiculo.BOMBEIRO,
+        criticidade=CRITICIDADE_TIPICA[TipoVeiculo.BOMBEIRO],
         posicao=(0.0, 0.0),
         velocidade=10.0,
         rota=("T1_IN", "T1_OUT"),
@@ -353,6 +378,7 @@ def _ve_transversal(
     return VeiculoEmergencia(
         id=id_veiculo,
         tipo=tipo,
+        criticidade=CRITICIDADE_TIPICA[tipo],
         posicao=(0.0, 0.0),
         velocidade=10.0,
         rota=("T1_IN", "T1_OUT"),

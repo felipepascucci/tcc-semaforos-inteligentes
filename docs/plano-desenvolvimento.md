@@ -334,8 +334,9 @@ a menos que `--repetir MOTIVO` autorize.
 | 5.6 | Firmware NodeMCU: dedup por UID com cooldown 3 s, `sequencia` monotônica, HTTP com timeout, reconexão Wi-Fi com backoff, `secrets.h` gerado por `firmware/gerar_secrets.py` |
 | 5.7 | `bridge/main.py` — asyncio, PING 1 s, reconexão serial, `t_atuacao` carimbado **na chegada do ACK** |
 | 5.8 | Ler os UIDs reais das tags e atualizar os seeds |
+| 5.9 | **P20** — LCD `SEM OCORRENCIA` / `SEM PRIORIDADE` (vem pronto em `mensagem_lcd`, sem lógica no firmware) e passo 1b do roteiro de demonstração (`context/05` §7): tag sem ocorrência negada, ocorrência aberta no painel, tag passa a preemptar |
 
-**Pronto quando:** tag aproxima → semáforo físico preempta em < 3 s (RF02); cabo USB desconectado durante preempção → ciclo fixo retomado em < 3 s (I6).
+**Pronto quando:** tag aproxima → semáforo físico preempta em < 3 s (RF02); cabo USB desconectado durante preempção → ciclo fixo retomado em < 3 s (I6); tag reconhecida sem ocorrência aberta **não** preempta (P20).
 
 ---
 
@@ -345,11 +346,13 @@ Todas as rotas do `context/01` §7, schemas Pydantic v2, WebSocket com throttle 
 
 **Regra do `context/08` §4.5:** endpoint, schema e teste no mesmo commit.
 
+**P20 (2026-09-29) acrescenta:** `POST /ocorrencias`, `POST /ocorrencias/{id}/encerramento` e `GET /ocorrencias?ativas=true`; e o serviço de `/deteccoes` passa a chamar `core/autorizacao.autorizar()` com o que buscou no banco, responder `acao = "SEM_OCORRENCIA"` (HTTP 200) à tag reconhecida sem ocorrência e gravar `deteccao.autorizado` e `fk_ocorrencia`. A tabela, o ORM e o repositório (`abrir_ocorrencia`, `encerrar_ocorrencia`, `ocorrencia_ativa_do_veiculo`) já existem desde a P20.
+
 ---
 
 ### Bloco 7 — Dashboard (Sprint 6) · ~2 semanas
 
-React + Vite + TS + Tailwind. Mapa Leaflet, painel de semáforos em tempo real, tela de logs com filtro, painel de métricas com Recharts, login simples. Vitest nos componentes de estado.
+React + Vite + TS + Tailwind. Mapa Leaflet, painel de semáforos em tempo real, tela de logs com filtro, painel de métricas com Recharts, login simples. Vitest nos componentes de estado. **Painel "Central" (P20):** abrir ocorrência escolhendo veículo e criticidade, encerrar, e ver quem está em serviço — é a central de despacho simulada.
 
 Primeiro candidato ao corte se algo atrasar (`context/08` §2, item 2 e 5).
 
@@ -404,20 +407,20 @@ convenção declarada, não otimização. Há lacuna genuína a preencher.
 | # | Entrega |
 |---|---|
 | 10.1 | **Contagem de conflitos.** ✅ **MEDIDA em 2026-09-10: 60 disputas em 10 execuções, 56 decidíveis, 6 por execução.** Abaixo do piso de 100 de P19, o que **torna a 10.2 obrigatória**. A instrumentação também expôs um defeito de E1/E2 anterior ao bloco — o VE recuava ~490 m ao atravessar um cruzamento —, corrigido e coberto por regressão. Evidência e números em `context/09` P19 |
-| 10.2 | **Cenário de treino mais denso em VEs — agora obrigatório**, pelo volume medido em 10.1. Novos arquivos de demanda, mesma malha. Precisa **defasar a rotação de tipos entre as duas rotas**: hoje os pares em conflito são sempre do mesmo tipo, e o atributo `tipo` do modelo fica com diferença zero em todo evento |
+| 10.2 | **Cenário de treino mais denso em VEs — agora obrigatório**, pelo volume medido em 10.1. Novos arquivos de demanda, mesma malha. ~~Precisa defasar a rotação de tipos entre as duas rotas~~ — deixou de valer com a P20 (`tipo` não é mais atributo). Precisa de **volume de disputas de mesmo nível de criticidade**, o domínio do modelo, e de alguns pares de nível misto, só para exercitar a regra. É aqui que criticidade e tipo se desacoplam (`criticidades` em rodízio próprio) |
 | 10.3 | ~~Declaração do objetivo de otimização~~ · **já feita** em 2026-09-10: critério **minimax**, minimizar o tempo do VE mais prejudicado. Registrada em P19 e em `context/00` §5 **antes** de existir treino |
-| 10.4 | **Rotulagem por bifurcação da simulação** — `saveState`/`loadState` no instante do conflito, rodando as duas escolhas até os VEs liberarem a rota, e rotulando pelo minimax. Com **divisão treino/teste por seed** e o treino **fora** do intervalo 1..50 (guarda de P16) |
-| 10.5 | Treino offline (regressão logística par a par sobre diferenças) e **exportação dos pesos como arquivo versionado** |
-| 10.6 | Inferência **pura** em `core/priorizacao/`, sem import de framework: `test_arquitetura.py` continua verde e o RNF01 continua medido. A guarda "preempção em curso vence" fica **acima** do modelo |
+| 10.4 | **Rotulagem por bifurcação da simulação** — `saveState`/`loadState` no instante do conflito, rodando as duas escolhas até os VEs liberarem a rota, e rotulando pelo minimax. Com **divisão treino/teste por seed** e o treino **fora** do intervalo 1..50 (guarda de P16). **Só as disputas de mesmo nível** (`mesmo_nivel = 1`) são bifurcadas — as mistas a regra de criticidade decide, e não há rótulo a aprender (P20) |
+| 10.5 | Treino offline (regressão logística par a par sobre diferenças, **quatro atributos** desde a P20) e **exportação dos pesos como arquivo versionado** |
+| 10.6 | Inferência **pura** em `core/priorizacao/`, sem import de framework: `test_arquitetura.py` continua verde e o RNF01 continua medido. Duas regras ficam **acima** do modelo, nesta ordem: **criticidade** (o nível mais crítico vence, inclusive sobre preempção em curso — P20) e **guarda de oscilação** (no mesmo nível, a preempção em curso vence) |
 | 10.7 | Braço `PREEMPCAO_ML` no executor e no lote, comparável contra o E8 determinístico |
-| 10.8 | Linha nova em T6 e análise estatística própria de **H4** — mesmo rigor de H1: Wilcoxon pareado, Cliff's δ, IC 95% |
+| 10.8 | ~~Linha nova em T6~~ (a linha de H4 já está em `context/07` T6 desde a P20) e análise estatística própria de **H4** — mesmo rigor de H1: Wilcoxon pareado, Cliff's δ, IC 95% — **estratificada por `mesmo_nivel`**, com o n de escolhas que o modelo de fato decidiu (`context/07` §3.3.1) |
 
 **Desenho, decidido em 2026-09-10 e anterior a qualquer treino** (justificativas em P19):
 
 ```
 score = w · (x_A − x_B)      escolhe A se score > 0, senão B
 
-x = (tipo, eta_s, velocidade_ms, fila_no_acesso, cruzamentos_restantes)
+x = (eta_s, velocidade_ms, fila_no_acesso, cruzamentos_restantes)
 ```
 
 Comparação par a par **sobre diferenças**, com torneio para três ou mais VEs — a
@@ -425,6 +428,12 @@ antissimetria fica garantida por construção, e não depende de o modelo aprend
 Critério **minimax**. Rótulos por bifurcação da simulação. `distancia_m` ficou de
 fora por redundância com `eta_s`; `preempcao_em_curso` ficou de fora porque não
 informa a decisão, **suspende** a decisão — é regra rígida acima do modelo.
+
+> **P20, 2026-09-29: `tipo` saiu do vetor.** Sob o rótulo minimax em tempo, o
+> peso de `tipo` não carregaria relevância — o tempo não sabe que a ambulância
+> leva uma vida. A relevância virou **criticidade da ocorrência** (1
+> `RISCO_VIDA`, 2 `RISCO_COLETIVO`, 3 `URGENCIA`), aplicada como regra **acima**
+> do modelo. O modelo decide só entre VEs de mesmo nível.
 
 **Pronto quando:** o braço `PREEMPCAO_ML` roda a matriz inteira; a política vem de
 arquivo versionado e não de código; `mypy --strict` e o teste de arquitetura
@@ -487,9 +496,15 @@ desempate determinístico.
   calibração de `K`/`n_ciclos_compensacao` seguem por fazer — e a correção de P16
   **aumentou** o custo transversal que E7 deveria mitigar (+24,6% → +43,6% no
   `intenso`), o que torna P17 mais urgente, não menos.
-- **P3** — decidida internamente (agente reativo determinístico), mas **pendente de
-  confirmação com o orientador**: a pergunta é se a banca espera aprendizado de
-  máquina. É o item de expectativa, não de engenharia.
+- ~~**P3**~~ — **revogada em 2026-09-10**: o orientador confirmou que a banca
+  espera aprendizado de máquina. Virou P19, acima.
+- ~~**P20**~~ ✅ **Decidida em 2026-09-29.** Emergência é estado declarado: a
+  preempção exige tag reconhecida **e** ocorrência ativa, aberta pela central de
+  despacho (simulada). A relevância entre tipos virou **criticidade da
+  ocorrência**, regra acima do modelo de P19, que perde o atributo `tipo`. Núcleo,
+  simulação e banco entregues na P20; API, LCD e painel ficam com os Blocos 6, 5
+  e 7 (entregas 5.9 e as notas dos Blocos 6 e 7). Nenhum número medido muda.
+  **Comunicar ao orientador** a mudança no desenho de P19.
 - **P6** — **formato fechado em 2026-08-31**: as tabelas do capítulo 5 do
   pré-projeto migram para uma seção "Resultados esperados" na metodologia,
   rotulada como estimativa preliminar, e o capítulo 5 passa a vir só de

@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from enum import StrEnum
+from enum import IntEnum, StrEnum
 
 
 class TipoVeiculo(StrEnum):
@@ -32,6 +32,31 @@ class TipoVeiculo(StrEnum):
     AMBULANCIA = "AMBULANCIA"
     BOMBEIRO = "BOMBEIRO"
     POLICIA = "POLICIA"
+
+
+class Criticidade(IntEnum):
+    """Criticidade da ocorrência que o VE atende — P20 (`context/09`).
+
+    **Menor valor = mais crítico**, para que a ordenação natural seja a ordem de
+    precedência em E8. A escala é ordinal: só a ordem importa, e por isso não há
+    peso numérico a justificar.
+
+    Ela é da **ocorrência**, não do tipo: uma ambulância com caso leve não passa
+    na frente de um incêndio com vítima. A tabela que orienta a central na
+    atribuição, por tipo de veículo, está em `context/01` §5.2.
+
+    Attributes:
+        RISCO_VIDA: Risco iminente à vida — paciente instável, incêndio ou
+            resgate com vítima, ocorrência policial com risco à vida.
+        RISCO_COLETIVO: Risco à coletividade ou crime em andamento — sinistro sem
+            vítima confirmada, perseguição, paciente estável.
+        URGENCIA: Deslocamento de urgência sem risco imediato — apoio, prevenção,
+            preservação da ordem pública.
+    """
+
+    RISCO_VIDA = 1
+    RISCO_COLETIVO = 2
+    URGENCIA = 3
 
 
 class Sinal(StrEnum):
@@ -44,11 +69,18 @@ class Sinal(StrEnum):
 
 @dataclass(frozen=True)
 class VeiculoEmergencia:
-    """Um VE ativo na malha, com sua rota planejada.
+    """Um VE **em serviço** na malha, com sua rota planejada.
+
+    Só chega aqui o VE que atende uma ocorrência ativa (P20): quem monta o
+    `EstadoMalha` filtra os demais — o adaptador SUMO pelo parâmetro
+    `criticidade` da rota, o serviço de `/deteccoes` por `core.autorizacao`.
 
     Attributes:
         id: Identificador do veículo (id do SUMO ou placa no protótipo).
-        tipo: Tipo do veículo, que define prioridade no desempate de E8.
+        tipo: Tipo do veículo — segundo critério do desempate de E8.
+        criticidade: Criticidade da ocorrência atendida — primeiro critério de
+            E8. **Sem valor padrão, de propósito:** um padrão silencioso daria
+            prioridade a quem não a declarou.
         posicao: Coordenada (x, y) em metros. Usada só para o dashboard —
             **nunca** para calcular distância a cruzamento (ver `deteccao.py`).
         velocidade: Velocidade atual, em m/s.
@@ -59,6 +91,7 @@ class VeiculoEmergencia:
 
     id: str
     tipo: TipoVeiculo
+    criticidade: Criticidade
     posicao: tuple[float, float]
     velocidade: float
     rota: tuple[str, ...]

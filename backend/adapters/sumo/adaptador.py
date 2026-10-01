@@ -41,6 +41,7 @@ from adapters.sumo.cliente import ClienteSumo, constantes
 from adapters.sumo.topologia import MalhaSumo
 from core.comandos import Comando
 from core.modelos import (
+    Criticidade,
     EstadoMalha,
     EstadoSemaforo,
     Sinal,
@@ -60,6 +61,13 @@ TIPO_POR_VTYPE = {
 }
 
 VCLASS_EMERGENCIA = "emergency"
+
+#: Parâmetro SUMO (`<param key=... value=.../>` do `<vehicle>`) que diz que o VE
+#: **está em serviço** e com qual criticidade (P20). O `vClass` diz que o veículo
+#: é de emergência; este parâmetro, que ele atende uma ocorrência. Sem ele, o
+#: veículo não chega ao motor — é o equivalente simulado da tag reconhecida sem
+#: ocorrência aberta. Quem o escreve é `sim/demanda/gerar_rotas.py`.
+PARAMETRO_CRITICIDADE = "criticidade"
 
 #: Prefixo que o SUMO dá às vias internas de um cruzamento (`:cruzamento_0`).
 #: Um VE nelas está **dentro** do cruzamento — ver `_posicao_na_via`.
@@ -95,6 +103,7 @@ class AdaptadorSumo:
     _controladores: dict[str, EstadoControlador] = field(default_factory=dict, repr=False)
     _estado_aplicado: dict[str, str] = field(default_factory=dict, repr=False)
     _tipos_ve: dict[str, TipoVeiculo] = field(default_factory=dict, repr=False)
+    _criticidades_ve: dict[str, Criticidade] = field(default_factory=dict, repr=False)
     _rotas_ve: dict[str, tuple[str, ...]] = field(default_factory=dict, repr=False)
     _fase_observada: dict[str, int] = field(default_factory=dict, repr=False)
 
@@ -226,6 +235,7 @@ class AdaptadorSumo:
                 VeiculoEmergencia(
                     id=identificador,
                     tipo=self._tipos_ve[identificador],
+                    criticidade=self._criticidades_ve[identificador],
                     posicao=tuple(dados[tc.VAR_POSITION]),  # type: ignore[arg-type]
                     velocidade=float(dados[tc.VAR_SPEED]),
                     rota=rota,
@@ -282,11 +292,26 @@ class AdaptadorSumo:
         Perguntar a classe de **todo** veículo a cada passo custaria milhares de
         chamadas por passo no cenário intenso. Perguntar só de quem acabou de
         entrar custa algumas por passo, e a resposta não muda depois.
+
+        **Só o VE em serviço é acompanhado (P20).** Um veículo de `vClass`
+        emergência sem o parâmetro `criticidade` é tratado como tráfego comum:
+        não é assinado e nunca chega ao motor — a mesma regra da bancada, onde a
+        tag reconhecida sem ocorrência aberta não preempta. Fica um aviso, para
+        que um arquivo de rotas escrito à mão sem o parâmetro não passe em
+        silêncio.
         """
         tc = constantes()
         for identificador in self.cliente.simulacao.getDepartedIDList():
             if self.cliente.veiculo.getVehicleClass(identificador) != VCLASS_EMERGENCIA:
                 continue
+            criticidade = self._criticidade_declarada(identificador)
+            if criticidade is None:
+                self.avisos.append(
+                    f"VE {identificador!r} sem o parâmetro {PARAMETRO_CRITICIDADE!r}: "
+                    "fora de serviço, tratado como tráfego comum (P20)"
+                )
+                continue
+            self._criticidades_ve[identificador] = criticidade
             vtype = self.cliente.veiculo.getTypeID(identificador)
             tipo = TIPO_POR_VTYPE.get(vtype)
             if tipo is None:
@@ -310,7 +335,30 @@ class AdaptadorSumo:
 
         for identificador in self.cliente.simulacao.getArrivedIDList():
             self._tipos_ve.pop(identificador, None)
+            self._criticidades_ve.pop(identificador, None)
             self._rotas_ve.pop(identificador, None)
+
+    def _criticidade_declarada(self, identificador: str) -> Criticidade | None:
+        """Criticidade da ocorrência do VE, lida do parâmetro da rota (P20).
+
+        Returns:
+            A criticidade, ou `None` se o VE não declara ocorrência.
+
+        Raises:
+            ValueError: se o parâmetro existir com valor fora da escala. Valor
+                inválido é erro de configuração, e não pode virar "fora de
+                serviço" em silêncio.
+        """
+        valor = str(self.cliente.veiculo.getParameter(identificador, PARAMETRO_CRITICIDADE))
+        if not valor:
+            return None
+        try:
+            return Criticidade(int(valor))
+        except ValueError as erro:
+            raise ValueError(
+                f"VE {identificador!r}: {PARAMETRO_CRITICIDADE}={valor!r} fora da escala "
+                f"{[int(nivel) for nivel in Criticidade]}"
+            ) from erro
 
     # -- escrita no mundo ----------------------------------------------------
 

@@ -28,13 +28,27 @@ def registrar_deteccao(
     fk_veiculo: int | None = None,
     rssi: int | None = None,
     sequencia: int | None = None,
+    autorizado: bool = False,
+    fk_ocorrencia: int | None = None,
 ) -> Deteccao:
     """Grava uma leitura, reconhecida ou não.
 
     Gravar as **não** reconhecidas é requisito, não zelo: é o registro da
     tentativa com UID desconhecido exigido por `context/02` §6, e é o
     denominador da taxa de reconhecimento do RNF05.
+
+    `autorizado` e `fk_ocorrencia` vêm de `core.autorizacao.autorizar()` (P20):
+    uma tag reconhecida sem ocorrência aberta é gravada com `autorizado=False`.
+    O padrão é negar — autorização precisa ser afirmada, nunca presumida.
+
+    Raises:
+        ValueError: se `autorizado` vier sem a ocorrência que o justifica, ou
+            sem a tag ter sido reconhecida.
     """
+    if autorizado and (fk_ocorrencia is None or not reconhecido):
+        raise ValueError(
+            "detecção autorizada exige tag reconhecida e a ocorrência que a autorizou (P20)"
+        )
     deteccao = Deteccao(
         id_correlacao=id_correlacao,
         origem=origem,
@@ -42,6 +56,8 @@ def registrar_deteccao(
         fk_veiculo=fk_veiculo,
         uid_bruto=uid_bruto,
         reconhecido=reconhecido,
+        autorizado=autorizado,
+        fk_ocorrencia=fk_ocorrencia,
         rssi=rssi,
         sequencia=sequencia,
     )

@@ -76,6 +76,16 @@ emergencias:
   # sorteá-la faria o tipo do VE variar com a seed, e o tipo muda a prioridade
   # em E8 — a comparação pareada exige que os três braços vejam o mesmo VE.
   tipos: [AMBULANCIA, BOMBEIRO, POLICIA]
+  # Criticidade da ocorrência de cada VE (P20): 1 RISCO_VIDA, 2 RISCO_COLETIVO,
+  # 3 URGENCIA. Roda EM PASSO com `tipos` — a i-ésima criticidade acompanha o
+  # i-ésimo tipo —, e o gerador recusa listas de tamanhos diferentes.
+  #
+  # SIMPLIFICAÇÃO DECLARADA: cada VE atende a ocorrência típica do seu tipo. Numa
+  # central real o nível vem da ocorrência, não do veículo. A escolha é
+  # deliberada: como esta ordem coincide com `prioridade_tipo`, o E8 determinístico
+  # decide exatamente como antes da P20 e nenhum número já medido muda. Quem
+  # desacopla criticidade de tipo é o cenário de treino da entrega 10.2.
+  criticidades: [1, 2, 3]
 
 # --- Protocolo experimental — context/04 §7 ---------------------------------
 execucao:

@@ -75,6 +75,13 @@ Ambas são controladas pelo **mesmo motor de decisão** (`backend/core/priorizac
 > Fica registrado também que **veredito nulo é veredito**: se a política aprendida
 > não superar a heurística, isso é reportado com tamanho de efeito e intervalo de
 > confiança, não escondido.
+>
+> **Escopo da escolha aprendida, desde 2026-09-29 (P20).** A precedência entre
+> VEs de **criticidade** diferente é regra declarada, não aprendida — o nível mais
+> crítico vence nos dois braços. Os braços `PREEMPCAO` e `PREEMPCAO_ML` só podem
+> diferir nas disputas entre VEs de **mesmo nível**. O enunciado de H4 não muda,
+> mas a análise é estratificada por `mesmo_nivel` e declara quantas disputas o
+> modelo de fato decidiu (`07` §3).
 
 > **Decisões P1 e P2 tomadas em 2026-08-24** (ver `09-pendencias-e-decisoes.md`):
 >
@@ -117,6 +124,15 @@ Ambas são controladas pelo **mesmo motor de decisão** (`backend/core/priorizac
 | RF06 | Monitorar localização das viaturas | Visualização contínua no dashboard |
 | RF07 | Recalcular a priorização | Ajuste dinâmico quando a rota do VE muda |
 
+> **Decisão P20 (2026-09-29) — o que "identificar" quer dizer no RF01.**
+> Identificar um VE tem dois fatores: **identidade** (a tag reconhecida, de
+> veículo ativo) e **estado** (uma ocorrência aberta pela central de despacho
+> para aquele veículo). Um VE sem ocorrência — uma ambulância voltando para a
+> base, por exemplo — é reconhecido, mas **não** recebe prioridade. A âncora é o
+> CTB, art. 29, VII, que só concede prioridade ao VE *"quando em serviço de
+> urgência"*. O RNF05 continua medindo apenas o primeiro fator, a identificação
+> da tag.
+
 > **Decisão P14 (2026-08-25) — onde termina a medição do RF02.** O requisito
 > original não dizia até que ponto contar os 3 s, e as duas leituras possíveis
 > davam resultados opostos. Adotada a leitura **"até o início da atuação"**: o
@@ -157,7 +173,9 @@ Registrar isso evita que o agente "melhore" o projeto para fora do prazo:
 - ⚠️ ~~Treinamento de modelo de machine learning preditivo.~~ **DEIXOU DE ESTAR FORA DE ESCOPO em 2026-09-10.** O orientador confirmou que a banca espera aprendizado de máquina, e indicou onde: um modelo para decidir **qual VE é priorizado** quando há mais de uma emergência simultânea — hoje o desempate determinístico da etapa E8. Isso **revoga a decisão P3** de 2026-08-24 e abre a pendência **P19** (`09-pendencias-e-decisoes.md`), onde estão o desenho a definir, o impacto no cronograma e o que precisa sair do escopo em troca.
   - O que **continua** verdadeiro da decisão P3: o restante do sistema — detecção, seleção de fase, transição segura, compensação — segue sendo **agente reativo com otimização determinística baseada em conhecimento**, técnica clássica de IA coberta por Russell & Norvig. O ML entra em **um** ponto delimitado, não substitui o motor.
   - Q-learning tabular para a política de compensação (E7) **continua fora de escopo**, como trabalho futuro descrito.
-- ❌ Integração com sistemas reais da CET, SAMU ou Corpo de Bombeiros.
+  - **O que o modelo não decide (P20, 2026-09-29):** se há emergência de fato (ocorrência ativa, regra determinística) e qual emergência importa mais (criticidade da ocorrência, regra acima do modelo). O ML escolhe só entre VEs de mesmo nível de criticidade.
+- ❌ Integração com sistemas reais da CET, SAMU ou Corpo de Bombeiros. A **central de despacho** que abre e encerra ocorrências (P20) é **simulada** — painel do dashboard ou endpoint da API.
+- ❌ Detecção acústica de sirene. Considerada e recusada em P20: a emergência é declarada pela central, não inferida do ambiente. A chave do giroflex no veículo fica como trabalho futuro.
 - ❌ Radar físico. **Decisão P7, 2026-08-24:** no protótipo, o RFID-RC522 **emula** a função do conjunto radar + V2I, e isso é declarado explicitamente no texto. A validação da fusão de sensores ocorre exclusivamente em ambiente simulado. Sem sensor adicional (HC-SR04 descartado — ampliaria escopo sem sustentar nenhuma das três hipóteses).
 - ❌ Autenticação multi-tenant, gestão de usuários, RBAC completo. Um login simples basta.
 - ❌ Alta disponibilidade real em AWS (multi-AZ, auto-scaling). A infra em nuvem é **descrita** como arquitetura-alvo e, se houver tempo, demonstrada em instância única.
@@ -177,6 +195,8 @@ Registrar isso evita que o agente "melhore" o projeto para fora do prazo:
 | **TraCI** | Traffic Control Interface — API de controle em tempo real do SUMO |
 | **Baseline** | Cenário de controle: semáforos de temporização fixa, sem preempção |
 | **Compensação** | Ajuste de ciclo após a passagem do VE para dissipar filas nas transversais |
+| **Ocorrência** | Atendimento em curso de um VE, aberto pela central de despacho e encerrado ao fim. Sem ocorrência ativa, o VE não recebe prioridade (P20) |
+| **Criticidade** | Nível da ocorrência — 1 `RISCO_VIDA`, 2 `RISCO_COLETIVO`, 3 `URGENCIA`. Decide a precedência entre VEs antes de qualquer outro critério (P20) |
 
 ## 10. Stakeholders
 

@@ -8,13 +8,13 @@
 --   docker compose exec -T db pg_dump -s -U tcc semaforo
 --
 -- Gerado de: PostgreSQL 16 (serviço `db` do docker-compose)
--- Revisão Alembic: eb4834072797
+-- Revisão Alembic: 3f9c2a71d5e8
 
 --
 -- PostgreSQL database dump
 --
 
-\restrict YSUVVLUAb0axSAB2UORjuaC0oGvvnmlcYbNsPCwVm0fSuZ8rgSdJ8bUK4LBb6kg
+\restrict e5fREWJ9CgSMyUukuJc2umfn5QAom4eMaQtsD6C057EiRemI182m771cP4L3Xch
 
 -- Dumped from database version 16.15
 -- Dumped by pg_dump version 16.15
@@ -115,7 +115,9 @@ CREATE TABLE public.deteccao (
     reconhecido boolean NOT NULL,
     rssi smallint,
     sequencia integer,
-    recebido_em timestamp with time zone DEFAULT now() NOT NULL
+    recebido_em timestamp with time zone DEFAULT now() NOT NULL,
+    autorizado boolean DEFAULT false NOT NULL,
+    fk_ocorrencia integer
 );
 
 
@@ -435,6 +437,43 @@ ALTER SEQUENCE public.metrica_via_transversal_id_metrica_tv_seq OWNED BY public.
 
 
 --
+-- Name: ocorrencia; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.ocorrencia (
+    id_ocorrencia integer NOT NULL,
+    fk_veiculo integer NOT NULL,
+    criticidade smallint NOT NULL,
+    descricao character varying(200),
+    origem character varying(20) DEFAULT 'CENTRAL'::character varying NOT NULL,
+    aberta_em timestamp with time zone DEFAULT now() NOT NULL,
+    encerrada_em timestamp with time zone,
+    CONSTRAINT ck_ocorrencia_criticidade_na_escala CHECK (((criticidade >= 1) AND (criticidade <= 3))),
+    CONSTRAINT ck_ocorrencia_encerra_depois_de_abrir CHECK (((encerrada_em IS NULL) OR (encerrada_em >= aberta_em)))
+);
+
+
+--
+-- Name: ocorrencia_id_ocorrencia_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.ocorrencia_id_ocorrencia_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: ocorrencia_id_ocorrencia_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.ocorrencia_id_ocorrencia_seq OWNED BY public.ocorrencia.id_ocorrencia;
+
+
+--
 -- Name: semaforo; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -603,6 +642,13 @@ ALTER TABLE ONLY public.metrica_via_transversal ALTER COLUMN id_metrica_tv SET D
 
 
 --
+-- Name: ocorrencia id_ocorrencia; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ocorrencia ALTER COLUMN id_ocorrencia SET DEFAULT nextval('public.ocorrencia_id_ocorrencia_seq'::regclass);
+
+
+--
 -- Name: semaforo id_semaforo; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -701,6 +747,14 @@ ALTER TABLE ONLY public.metrica_simulacao
 
 ALTER TABLE ONLY public.metrica_via_transversal
     ADD CONSTRAINT pk_metrica_via_transversal PRIMARY KEY (id_metrica_tv);
+
+
+--
+-- Name: ocorrencia pk_ocorrencia; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ocorrencia
+    ADD CONSTRAINT pk_ocorrencia PRIMARY KEY (id_ocorrencia);
 
 
 --
@@ -818,11 +872,26 @@ CREATE INDEX idx_metrica_exec ON public.metrica_simulacao USING btree (id_execuc
 
 
 --
+-- Name: uq_ocorrencia_aberta_por_veiculo; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uq_ocorrencia_aberta_por_veiculo ON public.ocorrencia USING btree (fk_veiculo) WHERE (encerrada_em IS NULL);
+
+
+--
 -- Name: deteccao fk_deteccao_fk_dispositivo; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.deteccao
     ADD CONSTRAINT fk_deteccao_fk_dispositivo FOREIGN KEY (fk_dispositivo) REFERENCES public.dispositivo_iot(id_dispositivo);
+
+
+--
+-- Name: deteccao fk_deteccao_fk_ocorrencia; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.deteccao
+    ADD CONSTRAINT fk_deteccao_fk_ocorrencia FOREIGN KEY (fk_ocorrencia) REFERENCES public.ocorrencia(id_ocorrencia);
 
 
 --
@@ -930,6 +999,14 @@ ALTER TABLE ONLY public.metrica_via_transversal
 
 
 --
+-- Name: ocorrencia fk_ocorrencia_fk_veiculo; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ocorrencia
+    ADD CONSTRAINT fk_ocorrencia_fk_veiculo FOREIGN KEY (fk_veiculo) REFERENCES public.veiculo_emergencia(id_veiculo);
+
+
+--
 -- Name: tag_rfid fk_tag_rfid_fk_veiculo; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -941,5 +1018,5 @@ ALTER TABLE ONLY public.tag_rfid
 -- PostgreSQL database dump complete
 --
 
-\unrestrict YSUVVLUAb0axSAB2UORjuaC0oGvvnmlcYbNsPCwVm0fSuZ8rgSdJ8bUK4LBb6kg
+\unrestrict e5fREWJ9CgSMyUukuJc2umfn5QAom4eMaQtsD6C057EiRemI182m771cP4L3Xch
 

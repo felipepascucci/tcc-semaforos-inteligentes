@@ -54,11 +54,23 @@ class Episodio:
     tipos: tuple[str, ...]
     decidivel: bool
     decidivel_em_algum_passo: bool
+    criticidades: tuple[int, ...] | None = None
+    mesmo_nivel: bool | None = None
 
     @property
     def chave(self) -> tuple[str, str, int]:
         """O ponto experimental de onde o episódio veio."""
         return (self.cenario, self.modo, self.seed)
+
+    @property
+    def treinavel(self) -> bool:
+        """Se o modelo de P19 decide este episódio.
+
+        Precisa estar em aberto (decidível) **e**, desde a P20, ser entre VEs de
+        mesma criticidade — entre níveis diferentes a regra decide. Em dados
+        anteriores à P20, sem a coluna, vale só a primeira condição.
+        """
+        return self.decidivel and self.mesmo_nivel is not False
 
 
 @dataclass(frozen=True)
@@ -88,6 +100,11 @@ def ler_episodios(caminho: Path) -> tuple[Episodio, ...]:
         Um episódio por linha, ou vazio se o arquivo não existir — nenhum
         conflito em nenhuma execução é um resultado possível, e é justamente o
         resultado que tornaria a 10.2 obrigatória.
+
+    As colunas `criticidades` e `mesmo_nivel` entraram com a P20. Arquivos
+    anteriores — `analysis/data/bloco10_conflitos/` é o caso — são lidos assim
+    mesmo, com os dois campos `None`: a informação não existe, e inventar um
+    valor padrão seria afirmar algo que a execução não mediu.
     """
     if not caminho.is_file():
         return ()
@@ -106,6 +123,12 @@ def ler_episodios(caminho: Path) -> tuple[Episodio, ...]:
                 tipos=tuple(linha["tipos"].split("|")),
                 decidivel=linha["decidivel"] == "1",
                 decidivel_em_algum_passo=linha["decidivel_em_algum_passo"] == "1",
+                criticidades=(
+                    tuple(int(nivel) for nivel in linha["criticidades"].split("|"))
+                    if linha.get("criticidades")
+                    else None
+                ),
+                mesmo_nivel=(linha["mesmo_nivel"] == "1" if linha.get("mesmo_nivel") else None),
             )
             for linha in csv.DictReader(arquivo)
         )
@@ -221,10 +244,34 @@ def gerar_relatorio(contagens: Sequence[ContagemDaExecucao], episodios: Sequence
             "",
         ]
 
+    treinaveis = total_decidiveis
+    linhas += ["## Criticidade (P20)", ""]
+    if not episodios:
+        linhas.append("Sem episódios.")
+    elif any(episodio.mesmo_nivel is None for episodio in episodios):
+        linhas.append(
+            "Indisponível: os dados são anteriores à P20 e não registram a "
+            "criticidade. O volume abaixo usa só a condição de decidível."
+        )
+    else:
+        mesmo = [episodio for episodio in episodios if episodio.mesmo_nivel]
+        treinaveis = sum(1 for episodio in episodios if episodio.treinavel)
+        linhas += [
+            f"Disputas de mesmo nível: {len(mesmo)} — o domínio do modelo de P19",
+            f"Disputas de nível misto: {len(episodios) - len(mesmo)} — decididas pela regra",
+            f"Decidíveis e de mesmo nível: {treinaveis}",
+            "Níveis por episódio: "
+            + _distribuicao(
+                "+".join(str(nivel) for nivel in episodio.criticidades or ())
+                for episodio in episodios
+            ),
+        ]
+    linhas.append("")
+
     linhas += [
         "## O que isto decide",
         "",
-        _veredito(total_decidiveis),
+        _veredito(treinaveis),
         "",
         "A divisão treino/teste é por seed, com o treino fora do intervalo 1..50 "
         "do Bloco 8 (guarda de P16), então o conjunto de treino é um subconjunto "
@@ -234,7 +281,11 @@ def gerar_relatorio(contagens: Sequence[ContagemDaExecucao], episodios: Sequence
 
 
 def _veredito(decidiveis: int) -> str:
-    """A leitura do número contra o piso declarado em P19, sem enfeite."""
+    """A leitura do número contra o piso declarado em P19, sem enfeite.
+
+    `decidiveis` é o que o modelo de fato pode aprender: desde a P20, só os
+    episódios decidíveis **e** de mesmo nível de criticidade.
+    """
     if decidiveis >= PISO_EVENTOS_DE_TREINO:
         return (
             f"{decidiveis} episódios decidíveis, contra o piso de "

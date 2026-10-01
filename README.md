@@ -194,7 +194,7 @@ mexendo em migration ou em seed:
 
 ```powershell
 docker compose up -d db          # o banco precisa estar no ar
-alembic upgrade head             # cria as 12 tabelas e os 5 enums
+alembic upgrade head             # cria as 13 tabelas (12 + `ocorrencia`, P20) e os 5 enums
 python -m db.seeds.carregar      # cadastros mínimos; idempotente
 python -m db.seeds.carregar --resumo
 
@@ -297,9 +297,15 @@ silenciosamente.
 3. **P8 / P9** — verificações de bancada (GPIO 0 no RST do RC522, LCD I2C em
    5 V — aguardando peças). **Abertas, resolver no Bloco 5.**
 
+**Decidida em 2026-09-29:** P20 — a preempção exige tag reconhecida **e**
+ocorrência ativa aberta pela central de despacho (simulada), e a criticidade da
+ocorrência decide entre VEs antes do tipo, como regra acima do modelo de P19.
+
+**Revogada em 2026-09-10:** P3 — a banca espera aprendizado de máquina, que entra
+para escolher entre VEs em conflito (P19, Bloco 10).
+
 **Resolvidas em 2026-08-24:** P1 (H1 ≥ 25% condicionada à saturação), P2
-(latência de decisão e fim-a-fim são métricas distintas), P3 (agente reativo
-determinístico; ML como trabalho futuro), P5 (persistir só transições de fase, só
+(latência de decisão e fim-a-fim são métricas distintas), ~~P3~~ (revogada, acima), P5 (persistir só transições de fase, só
 de execuções exemplares), P7 (RFID emula radar+V2I, declarado no texto), P10
 (módulos semáforo têm resistores integrados; sem restrição elétrica), P13
 (protótipo é um cruzamento de 4 aproximações em split phasing; protocolo passa a

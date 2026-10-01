@@ -47,7 +47,12 @@
     <vehicle id="teste_carro_3" type="carro" route="TESTE_ARTERIAL" depart="6.00"
              departLane="free" departSpeed="max"/>
 
+    <!-- O `param` diz que a ambulância ESTÁ EM SERVIÇO, com ocorrência de
+         criticidade 1 (P20). Sem ele o adaptador a trataria como tráfego comum,
+         como faz com a tag reconhecida sem ocorrência aberta na bancada. -->
     <vehicle id="teste_ve_0" type="ambulancia" route="TESTE_ARTERIAL" depart="10.00"
-             departLane="free" departSpeed="max"/>
+             departLane="free" departSpeed="max">
+        <param key="criticidade" value="1"/>
+    </vehicle>
 
 </routes>

@@ -24,6 +24,11 @@
   e é também o que o adaptador TraCI usa para identificá-lo — a detecção do VE na
   simulação não depende de convenção de nome de id.
 
+  Ser VE não é estar em serviço (P20): o `vClass` diz que o veículo é de
+  emergência; o `<param key="criticidade">` de cada `<vehicle>` na rota gerada
+  diz que ele atende uma ocorrência. Sem o parâmetro, o adaptador o trata como
+  tráfego comum.
+
   SOBRE `tau` — O ÚNICO PARÂMETRO CALIBRADO (2026-08-25)
 
   `accel`, `decel`, `sigma`, `length` e `maxSpeed` vêm do context/04 §4. `tau` (o

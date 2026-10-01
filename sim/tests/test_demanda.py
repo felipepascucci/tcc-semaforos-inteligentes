@@ -10,19 +10,22 @@ justamente para não depender do simulador.
 
 from __future__ import annotations
 
+import copy
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import pytest
 
+from adapters.sumo.adaptador import PARAMETRO_CRITICIDADE
 from sim.calibracao import cenarios as calibracao
+from sim.demanda import gerar_rotas
 from sim.demanda.fluxos import (
     ENTRADAS_ARTERIAIS,
     ENTRADAS_TRANSVERSAIS,
     correntes_do_cenario,
     rotas_de_emergencia,
 )
-from sim.demanda.gerar_rotas import ARQUIVO_DE_FLUXO, gerar
+from sim.demanda.gerar_rotas import ARQUIVO_DE_FLUXO, gerar, partidas_de_emergencia
 
 RAIZ = Path(__file__).resolve().parents[2]
 DEMANDA = RAIZ / "sim" / "demanda"
@@ -141,6 +144,104 @@ def test_cenario_de_conflito_gera_ves_pelas_duas_rotas(tmp_path: Path) -> None:
     }
 
     assert rotas == {"ROTA_VE_CORREDOR", "ROTA_VE_TRANSVERSAL"}
+
+
+# ---------------------------------------------------------------------------
+# Criticidade da ocorrência — P20
+# ---------------------------------------------------------------------------
+
+
+def _criticidade(veiculo: ET.Element) -> str | None:
+    parametro = veiculo.find(f"param[@key='{PARAMETRO_CRITICIDADE}']")
+    return None if parametro is None else parametro.get("value")
+
+
+def test_todo_ve_gerado_declara_a_criticidade_e_o_fundo_nao(tmp_path: Path) -> None:
+    """Sem o parâmetro o adaptador trataria o VE como fora de serviço."""
+    arquivo = gerar("multiplas_emergencias", 1, destino=tmp_path / "crit.rou.xml")
+    veiculos = ET.parse(arquivo).getroot().findall("vehicle")
+
+    ves = [v for v in veiculos if str(v.get("id")).startswith("VE_")]
+    fundo = [v for v in veiculos if not str(v.get("id")).startswith("VE_")]
+
+    assert ves
+    assert all(_criticidade(v) is not None for v in ves)
+    assert all(_criticidade(v) is None for v in fundo)
+
+
+def test_criticidade_roda_em_passo_com_o_tipo(tmp_path: Path) -> None:
+    """Nos cenários do experimento, cada VE atende a ocorrência típica do tipo.
+
+    É a atribuição que faz o E8 da P20 decidir como o anterior — e, com isso,
+    nenhum número já medido mudar.
+    """
+    esperado = {"ambulancia": "1", "bombeiro": "2", "policia": "3"}
+    arquivo = gerar("multiplas_emergencias", 1, destino=tmp_path / "passo.rou.xml")
+
+    pares = {
+        (str(v.get("type")), _criticidade(v))
+        for v in ET.parse(arquivo).getroot().findall("vehicle")
+        if str(v.get("id")).startswith("VE_")
+    }
+
+    assert pares == set(esperado.items())
+
+
+def test_listas_de_tamanhos_diferentes_sao_recusadas() -> None:
+    """Com uma criticidade a menos, o rodízio sairia de fase em silêncio."""
+    configuracao = copy.deepcopy(calibracao.carregar_configuracao())
+    configuracao["emergencias"]["criticidades"] = [1, 2]
+
+    with pytest.raises(ValueError, match="criticidades"):
+        list(partidas_de_emergencia(configuracao, "moderado"))
+
+
+def test_nivel_fora_da_escala_e_recusado() -> None:
+    configuracao = copy.deepcopy(calibracao.carregar_configuracao())
+    configuracao["emergencias"]["criticidades"] = [1, 2, 7]
+
+    with pytest.raises(ValueError):
+        list(partidas_de_emergencia(configuracao, "moderado"))
+
+
+def test_garantir_regenera_arquivo_em_cache_desatualizado(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Cache anterior à P20 não pode ser reaproveitado.
+
+    Sem o parâmetro `criticidade`, o adaptador trata todo VE como fora de
+    serviço — o lote rodaria inteiro sem preempção nenhuma, e sem erro.
+    """
+    monkeypatch.setattr(gerar_rotas, "SAIDA", tmp_path)
+    caminho = gerar_rotas.caminho_das_rotas("leve", 3)
+    caminho.write_text("<routes/>  <!-- gerado por uma versão antiga -->\n", encoding="utf-8")
+
+    devolvido = gerar_rotas.garantir("leve", 3)
+
+    assert devolvido == caminho
+    assert caminho.read_text(encoding="utf-8") == gerar_rotas.conteudo("leve", 3)
+
+
+def test_garantir_nao_reescreve_arquivo_ja_atual(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Arquivo atual fica intocado — nem a data de modificação muda."""
+    monkeypatch.setattr(gerar_rotas, "SAIDA", tmp_path)
+    caminho = gerar_rotas.garantir("leve", 3)
+    antes = caminho.stat().st_mtime_ns
+
+    gerar_rotas.garantir("leve", 3)
+
+    assert caminho.stat().st_mtime_ns == antes
+
+
+def test_cenario_curto_declara_a_criticidade_do_seu_ve() -> None:
+    """`teste_60s.rou.xml` é escrito à mão; sem o parâmetro, a suíte `sumo` perderia o VE."""
+    raiz = ET.parse(DEMANDA / "teste_60s.rou.xml").getroot()
+    ves = [v for v in raiz.findall("vehicle") if v.get("type") == "ambulancia"]
+
+    assert ves
+    assert all(_criticidade(v) == "1" for v in ves)
 
 
 # ---------------------------------------------------------------------------

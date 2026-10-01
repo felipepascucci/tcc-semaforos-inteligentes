@@ -25,7 +25,7 @@ Se for necessário cortar escopo, cortar nesta ordem (do primeiro a ser cortado 
 2. Mapa Leaflet no dashboard → substituir por esquema SVG estático da malha.
 3. Compensação pós-evento (E7) → mas então H2 precisa sair do trabalho, não ficar sem evidência.
 4. Cenário `multiplas_emergencias` → reduz a força do trabalho, mas é sacrificável.
-5. Dashboard inteiro → substituir por gráficos gerados pelo `analysis/`.
+5. Dashboard inteiro → substituir por gráficos gerados pelo `analysis/`. Isso inclui o painel "Central" de ocorrências (P20), que nesse caso vira chamada direta a `POST /ocorrencias` — a regra de confirmação da emergência mora no backend e **não** é cortada junto.
 6. **Nunca cortar:** motor de decisão, invariantes de segurança, matriz de execuções da simulação, análise estatística, protótipo físico funcionando.
 
 O item 6 é o que constitui o TCC. O resto é acabamento.
@@ -107,6 +107,12 @@ Além do código, o TCC exige (pré-projeto §2.7):
 | Esquema elétrico do protótipo | Fritzing | `docs/hardware/esquema.fzz` |
 
 Preferir PlantUML a diagrama desenhado à mão: fica versionado, regenerável e consistente com o código. Um diagrama que diverge do sistema é passivo, não ativo.
+
+> **P20 (2026-09-29) — o que os diagramas precisam mostrar quando forem feitos.**
+> Casos de uso: o ator **Central de despacho** (simulada), com "abrir ocorrência"
+> e "encerrar ocorrência". Sequência de preempção: a consulta da ocorrência ativa
+> **entre** a resolução da tag e o motor, com o ramo "sem ocorrência → sem
+> preempção". DER: a tabela `ocorrencia`.
 
 ## 6. Riscos do projeto
 

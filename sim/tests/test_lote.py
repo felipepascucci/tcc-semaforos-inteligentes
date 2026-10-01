@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 from sim.controlador import lote
-from sim.controlador.coletor import ARQUIVO_EXECUCOES, ARQUIVO_VE
+from sim.controlador.coletor import ARQUIVO_EXECUCOES, ARQUIVO_VE, CabecalhoDivergenteError
 
 
 def _ponto(cenario: str = "leve", modo: str = "FIXO", seed: int = 1) -> lote.Ponto:
@@ -147,6 +147,40 @@ def test_consolidar_ignora_pasta_sem_o_arquivo(tmp_path: Path) -> None:
     (tmp_path / "vazia").mkdir()
     contagem = lote.consolidar([tmp_path / "a", tmp_path / "vazia"], tmp_path / "dados")
     assert contagem[ARQUIVO_EXECUCOES] == 1
+
+
+def test_consolidar_recusa_destino_com_outro_cabecalho_sem_escrever_nada(
+    tmp_path: Path,
+) -> None:
+    """Acrescentar colunas a um CSV antigo o corromperia em silêncio.
+
+    É o que aconteceria ao consolidar em `analysis/data/` — cujo `execucoes.csv`
+    do piloto tem 22 colunas — execuções de uma versão com mais colunas. A
+    checagem roda antes de qualquer escrita: nenhum arquivo fica pela metade.
+    """
+    destino = tmp_path / "dados"
+    destino.mkdir()
+    (destino / ARQUIVO_EXECUCOES).write_text("cenario,modo\nleve,FIXO\n", encoding="utf-8")
+    _csv_parcial(tmp_path / "a", ARQUIVO_VE, [["leve", "FIXO", "1"]])
+    _csv_parcial(tmp_path / "a", ARQUIVO_EXECUCOES, [["leve", "FIXO", "1"]])
+
+    with pytest.raises(CabecalhoDivergenteError):
+        lote.consolidar([tmp_path / "a"], destino)
+
+    assert not (destino / ARQUIVO_VE).exists()
+    assert (destino / ARQUIVO_EXECUCOES).read_text(encoding="utf-8") == "cenario,modo\nleve,FIXO\n"
+
+
+def test_consolidar_recusa_execucoes_com_cabecalhos_diferentes(tmp_path: Path) -> None:
+    """Execuções de versões diferentes do código não se misturam na mesma matriz."""
+    _csv_parcial(tmp_path / "a", ARQUIVO_EXECUCOES, [["leve", "FIXO", "1"]])
+    (tmp_path / "b").mkdir()
+    (tmp_path / "b" / ARQUIVO_EXECUCOES).write_text(
+        "cenario,modo,seed,extra\nleve,PREEMPCAO,1,x\n", encoding="utf-8"
+    )
+
+    with pytest.raises(CabecalhoDivergenteError):
+        lote.consolidar([tmp_path / "a", tmp_path / "b"], tmp_path / "dados")
 
 
 # --- proteção contra consolidar o mesmo ponto duas vezes --------------------
