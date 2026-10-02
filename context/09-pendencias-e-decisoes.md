@@ -589,12 +589,11 @@ mesmo experimento. As seeds 101..105 são pontos novos, então a guarda de
 
 ---
 
-## P17 — E7 não entrega a mitigação de H2 · ✅ **DECIDIDA em 2026-10-01** (execução pendente)
+## P17 — E7 não entrega a mitigação de H2 · ✅ **FECHADA em 2026-10-01** (calibrada e congelada; veredito no Bloco 8)
 
 > **Decisão da equipe: manter E7 e H2, fixar a régua agora e calibrar uma vez.**
 > Matar E7 foi considerado e recusado: obrigaria a tirar H2 do trabalho (que está
-> no pré-projeto) com base numa medição feita com `K` nunca calibrado e com uma
-> métrica que pode estar diluindo o efeito.
+> no pré-projeto) com base numa medição feita com `K` nunca calibrado.
 >
 > 1. **Denominador: fração do acréscimo.** H2 é atingida quando
 >    `(preempcao − compensada) / (preempcao − fixo) ≥ 15%`. O "impacto negativo"
@@ -603,11 +602,24 @@ mesmo experimento. As seeds 101..105 são pontos novos, então a guarda de
 > 2. **Onde H2 é avaliada: `moderado` e `intenso`**, os mesmos cenários de H1. Em
 >    `leve` o acréscimo é ~0 e a fração fica sem significado; `leve` e
 >    `multiplas_emergencias` são reportados de forma descritiva, sem veredito.
-> 3. **Régua: espera transversal na janela de cada evento**, a mesma janela para
->    o custo e para a mitigação. A janela cobre a preempção e os ciclos de
->    compensação que a seguem. A média da hora inteira continua reportada como
->    métrica secundária. A definição operacional exata da janela é escrita e
->    commitada **antes** de ser implementada.
+> 3. **Régua: a espera média transversal da hora inteira**
+>    (`tempo_espera_medio_transversal_s`, já implementada), média entre as seeds.
+>    Uma "janela de cada evento" chegou a ser decidida e foi **revertida no mesmo
+>    dia, antes de qualquer código**, por dois motivos verificados:
+>    - **Com o denominador do item 1, a diluição não enviesa.** Fora dos eventos
+>      os três braços se comportam igual; esses períodos entram com o mesmo valor
+>      nos dois termos da fração e se cancelam. A razão de diferenças é a mesma
+>      sobre a hora ou sobre a janela — a diluição só pesava na leitura pela
+>      espera total, descartada no item 1.
+>    - **Em nível de rede, a janela é quase a hora inteira.** Um VE parte a cada
+>      600 s e leva de 300 s a 540 s para cruzar os oito cruzamentos, cada um
+>      seguido de compensação. Uma janela distinta da hora exigiria medir por
+>      cruzamento, e o `tripinfo` não atribui espera a cruzamento — seria
+>      instrumentação nova para, no máximo, reduzir variância.
+>
+>    Consequência: a mitigação de **−2,0%** (`intenso`) e **−5,0%** (`moderado`)
+>    do acréscimo medida na remedição de P16 não é artefato da régua. Com os
+>    parâmetros atuais, E7 não mitiga; a calibração é a alavanca.
 > 4. **Calibração de `K` e `n_ciclos_compensacao`: uma rodada**, com as mesmas
 >    guardas de P16 — critério, valores candidatos e regra de escolha escritos e
 >    commitados antes de rodar; seeds fora de 1..50 (calibração em 101..105);
@@ -618,9 +630,13 @@ mesmo experimento. As seeds 101..105 são pontos novos, então a guarda de
 >    constatação de que a compensação não o mitigou nesta forma. E7 e H2
 >    continuam no trabalho nos dois casos.
 >
-> **O que falta é execução, antes do Bloco 8:** (a) declarar a janela e o
-> critério da calibração; (b) implementar a métrica de janela; (c) rodar a
-> calibração; (d) congelar os parâmetros.
+> **O que falta é execução, antes do Bloco 8:** ~~(a) declarar o critério da
+> calibração~~ (feito, ver "Critério da calibração" no fim desta pendência);
+> ~~(b) dar ao lote um jeito de variar `K` e `n_ciclos_compensacao` sem editar
+> `parametros.yaml`~~ (feito: `--ajuste` no lote e `sim/calibracao/compensacao.py`);
+> ~~(c) rodar a calibração; (d) congelar os parâmetros~~ (feito em 2026-10-01:
+> `K = 1,0`, `n = 3`, pontuação +6,2%; ver "Resultado da calibração" no fim desta
+> pendência). **P17 está executada; o veredito de H2 vem do Bloco 8.**
 >
 > O registro abaixo é o histórico do problema.
 
@@ -745,6 +761,129 @@ fato custa algo.
 > transversal medido e declarar que a compensação proposta não o mitigou de forma
 > mensurável neste experimento — H2 rejeitada é um resultado, não um fracasso,
 > desde que dito assim.
+
+### Critério da calibração, declarado **antes** do código · 2026-10-01
+
+Commitado antes de qualquer alteração de código ou execução, pelo mesmo motivo de
+P16: o `git log` é o que prova que o critério precede o resultado.
+
+**O que se calibra.** Só os dois parâmetros de E7 em `parametros.yaml`:
+`ganho_compensacao_k` (hoje 0,7) e `n_ciclos_compensacao` (hoje 2). A fórmula de
+E7 (`01` §5.2) **não muda**. Mudar o mecanismo seria outra tentativa, fora do
+que foi decidido.
+
+**Por que a grade cobre os dois lados do valor atual.** A ordem de grandeza
+mostra que não se sabe, antes de medir, se falta ou sobra compensação. Com 2
+fases de 30 s e ciclo de 70 s, uma preempção de 30 s (valor ilustrativo) gera
+um déficit de `30/70 × 30 ≈ 13 s` de verde. Com `K = 0,7` e `n = 2`, a
+transversal recebe até ~9 s a mais por verde, em dois verdes. Já a fila extra
+que essa preempção acumula na transversal (uma faixa) é de
+`314 × 30/3600 ≈ 2,6` veículos no `moderado` e `539 × 30/3600 ≈ 4,5` no
+`intenso` (fluxos derivados, `04` §5). Ao headway medido de 2,29 s, ela escoa
+em ~6 s e ~10 s. Pela conta, a compensação atual já é da ordem do necessário,
+e o efeito medido é nulo. Daí a grade testar menos e mais compensação.
+
+**Grade, fixada agora — 15 combinações:**
+
+| Parâmetro | Valores |
+| --- | --- |
+| `ganho_compensacao_k` | 0,25 · 0,5 · 0,7 · 1,0 · 1,5 |
+| `n_ciclos_compensacao` | 1 · 2 · 3 |
+
+`K = 1,0` devolve o déficit inteiro (ponderado pela fila); 1,5 testa devolver
+mais que o perdido; 0,25 testa compensação mínima. `n = 3` são 210 s de
+compensação por cruzamento, um terço do intervalo entre VEs. A combinação atual
+(0,7; 2) está na grade e serve de referência.
+
+**Onde se mede.** Cenários `moderado` e `intenso` (os de H2), **seeds 101..105**
+(fora de 1..50, guarda de P16), 3.600 s, `--sem-banco`, saída em
+`analysis/data/calibracao_p17/`. `FIXO` e `PREEMPCAO` rodam **uma vez** por
+cenário e seed — não dependem de `K` nem de `n`. Os dados de
+`calibracao_p16/` não servem de baseline: vieram de código anterior à correção
+da via interna e à P20. Total: 20 execuções de baseline + 150 do braço
+`PREEMPCAO_COMPENSADA`.
+
+**Medida e regra de escolha:**
+
+1. Para cada cenário `c`, com as médias entre as cinco seeds de
+   `tempo_espera_medio_transversal_s`:
+   `M(c) = (PREEMPCAO − COMPENSADA) / (PREEMPCAO − FIXO)` — a mesma conta de
+   `resumir_h2` em `analysis/relatorio_piloto.py`.
+2. Pontuação da combinação: `(M(moderado) + M(intenso)) / 2`.
+3. **Eliminada** a combinação com qualquer execução que tenha colisão,
+   teleporte, violação de I1–I5 ou reprovação em `validar_execucao()`. Não se
+   reroda com outro valor no lugar.
+4. **Escolhida** a de maior pontuação. Empate exato: menor `n`, depois menor `K`.
+5. **Congelada** num commit próprio em `parametros.yaml`, antes do Bloco 8.
+
+**Regra de parada: uma rodada.** A escolhida é congelada **mesmo que a pontuação
+fique abaixo de 15%, ou abaixo de zero**. Não há segunda grade, refinamento em
+volta do melhor ponto nem troca de cenário. O veredito de H2 sai do Bloco 8
+(seeds 1..50), não desta calibração. Corrigir um defeito de implementação achado
+no caminho não conta como nova rodada, como em P16.
+
+**Reportado junto, sem entrar na escolha:** `M` por cenário, o custo
+`(PREEMPCAO − FIXO) / FIXO` e o tempo de travessia do VE no braço compensado
+contra o `PREEMPCAO`, por combinação. Se a escolhida piorar o tempo do VE, isso
+vai para o texto.
+
+**Resultado esperado, declarado antes de medir:** nenhum. A aritmética acima não
+indica a direção, e por isso a grade é bilateral. O que se afirma de antemão é só
+que a segurança (I1–I5) não pode ser afetada: E7 age por `ESTENDER_VERDE`,
+limitado por `verde_max_s` e pela guarda de I5 do motor.
+
+### Resultado da calibração · 2026-10-01
+
+Rodada única, código `ba44b27`, 170 execuções de 3.600 s, **170 válidas**: zero
+colisão, teleporte ou violação de I1–I5 em todas. Dados em
+`analysis/data/calibracao_p17/` (`resultado_calibracao.csv`,
+`baselines_calibracao.csv` e uma subpasta por combinação). Reproduzível com
+`python -m sim.calibracao.compensacao --so-avaliar`.
+
+| Cenário | Espera `FIXO` | Espera `PREEMPCAO` | Custo |
+| --- | ---: | ---: | ---: |
+| `moderado` | 15,54 s | 18,13 s | +16,6% |
+| `intenso` | 16,12 s | 24,72 s | +53,3% |
+
+| K | n | M `moderado` | M `intenso` | Pontuação |
+| ---: | ---: | ---: | ---: | ---: |
+| 0,25 | 1 | −4,6% | +5,1% | +0,3% |
+| 0,5 | 1 | −10,0% | +6,6% | −1,7% |
+| 0,7 | 1 | −15,8% | +10,5% | −2,6% |
+| 1,0 | 1 | −12,2% | +5,7% | −3,2% |
+| 1,5 | 1 | −17,8% | +8,1% | −4,9% |
+| 0,25 | 2 | −10,0% | −0,8% | −5,4% |
+| 0,5 | 2 | −11,7% | +3,6% | −4,1% |
+| 0,7 | 2 | −8,2% | +5,0% | −1,6% |
+| 1,0 | 2 | −11,2% | +10,8% | −0,2% |
+| 1,5 | 2 | −5,3% | +9,3% | +2,0% |
+| 0,25 | 3 | −12,5% | +8,8% | −1,8% |
+| 0,5 | 3 | −11,9% | +10,3% | −0,8% |
+| 0,7 | 3 | −1,9% | +4,8% | +1,4% |
+| **1,0** | **3** | **+0,9%** | **+11,7%** | **+6,2%** |
+| 1,5 | 3 | 0,0% | −2,0% | −1,0% |
+
+**Escolhida pela regra: `K = 1,0`, `n = 3`**, congelada em `parametros.yaml` num
+commit próprio. Pontuação **+6,2%**, abaixo da meta de 15%. Pela regra de
+parada, não há segunda rodada.
+
+**A escolha não indica que a calibração achou uma alavanca**, e o texto precisa
+dizer isso. Com 5 seeds, o desvio-padrão de `M` entre seeds tem mediana de 26%
+no `moderado` e 15% no `intenso`. O erro-padrão da média fica em ~12% e ~7%, e
+o da pontuação em ~7%. Todas as 15 combinações ficam dentro de cerca de um
+erro-padrão de zero. Não há tendência com `K` nem com `n`, e combinações
+vizinhas trocam de sinal ((1,0; 3) dá +6,2%; (1,5; 3) dá −1,0%). O padrão
+estável é por cenário: a compensação quase sempre piora o `moderado` e ajuda
+pouco o `intenso`.
+
+**Efeito no VE, reportado como o critério manda:** com a escolhida, a travessia
+do VE no braço compensado fica em 314,2 s no `moderado` e 397,8 s no `intenso`,
+contra 311,7 s e 387,6 s em `PREEMPCAO` (+0,8% e +2,6%).
+
+**Consequência para H2:** o mais provável é ela sair rejeitada no Bloco 8. Se
+sair, é um resultado bem sustentado: a compensação proposta foi testada com
+parâmetros calibrados por procedimento declarado antes, e não reduziu de forma
+mensurável o custo transversal que a preempção causa.
 
 ---
 
@@ -1432,7 +1571,8 @@ diferenças) foram verificados.
 | Data | Item | Decisão | Justificativa |
 | --- | --- | --- | --- |
 | 2026-10-01 | **Escopo integral** | O escopo declarado em `00-visao-geral.md` é entregue por inteiro. A lista de priorização para redução de escopo do `08` §2 foi **removida** do projeto, junto com as referências a ela. | Decisão da equipe. Atraso se resolve no planejamento, não tirando entregas. |
-| 2026-10-01 | **P17 decidida** — E7 e H2 | E7 e H2 **ficam**. H2 = mitigação de **≥ 15% do acréscimo** causado pela preempção, avaliada em `moderado` e `intenso`, medida na **janela de cada evento** (média horária como secundária). `K` e `n_ciclos_compensacao` são calibrados **uma vez**, em seeds 101..105, com critério commitado antes; o veredito vem do Bloco 8. Abaixo de 15%, H2 é reportada como rejeitada. | Matar E7 tiraria do trabalho uma hipótese do pré-projeto com base numa medição feita com parâmetro nunca calibrado e métrica possivelmente diluída. A régua é fixada enquanto nenhuma leitura atinge a meta, então a escolha não é feita pelo resultado. Uma H2 rejeitada com evidência é resultado; uma H2 removida é lacuna. |
+| 2026-10-01 | **P17 executada** — calibração de E7 | Rodada única, 170 execuções válidas. Escolhida pela regra declarada: **`K = 1,0`, `n_ciclos_compensacao = 3`**, pontuação +6,2%, abaixo da meta de 15%. Congelada em `parametros.yaml`. | A regra de parada manda congelar mesmo abaixo da meta. As 15 combinações ficam dentro de cerca de um erro-padrão de zero (~7% na pontuação), sem tendência com `K` nem com `n`: a calibração não achou alavanca, e isso vai para o texto. Veredito de H2 no Bloco 8. |
+| 2026-10-01 | **P17 decidida** — E7 e H2 | E7 e H2 **ficam**. H2 = mitigação de **≥ 15% do acréscimo** causado pela preempção, avaliada em `moderado` e `intenso`, sobre a **espera média transversal da hora** (uma janela por evento foi decidida e revertida no mesmo dia: com este denominador ela não muda a razão). `K` e `n_ciclos_compensacao` são calibrados **uma vez**, em seeds 101..105, com critério commitado antes; o veredito vem do Bloco 8. Abaixo de 15%, H2 é reportada como rejeitada. | Matar E7 tiraria do trabalho uma hipótese do pré-projeto com base numa medição feita com parâmetro nunca calibrado e métrica possivelmente diluída. A régua é fixada enquanto nenhuma leitura atinge a meta, então a escolha não é feita pelo resultado. Uma H2 rejeitada com evidência é resultado; uma H2 removida é lacuna. |
 | 2026-10-01 | **P15 fechada** — cliente do lote | **Opção 2:** lote com `traci` e processos em paralelo; `libsumo` não é instalado pelo pip. `--libsumo` segue implementado, sem ser o padrão. | O piloto mediu ~6 h para as 600 execuções com `traci` e 6 processos: cabe na janela. Sem ganho de viabilidade, não há razão para abrir exceção à regra de 2026-08-24 (cliente do SUMO só de `%SUMO_HOME%/tools`). |
 | 2026-10-01 | **P11 fechada** | Fechada pela equipe. O método de medir o fluxo de saturação na própria malha foi aprovado pelo orientador em 2026-09-10. O restante — citações da faixa de plausibilidade e do enquadramento por v/c, e os itens 4 a 6 — é redação da metodologia. | Nada no código ou nas execuções depende mais de P11; mantê-la aberta só misturava pendência de redação com pendência de decisão. |
 | 2026-10-01 | **P20 fechada** | Implementada e mergeada (PR #8). API, LCD e painel ficam nos Blocos 6, 5 e 7. | Decisão de 2026-09-29 executada; não sobra decisão em aberto. |

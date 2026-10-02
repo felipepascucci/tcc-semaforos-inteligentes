@@ -265,6 +265,14 @@ Com `libsumo` e 4 processos em paralelo, isso roda em algumas horas. Com `traci`
 > MOTIVO`, que apaga do banco os pontos já gravados antes de reexecutar, e
 > `--sem-banco`.
 >
+> **`--ajuste NOME=VALOR` (P17, 2026-10-01).** Substitui `ganho_compensacao_k` ou
+> `n_ciclos_compensacao` sem editar `parametros.yaml` — nenhum outro parâmetro é
+> ajustável. Exige `--sem-banco` (o snapshot de `execucao_simulacao` é o do YAML)
+> e consolida numa subpasta de `--saida` com o rótulo do ajuste, porque os CSV
+> não têm coluna de parâmetro. Existe para a calibração de E7
+> (`python -m sim.calibracao.compensacao`); o Bloco 8 roda sem ajuste, com os
+> valores congelados no YAML.
+>
 > **O lote paraleliza com processos `traci`, não com `libsumo`** — o módulo
 > Python do `libsumo` não vem no instalador Windows (P15). O adaptador abstrai os
 > dois (3.6), então trocar é passar `--libsumo` quando a decisão for tomada. O

@@ -113,19 +113,37 @@ class Ponto:
         cenario: Cenário de `cenarios.yaml`.
         modo: Braço de comparação.
         seed: Seed do ponto.
+        ajustes: Parâmetros que substituem os de `parametros.yaml` neste ponto
+            (calibração de P17). Vazio nas execuções normais.
     """
 
     cenario: str
     modo: str
     seed: int
+    ajustes: executor.Ajustes = ()
 
     def __str__(self) -> str:
-        return f"{self.cenario}/{self.modo}/seed={self.seed}"
+        base = f"{self.cenario}/{self.modo}/seed={self.seed}"
+        return f"{base}/{self.variante}" if self.ajustes else base
+
+    @property
+    def variante(self) -> str:
+        """Rótulo dos ajustes; vazio quando o ponto usa `parametros.yaml` puro."""
+        return executor.rotulo_dos_ajustes(self.ajustes)
 
     @property
     def pasta(self) -> Path:
         """Pasta de saída bruta desta execução."""
-        return executor.SAIDA / f"{self.cenario}_{self.modo}_{self.seed}"
+        return executor.pasta_de_saida(self.cenario, self.modo, self.seed, self.ajustes)
+
+    def destino(self, saida: Path) -> Path:
+        """Onde os CSV deste ponto são consolidados.
+
+        Ponto com ajustes vai para uma subpasta com o rótulo deles. Os CSV não
+        têm coluna de parâmetro, então duas combinações do mesmo (cenário, modo,
+        seed) no mesmo arquivo seriam linhas indistinguíveis.
+        """
+        return saida / self.variante if self.ajustes else saida
 
 
 @dataclass(frozen=True)
@@ -216,8 +234,32 @@ def analisar_seeds(texto: str) -> tuple[int, ...]:
     return tuple(sorted(seeds))
 
 
+def analisar_ajustes(textos: Sequence[str]) -> executor.Ajustes:
+    """Interpreta `["ganho_compensacao_k=1.5", "n_ciclos_compensacao=3"]`.
+
+    Só a forma é conferida aqui; nome e valor são validados por
+    `executor.aplicar_ajustes()`, que é quem os aplica.
+
+    Raises:
+        ValueError: se algum item não tiver a forma `NOME=VALOR` numérica.
+    """
+    pares: list[tuple[str, float]] = []
+    for texto in textos:
+        nome, sinal, valor = texto.partition("=")
+        if not sinal or not nome.strip():
+            raise ValueError(f"ajuste fora da forma NOME=VALOR: {texto!r}")
+        try:
+            pares.append((nome.strip(), float(valor)))
+        except ValueError:
+            raise ValueError(f"valor não numérico em {texto!r}") from None
+    return tuple(sorted(pares))
+
+
 def matriz(
-    cenarios: Sequence[str], modos: Sequence[str], seeds: Sequence[int]
+    cenarios: Sequence[str],
+    modos: Sequence[str],
+    seeds: Sequence[int],
+    ajustes: executor.Ajustes = (),
 ) -> tuple[Ponto, ...]:
     """Produto cartesiano dos três eixos, em ordem estável.
 
@@ -227,7 +269,10 @@ def matriz(
     **completas** para trás, em vez de um cenário inteiro num modo só.
     """
     return tuple(
-        Ponto(cenario, modo, seed) for seed in seeds for cenario in cenarios for modo in modos
+        Ponto(cenario, modo, seed, ajustes)
+        for seed in seeds
+        for cenario in cenarios
+        for modo in modos
     )
 
 
@@ -239,9 +284,9 @@ def exemplares(pontos: Iterable[Ponto]) -> frozenset[Ponto]:
     transições no banco e latência linha a linha no CSV, e portanto quais
     alimentam as figuras do capítulo 5.
     """
-    escolhidos: dict[tuple[str, str], Ponto] = {}
+    escolhidos: dict[tuple[str, str, executor.Ajustes], Ponto] = {}
     for ponto in pontos:
-        chave = (ponto.cenario, ponto.modo)
+        chave = (ponto.cenario, ponto.modo, ponto.ajustes)
         atual = escolhidos.get(chave)
         if atual is None or ponto.seed < atual.seed:
             escolhidos[chave] = ponto
@@ -296,6 +341,7 @@ def executar_ponto(tarefa: Tarefa) -> ResultadoDoPonto:
                 exemplar=tarefa.exemplar,
                 persistir=tarefa.persistir,
                 diretorio_csv=ponto.pasta,
+                ajustes=ponto.ajustes,
             )
         )
     except Exception as erro:  # o lote continua; o ponto entra como falho
@@ -313,7 +359,7 @@ def executar_ponto(tarefa: Tarefa) -> ResultadoDoPonto:
     # interseção dos três braços.
     problemas = validar_execucao(
         resultado,
-        carregar_parametros("simulacao"),
+        executor.aplicar_ajustes(carregar_parametros("simulacao"), ponto.ajustes),
         completa=tarefa.duracao_s is None,
     )
     return ResultadoDoPonto(
@@ -474,8 +520,10 @@ def registrar_descartes(
     for resultado in resultados:
         ponto = resultado.ponto
         if resultado.erro is not None:
+            # Com ajustes, a pasta é o único lugar que diz qual combinação falhou.
+            evidencia = str(ponto.pasta.relative_to(RAIZ)) if ponto.ajustes else ""
             linhas.append(
-                (agora, "FALHA", ponto.cenario, ponto.modo, ponto.seed, resultado.erro, "")
+                (agora, "FALHA", ponto.cenario, ponto.modo, ponto.seed, resultado.erro, evidencia)
             )
         for problema in resultado.problemas:
             linhas.append(
@@ -556,6 +604,14 @@ def remover_do_banco(pontos: Sequence[Ponto]) -> tuple[list[Ponto], str | None]:
 # ---------------------------------------------------------------------------
 
 
+def _por_destino(pontos: Sequence[Ponto], saida: Path) -> dict[Path, list[Ponto]]:
+    """Agrupa os pontos pelo diretório em que serão consolidados, na ordem da matriz."""
+    grupos: dict[Path, list[Ponto]] = {}
+    for ponto in pontos:
+        grupos.setdefault(ponto.destino(saida), []).append(ponto)
+    return grupos
+
+
 @dataclass(frozen=True)
 class ResumoDoLote:
     """O que o lote produziu.
@@ -619,10 +675,20 @@ def rodar(
     """
     inicio = time.perf_counter()
 
+    if persistir and any(ponto.ajustes for ponto in pontos):
+        raise ValueError(
+            "pontos com ajustes de parâmetro não podem gravar em execucao_simulacao: "
+            "o snapshot do banco é o de parametros.yaml (use persistir=False / --sem-banco)"
+        )
+    grupos = _por_destino(pontos, saida)
+
     # A checagem vem ANTES de qualquer execução, de propósito: descobrir a
     # duplicata só na hora de consolidar significaria descobri-la depois de horas
     # de máquina, com os processos já gastos.
-    if repetidos := pontos_ja_no_csv(saida, pontos):
+    repetidos = tuple(
+        ponto for destino, membros in grupos.items() for ponto in pontos_ja_no_csv(destino, membros)
+    )
+    if repetidos:
         if repetir_motivo is None:
             raise PontoJaConsolidadoError(
                 f"{len(repetidos)} ponto(s) da matriz já têm linhas em "
@@ -635,9 +701,10 @@ def rodar(
                 "anterior é apagada dos CSV e do banco, e a remoção fica registrada em "
                 f"{ARQUIVO_DESCARTES} (context/06 §4)."
             )
-        apagadas = remover_dos_csv(saida, repetidos)
-        for nome, quantas in apagadas.items():
-            print(f"  --repetir: {quantas} linha(s) removida(s) de {nome}")
+        for destino, membros in grupos.items():
+            apagadas = remover_dos_csv(destino, [p for p in repetidos if p in membros])
+            for nome, quantas in apagadas.items():
+                print(f"  --repetir: {quantas} linha(s) removida(s) de {destino / nome}")
 
     # Pareamento por seed: os arquivos de rota nascem aqui, em série, antes de
     # qualquer processo subir (context/04 §7).
@@ -674,7 +741,11 @@ def rodar(
 
     # Só execução válida entra na análise (context/06 §4). A reprovada fica na
     # própria pasta, com a evidência bruta, e o motivo vai para descartes.csv.
-    linhas = consolidar([r.ponto.pasta for r in resultados if r.valida], saida)
+    linhas: dict[str, int] = {}
+    for destino, membros in grupos.items():
+        validas = [r.ponto.pasta for r in resultados if r.valida and r.ponto in membros]
+        for nome, quantas in consolidar(validas, destino).items():
+            linhas[nome] = linhas.get(nome, 0) + quantas
 
     # A reexecução é registrada uma vez por ponto, tenha a evidência anterior
     # saído do CSV, do banco, ou dos dois.
@@ -759,7 +830,22 @@ def main(argumentos: Sequence[str] | None = None) -> int:
         help="apaga do banco os pontos já gravados antes de rodar; o motivo vai "
         "para descartes.csv (context/06 §4)",
     )
+    analisador.add_argument(
+        "--ajuste",
+        metavar="NOME=VALOR",
+        action="append",
+        default=[],
+        help=f"substitui um parâmetro de E7 em todos os pontos ({', '.join(executor.AJUSTAVEIS)});"
+        " exige --sem-banco e consolida numa subpasta de --saida com o rótulo do ajuste",
+    )
     opcoes = analisador.parse_args(argumentos)
+
+    try:
+        ajustes = analisar_ajustes(opcoes.ajuste)
+    except ValueError as erro:
+        analisador.error(str(erro))
+    if ajustes and not opcoes.sem_banco:
+        analisador.error("--ajuste exige --sem-banco")
 
     cenarios = tuple(nome.strip() for nome in opcoes.cenarios.split(",") if nome.strip())
     modos = tuple(nome.strip() for nome in opcoes.modos.split(",") if nome.strip())
@@ -767,7 +853,7 @@ def main(argumentos: Sequence[str] | None = None) -> int:
         analisador.error(f"modo desconhecido: {', '.join(desconhecidos)}")
 
     seeds = analisar_seeds(opcoes.seeds)
-    pontos = matriz(cenarios, modos, seeds)
+    pontos = matriz(cenarios, modos, seeds, ajustes)
     marcados = exemplares(pontos)
 
     print(

@@ -14,7 +14,7 @@ Documento de validação da integração entre o software e o protótipo físico
 
 ## §1 — O que o sistema faz
 
-Um veículo de emergência (VE) se aproxima de um cruzamento. O sistema o identifica, calcula quais semáforos da rota precisam mudar, e executa a **preempção** — interrompe o ciclo normal para conceder verde à aproximação do VE. Depois da passagem, **compensa** o ciclo por `n_ciclos_compensacao = 2` ciclos, redistribuindo verde às transversais que ficaram esperando.
+Um veículo de emergência (VE) se aproxima de um cruzamento. O sistema o identifica, calcula quais semáforos da rota precisam mudar, e executa a **preempção** — interrompe o ciclo normal para conceder verde à aproximação do VE. Depois da passagem, **compensa** o ciclo por `n_ciclos_compensacao = 3` ciclos (valor calibrado em P17), redistribuindo verde às transversais que ficaram esperando.
 
 Duas frentes de validação, com papéis diferentes:
 

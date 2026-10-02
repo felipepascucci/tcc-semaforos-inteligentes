@@ -5,10 +5,10 @@ vias transversais (enunciado corrigido em 2026-08-31 — "em até 15%" era um te
 não uma meta, e a mitigação medida no piloto o cumpriria). Sem ela o trabalho
 ainda mede H1, mas H2 fica sem mecanismo que a teste.
 
-`K` e `n_ciclos_compensacao` continuam nos valores de partida de `context/01` §5.3
-e **nunca foram calibrados contra dado real**. O piloto do Bloco 4 mede mitigação
-entre -1,0% e +0,6%. A calibração foi decidida em 2026-10-01 (P17): uma rodada,
-em seeds 101..105, com critério declarado antes.
+`K` e `n_ciclos_compensacao` foram calibrados em 2026-10-01 (P17), numa rodada
+única sobre grade declarada antes: `K = 1,0` e `n = 3`, com pontuação +6,2%,
+abaixo da meta. Nenhuma combinação da grade se distinguiu de zero além do ruído
+entre seeds — com esta fórmula, E7 não mitiga de forma mensurável.
 
 A fórmula é a de `context/01` §5.2::
 

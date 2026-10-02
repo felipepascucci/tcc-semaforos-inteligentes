@@ -217,13 +217,13 @@ senão:
 
 **E6 — Manutenção e liberação.** Manter a fase até o VE cruzar a linha de retenção, com timeout de segurança `PREEMPCAO_TIMEOUT_S = 45`. Ao liberar, registrar em `log_prioridade` com `status_execucao`.
 
-**E7 — Compensação pós-evento (H2).** Após a liberação, por `N_CICLOS_COMPENSACAO = 2` ciclos, redistribuir o verde proporcionalmente à fila acumulada de cada acesso, respeitando `VERDE_MIN` e `VERDE_MAX`:
+**E7 — Compensação pós-evento (H2).** Após a liberação, por `N_CICLOS_COMPENSACAO = 3` ciclos, redistribuir o verde proporcionalmente à fila acumulada de cada acesso, respeitando `VERDE_MIN` e `VERDE_MAX`:
 
 ```
 verde_i = clamp(VERDE_BASE_i + K * (fila_i / soma_filas) * DEFICIT_TOTAL, VERDE_MIN, VERDE_MAX)
 ```
 
-onde `DEFICIT_TOTAL` é o tempo de verde que o acesso deixou de receber durante a preempção, e `K` é o ganho de compensação (parâmetro do experimento, começar em `K = 0.7`).
+onde `DEFICIT_TOTAL` é o tempo de verde que o acesso deixou de receber durante a preempção, e `K` é o ganho de compensação (parâmetro do experimento; começou em `K = 0.7` e foi calibrado para `K = 1.0` em P17).
 
 > **"Começar em `K = 0.7`" foi onde parou, e é P17.** O piloto do Bloco 4 mede uma
 > mitigação entre −1,0% e +0,6% contra a meta de H2 — `K` e
@@ -233,9 +233,15 @@ onde `DEFICIT_TOTAL` é o tempo de verde que o acesso deixou de receber durante 
 > compensação atua por ~140 s depois de cada evento, com um VE a cada 10 min.
 > Calibrar contra uma métrica que dilui é calibrar contra ruído.
 >
-> **Decidido em 2026-10-01 (P17):** H2 passa a ser medida na janela de cada
-> evento, e `K`/`N_CICLOS_COMPENSACAO` são calibrados uma vez, em seeds
-> 101..105, com critério commitado antes. Ver `09` P17.
+> **Decidido em 2026-10-01 (P17):** a suspeita de diluição não se sustenta. Com
+> H2 medida como fração do *acréscimo*, os períodos sem evento se cancelam e a
+> média horária não enviesa a razão. `K`/`N_CICLOS_COMPENSACAO` são calibrados
+> uma vez, em seeds 101..105, pela grade e regra declaradas em `09` P17.
+>
+> **Calibrado em 2026-10-01:** `K = 1.0`, `N_CICLOS_COMPENSACAO = 3`, escolhidos
+> pela regra com pontuação +6,2%, abaixo da meta de 15%. As 15 combinações da
+> grade ficam dentro de cerca de um erro-padrão de zero: com esta fórmula, E7
+> não mitiga de forma mensurável. Ver `09` P17, "Resultado da calibração".
 
 **E8 — Conflito entre múltiplos VEs.** Cenário obrigatório de teste. Regra de desempate, em ordem:
 
@@ -346,8 +352,8 @@ verde_max_s: 60.0
 amarelo_s: 3.0
 all_red_s: 2.0
 preempcao_timeout_s: 45.0
-n_ciclos_compensacao: 2
-ganho_compensacao_k: 0.7
+n_ciclos_compensacao: 3      # calibrado em P17 (era 2)
+ganho_compensacao_k: 1.0     # calibrado em P17 (era 0.7)
 velocidade_min_estimativa_ms: 4.0
 prioridade_tipo: [AMBULANCIA, BOMBEIRO, POLICIA]
 ```

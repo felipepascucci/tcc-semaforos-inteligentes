@@ -58,6 +58,15 @@ SAIDA = RAIZ / "sim" / "saida"
 
 MODOS = ("FIXO", "PREEMPCAO", "PREEMPCAO_COMPENSADA")
 
+#: Parâmetros que uma execução pode variar sem editar `parametros.yaml`. Só os de
+#: E7, porque é o que a calibração de P17 precisa (`context/09` P17). Ampliar a
+#: lista é decisão, não conveniência: todo parâmetro fora daqui só muda por
+#: commit no YAML, que é o que o `versao_codigo` de cada execução registra.
+AJUSTAVEIS = ("ganho_compensacao_k", "n_ciclos_compensacao")
+
+#: Ajustes de parâmetro de uma execução, como pares (nome, valor) ordenados.
+Ajustes = tuple[tuple[str, float], ...]
+
 
 @dataclass(frozen=True)
 class Opcoes:
@@ -82,6 +91,10 @@ class Opcoes:
             execução para a **própria** pasta de saída e consolida depois: com
             vários processos escrevendo direto no arquivo compartilhado, as
             linhas se intercalariam e a ordem mudaria a cada corrida.
+        ajustes: Valores que substituem os de `parametros.yaml` nesta execução,
+            restritos a `AJUSTAVEIS`. Existe para a calibração de P17. Exige
+            `persistir=False`: `execucao_simulacao` guarda o snapshot do YAML, e
+            a linha mentiria sobre os parâmetros usados.
     """
 
     cenario: str
@@ -95,6 +108,7 @@ class Opcoes:
     saida_detalhada: bool = False
     atraso_ms: int = 20
     diretorio_csv: Path | None = None
+    ajustes: Ajustes = ()
 
 
 def versao_do_codigo() -> str:
@@ -129,6 +143,68 @@ def parametros_do_modo(modo: str, base: Parametros) -> Parametros:
     if modo == "PREEMPCAO":
         return replace(base, n_ciclos_compensacao=0)
     return base
+
+
+def aplicar_ajustes(base: Parametros, ajustes: Ajustes) -> Parametros:
+    """Substitui os parâmetros ajustáveis e revalida o conjunto.
+
+    Args:
+        base: Parâmetros lidos de `parametros.yaml`.
+        ajustes: Pares (nome, valor), com nomes de `AJUSTAVEIS`.
+
+    Returns:
+        Os parâmetros com os ajustes aplicados, ou `base` se não houver ajuste.
+
+    Raises:
+        ValueError: se um nome não for ajustável, se aparecer duas vezes, ou se
+            um valor inteiro vier com parte fracionária — truncar em silêncio
+            mudaria o ponto da grade sem ninguém ver.
+        ConfiguracaoInvalidaError: se o conjunto resultante for incoerente.
+    """
+    from dataclasses import replace  # import local: uso local
+
+    if not ajustes:
+        return base
+    nomes = [nome for nome, _ in ajustes]
+    if desconhecidos := [nome for nome in nomes if nome not in AJUSTAVEIS]:
+        raise ValueError(
+            f"parâmetro não ajustável: {', '.join(desconhecidos)} "
+            f"(ajustáveis: {', '.join(AJUSTAVEIS)})"
+        )
+    if len(set(nomes)) != len(nomes):
+        raise ValueError(f"parâmetro ajustado mais de uma vez: {nomes}")
+
+    valores: dict[str, float | int] = {}
+    for nome, valor in ajustes:
+        if isinstance(getattr(base, nome), int):
+            if valor != int(valor):
+                raise ValueError(f"{nome} é inteiro e recebeu {valor}")
+            valores[nome] = int(valor)
+        else:
+            valores[nome] = float(valor)
+    ajustados = replace(base, **valores)  # type: ignore[arg-type]
+    ajustados.validar()
+    return ajustados
+
+
+def rotulo_dos_ajustes(ajustes: Ajustes) -> str:
+    """Nome curto e estável de um conjunto de ajustes, para pastas e relatórios.
+
+    Vazio quando não há ajuste, para que as execuções normais continuem nas
+    pastas de sempre.
+    """
+    return "__".join(f"{nome}-{valor:g}" for nome, valor in sorted(ajustes))
+
+
+def pasta_de_saida(cenario: str, modo: str, seed: int, ajustes: Ajustes = ()) -> Path:
+    """Pasta da saída bruta de uma execução.
+
+    Com ajustes, o rótulo entra no nome. Sem isso, as 15 combinações da
+    calibração de P17 escreveriam o `tripinfo.xml` do mesmo (cenário, modo,
+    seed) na mesma pasta, em processos paralelos.
+    """
+    rotulo = rotulo_dos_ajustes(ajustes)
+    return SAIDA / (f"{cenario}_{modo}_{seed}" + (f"__{rotulo}" if rotulo else ""))
 
 
 def _detectores_da_execucao(saida: Path) -> Path:
@@ -224,6 +300,12 @@ def executar(opcoes: Opcoes) -> ResultadoExecucao:
     """
     if opcoes.modo not in MODOS:
         raise ValueError(f"modo desconhecido: {opcoes.modo!r} (esperado um de {', '.join(MODOS)})")
+    if opcoes.ajustes and opcoes.persistir:
+        raise ValueError(
+            "execução com ajustes de parâmetro não pode gravar em execucao_simulacao: "
+            "o snapshot do banco é o de parametros.yaml e mentiria sobre o que rodou "
+            "(use persistir=False / --sem-banco)"
+        )
 
     configuracao = _configuracao()
     duracao_s = opcoes.duracao_s or float(configuracao["execucao"]["duracao_s"])
@@ -232,9 +314,11 @@ def executar(opcoes: Opcoes) -> ResultadoExecucao:
     if problemas := topologia_sumo.validar(malha):
         raise ValueError("mapa de fases e rede não fecham:\n  " + "\n  ".join(problemas))
 
-    parametros = parametros_do_modo(opcoes.modo, carregar_parametros("simulacao"))
+    parametros = parametros_do_modo(
+        opcoes.modo, aplicar_ajustes(carregar_parametros("simulacao"), opcoes.ajustes)
+    )
     rotas = gerar_rotas.garantir(opcoes.cenario, opcoes.seed)
-    saida = SAIDA / f"{opcoes.cenario}_{opcoes.modo}_{opcoes.seed}"
+    saida = pasta_de_saida(opcoes.cenario, opcoes.modo, opcoes.seed, opcoes.ajustes)
     saida.mkdir(parents=True, exist_ok=True)
 
     controlar = opcoes.modo != "FIXO"
