@@ -168,6 +168,29 @@ Note que **em nenhum instante há mais de um `G`** na string de estado. Essa é 
 
 **A latência de atuação (`t_atuacao`) é carimbada quando o backend recebe o `ACK`**, não quando envia o comando. Medir o envio mediria apenas a velocidade do próprio código.
 
+### Tradução comando abstrato → linha (entrega 5.1, 2026-10-02)
+
+Implementada em `bridge/protocolo.py` (`traduzir()`), testada em `bridge/tests/test_protocolo.py`.
+
+| Comando do motor (`01` §9) | Linha | Por quê |
+| --- | --- | --- |
+| `IR_PARA_FASE` | `PRE,<fase>,<dur_s>` | Preempção (E5) |
+| `ESTENDER_VERDE` **com** `id_veiculo` | `PRE,<fase>,<dur_s>` | A fase pedida já está verde |
+| `ESTENDER_VERDE` **sem** `id_veiculo` | nenhuma | Extensão de compensação do E7, ver abaixo |
+| `LIBERAR` | `CLR` | Fim da preempção |
+| `COMPENSAR` | `CLR` | O motor o emite **no lugar** de `LIBERAR`; sem `CLR` o UNO ficaria em preempção até o timeout de 30 s |
+| `FALLBACK_SEGURO` | `CLR` | O fail-safe de `01` §6 é voltar ao ciclo fixo. `SAFE` (todos em vermelho) é parada de operador, não fail-safe |
+
+Regras que saem dessa tabela:
+
+- **`PRE` para a fase que já está verde estende o verde, sem recomeçar a transição.** É o primeiro ramo de E5 (`01` §5.2), e é requisito do firmware (5.3).
+- **`dur_s` é inteiro, arredondado para cima.** Arredondar para baixo poderia fechar o verde antes de o VE passar; o erro para cima custa no máximo 1 s à transversal. Os tempos de `CFG`, ao contrário, **não** são arredondados: são tempos de segurança (I2–I4), e valor fracionário é recusado.
+- **O protocolo valida formato; a semântica é do firmware.** `PRE,5,20` e `TEST,GG--` saem da ponte, e quem recusa é o UNO (`FASE_INVALIDA`, `CONFLITO`). A ponte não é uma terceira cópia da matriz de conflito, e recusar ali esconderia a guarda que a bancada precisa demonstrar.
+- **Telemetria com dois `G` é interpretada, não rejeitada.** É a evidência de violação de I1 que o relatório de validação conta; descartá-la como linha malformada apagaria o que se quer detectar.
+- **O parser aceita `\r\n`**, que é o que `Serial.println` envia, além do `\n` do contrato. Em modo de teste a telemetria pode trazer `-` (módulo apagado).
+
+**Compensação não é demonstrada na bancada — decisão da equipe, 2026-10-04.** A extensão de compensação sai do motor sem `id_veiculo` justamente para não ser contada como preempção, e o protocolo não tem linha para "estender o verde do ciclo fixo sem preempção": `PRE` marcaria o UNO como em preempção. Nada se perde, porque a bancada não mede fila: com fila zero o plano de E7 é a própria duração base, e a extensão coincide com o ciclo fixo. Não haveria o que mostrar mesmo com um comando novo, então **o protocolo do §4 fica como está** (contrato §15, item 4, fechado) e a compensação sai do roteiro de demonstração (§7, passo 4). E7 continua no motor e é medida onde H2 é avaliada, na simulação — que é a fonte dos dados estatísticos de qualquer forma (`00` §3, Frente A).
+
 ## 5. Firmware do NodeMCU — requisitos
 
 1. **Deduplicação de leitura.** O RC522 lê a mesma tag continuamente enquanto ela estiver no campo. Enviar um POST por leitura inunda o backend. Regra: enviar apenas quando o UID mudar **ou** quando tiverem passado mais de `COOLDOWN_MS = 3000` desde o último envio do mesmo UID.
@@ -230,7 +253,7 @@ Para a apresentação, um roteiro determinístico em `bridge/demo.py`:
 1b. **Emergência é estado declarado (P20).** Aproximar a tag da ambulância **sem ocorrência aberta** → LCD `SEM OCORRENCIA`, o semáforo não muda, a tentativa aparece no dashboard. Abrir a ocorrência no painel "Central" do dashboard (criticidade 1, `RISCO_VIDA`). É a resposta, na bancada, à pergunta "como o semáforo sabe que a emergência é real?".
 2. Aproximar a tag da ambulância (agora com ocorrência aberta) → LCD muda, o semáforo da aproximação do VE vai para verde com transição segura (amarelo → all-red → verde), dashboard acende o alerta.
 3. Mostrar o log de priorização aparecendo em tempo real no dashboard, com a latência medida.
-4. Após a passagem, mostrar a compensação nas transversais.
+4. ~~Após a passagem, mostrar a compensação nas transversais.~~ **Retirado em 2026-10-04:** a bancada não mede fila, então a compensação coincide com o ciclo fixo e não há o que mostrar (§4, "Compensação não é demonstrada na bancada"). Se a banca perguntar, a resposta é que E7 é avaliada na simulação, onde H2 é medida.
 5. Aproximar uma tag não cadastrada → `ACESSO NEGADO`, sem preempção, tentativa registrada.
 6. Desconectar o cabo do Arduino → watchdog dispara, sistema retorna ao ciclo fixo (demonstração do fail-safe).
 
