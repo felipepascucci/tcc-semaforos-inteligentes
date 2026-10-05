@@ -25,6 +25,9 @@ dependencies = [
     # (Bloco 6, context/09 2026-10-05). Já estava na stack como dependência de
     # teste (context/02 §2); passa a ser de runtime.
     "httpx>=0.27",
+    # Token do login do operador do dashboard (context/02 §6, Bloco 7). Registrado
+    # em context/09, 2026-10-05. A senha usa PBKDF2 do hashlib: sem lib de hash.
+    "PyJWT>=2.8",
 ]
 
 [project.optional-dependencies]

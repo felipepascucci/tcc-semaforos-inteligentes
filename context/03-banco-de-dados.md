@@ -231,6 +231,9 @@ CREATE TABLE pedido_simulacao (
     modo           modo_controle NOT NULL,
     seed           INT NOT NULL,
     duracao_s      INT CHECK (duracao_s IS NULL OR duracao_s > 0),  -- NULL: a de cenarios.yaml
+    -- Bloco 7: múltiplo do tempo real em que o atendente roda; NULL é o máximo.
+    -- O ritmo fica fora do SUMO e não muda o resultado (migration e5a17c3d8b42).
+    velocidade     SMALLINT CHECK (velocidade IS NULL OR velocidade IN (1, 2, 5, 10)),
     status         VARCHAR(12) NOT NULL DEFAULT 'PENDENTE'
                    CHECK (status IN ('PENDENTE', 'RODANDO', 'CONCLUIDA', 'FALHA')),
     fk_execucao    INT REFERENCES execucao_simulacao(id_execucao) ON DELETE SET NULL,

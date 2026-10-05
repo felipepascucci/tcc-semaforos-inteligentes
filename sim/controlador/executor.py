@@ -42,12 +42,14 @@ from adapters.configuracao import snapshot as snapshot_parametros
 from adapters.sumo import topologia as topologia_sumo
 from adapters.sumo.adaptador import AdaptadorSumo
 from adapters.sumo.cliente import abrir_cliente
+from core.modelos import EstadoMalha
 from core.parametros import Parametros
 from core.priorizacao.conflito import EventoConflito
 from core.priorizacao.motor import MotorDecisao
 from core.seguranca import VerificadorSeguranca
 from sim.ambiente import executavel
 from sim.controlador.coletor import DADOS, ColetorMetricas, ResultadoExecucao, gravar_csv
+from sim.controlador.ritmo import Ritmo
 from sim.controlador.transmissor import Transmissor
 from sim.demanda import gerar_rotas
 from sim.rede import georreferencia
@@ -102,6 +104,9 @@ class Opcoes:
             (`sim/controlador/transmissor.py`). `None`, o padrão, não transmite:
             é assim que o lote roda (decisão de 2026-10-05, Bloco 6).
         id_pedido: O pedido do atendente que originou esta execução, se houver.
+        velocidade: Múltiplo do tempo real em que o laço anda
+            (`sim/controlador/ritmo.py`, Bloco 7). `None`, o padrão, roda o
+            mais rápido possível, como o lote. Não muda o resultado.
     """
 
     cenario: str
@@ -118,6 +123,7 @@ class Opcoes:
     ajustes: Ajustes = ()
     transmitir: str | None = None
     id_pedido: int | None = None
+    velocidade: float | None = None
 
 
 def versao_do_codigo() -> str:
@@ -357,9 +363,20 @@ def executar(opcoes: Opcoes) -> ResultadoExecucao:
     registro = _abrir_registro(opcoes, parametros, duracao_s) if opcoes.persistir else None
 
     transmissor = _transmissor(opcoes)
+    ritmo = None if opcoes.velocidade is None else Ritmo(opcoes.velocidade)
     adaptador.iniciar(_comando_sumo(opcoes, rotas, saida, duracao_s))
     try:
-        _laco(adaptador, motor, verificador, coletor, duracao_s, controlar, conflitos, transmissor)
+        _laco(
+            adaptador,
+            motor,
+            verificador,
+            coletor,
+            duracao_s,
+            controlar,
+            conflitos,
+            transmissor,
+            ritmo,
+        )
     finally:
         adaptador.fechar()
         if transmissor is not None:
@@ -402,9 +419,27 @@ def _transmissor(opcoes: Opcoes) -> Transmissor | None:
         seed=opcoes.seed,
         georreferencia=georreferencia.carregar(),
         id_pedido=opcoes.id_pedido,
+        velocidade=opcoes.velocidade,
     )
     transmissor.iniciar()
     return transmissor
+
+
+def _posicoes_do_trafego(
+    adaptador: AdaptadorSumo, estado: EstadoMalha
+) -> list[tuple[float, float]]:
+    """Os veículos que não são VE em serviço, em coordenadas da rede (Bloco 7).
+
+    Só leitura: não altera a simulação. Chamado só quando o transmissor pede, a
+    5 Hz de relógio, e nunca no lote.
+    """
+    ves = {ve.id for ve in estado.veiculos_emergencia}
+    veiculo = adaptador.cliente.veiculo
+    return [
+        tuple(veiculo.getPosition(id_veiculo))
+        for id_veiculo in veiculo.getIDList()
+        if id_veiculo not in ves
+    ]
 
 
 def _laco(
@@ -416,6 +451,7 @@ def _laco(
     controlar: bool,
     conflitos: list[EventoConflito],
     transmissor: Transmissor | None = None,
+    ritmo: Ritmo | None = None,
 ) -> None:
     """O laço de `context/04` §8.
 
@@ -425,7 +461,8 @@ def _laco(
 
     O buffer `conflitos` é preenchido pelo motor durante a decisão e drenado
     depois que o cronômetro para. A transmissão ao vivo, quando ligada, também
-    fica fora do trecho cronometrado, e só anexa o estado numa fila.
+    fica fora do trecho cronometrado, e só anexa o estado numa fila. O ritmo,
+    quando pedido, dorme no fim do passo, depois de tudo.
     """
     while adaptador.cliente.tempo() < duracao_s:
         t = adaptador.passo()
@@ -443,6 +480,8 @@ def _laco(
             comandos = []
         if transmissor is not None:
             transmissor.publicar(estado, latencia_ms)
+            if transmissor.quer_trafego():
+                transmissor.publicar_trafego(_posicoes_do_trafego(adaptador, estado))
 
         transicoes = adaptador.aplicar(comandos, t)
 
@@ -466,6 +505,8 @@ def _laco(
 
         if adaptador.cliente.veiculos_restantes() == 0:
             break
+        if ritmo is not None:
+            ritmo.esperar(t)
 
 
 def _veiculos_planejados(rotas: Path) -> int:
@@ -629,6 +670,12 @@ def main(argumentos: Sequence[str] | None = None) -> int:
         help="empurra o estado a 5 Hz ao backend, para o dashboard (padrão: $BACKEND_URL)",
     )
     analisador.add_argument(
+        "--velocidade",
+        type=float,
+        default=None,
+        help="múltiplo do tempo real, para o dashboard (padrão: o mais rápido possível)",
+    )
+    analisador.add_argument(
         "--atraso-ms",
         type=int,
         default=20,
@@ -649,6 +696,7 @@ def main(argumentos: Sequence[str] | None = None) -> int:
             saida_detalhada=opcoes.saida_detalhada,
             atraso_ms=opcoes.atraso_ms,
             transmitir=opcoes.transmitir,
+            velocidade=opcoes.velocidade,
         )
     )
     print(_resumo(resultado))

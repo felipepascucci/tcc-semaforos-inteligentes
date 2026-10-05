@@ -146,6 +146,28 @@ def test_cenario_de_conflito_gera_ves_pelas_duas_rotas(tmp_path: Path) -> None:
     assert rotas == {"ROTA_VE_CORREDOR", "ROTA_VE_TRANSVERSAL"}
 
 
+def _cruzamentos_da_rota(id_rota: str) -> list[str]:
+    """Os cruzamentos semaforizados que a rota atravessa, na ordem."""
+    rotas = ET.parse(DEMANDA / "emergencias.rou.xml").getroot()
+    vias = next(r for r in rotas.iter("route") if r.get("id") == id_rota).attrib["edges"].split()
+    rede = ET.parse(RAIZ / "sim" / "rede" / "malha.net.xml").getroot()
+    destino = {e.attrib["id"]: e.attrib["to"] for e in rede.iter("edge") if "to" in e.attrib}
+    return [destino[via] for via in vias if destino[via].startswith("CRUZ_")]
+
+
+def test_rota_secundaria_encontra_o_corredor_e_segue_por_quatro_cruzamentos() -> None:
+    """Depois do conflito em CRUZ_02, o segundo VE ainda tem cruzamentos pela frente.
+
+    Bloco 7 (2026-10-05). O CRUZ_08 é comum às duas rotas.
+    """
+    secundaria = _cruzamentos_da_rota("ROTA_VE_TRANSVERSAL")
+    corredor = _cruzamentos_da_rota("ROTA_VE_CORREDOR")
+
+    assert secundaria == ["CRUZ_02", "CRUZ_06", "CRUZ_07", "CRUZ_08"]
+    assert corredor == [f"CRUZ_0{i}" for i in (1, 2, 3, 4, 8, 7, 6, 5)]
+    assert {"CRUZ_02", "CRUZ_08"} <= set(secundaria) & set(corredor)
+
+
 # ---------------------------------------------------------------------------
 # Criticidade da ocorrência — P20
 # ---------------------------------------------------------------------------

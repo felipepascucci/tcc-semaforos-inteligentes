@@ -8,13 +8,13 @@
 --   docker compose exec -T db pg_dump -s -U tcc semaforo
 --
 -- Gerado de: PostgreSQL 16 (serviço `db` do docker-compose)
--- Revisão Alembic: c4d81f2b9a60
+-- Revisão Alembic: e5a17c3d8b42
 
 --
 -- PostgreSQL database dump
 --
 
-\restrict Ek4B8ci5NneZc0arqA48UbndHRexqzmLcBJseaIraCSS06IjnRCb2nIci3qpUvz
+\restrict pJVPAarVvE8FrPGo8V4bJcF0MtrYHgcCAt9tkJDO4a8DKYsNBqTlDpzDOeub9Kf
 
 -- Dumped from database version 16.15
 -- Dumped by pg_dump version 16.15
@@ -490,8 +490,10 @@ CREATE TABLE public.pedido_simulacao (
     criado_em timestamp with time zone DEFAULT now() NOT NULL,
     iniciado_em timestamp with time zone,
     finalizado_em timestamp with time zone,
+    velocidade smallint,
     CONSTRAINT ck_pedido_simulacao_duracao_positiva CHECK (((duracao_s IS NULL) OR (duracao_s > 0))),
-    CONSTRAINT ck_pedido_simulacao_status_conhecido CHECK (((status)::text = ANY ((ARRAY['PENDENTE'::character varying, 'RODANDO'::character varying, 'CONCLUIDA'::character varying, 'FALHA'::character varying])::text[])))
+    CONSTRAINT ck_pedido_simulacao_status_conhecido CHECK (((status)::text = ANY ((ARRAY['PENDENTE'::character varying, 'RODANDO'::character varying, 'CONCLUIDA'::character varying, 'FALHA'::character varying])::text[]))),
+    CONSTRAINT ck_pedido_simulacao_velocidade_conhecida CHECK (((velocidade IS NULL) OR (velocidade = ANY (ARRAY[1, 2, 5, 10]))))
 );
 
 
@@ -1090,5 +1092,5 @@ ALTER TABLE ONLY public.tag_rfid
 -- PostgreSQL database dump complete
 --
 
-\unrestrict Ek4B8ci5NneZc0arqA48UbndHRexqzmLcBJseaIraCSS06IjnRCb2nIci3qpUvz
+\unrestrict pJVPAarVvE8FrPGo8V4bJcF0MtrYHgcCAt9tkJDO4a8DKYsNBqTlDpzDOeub9Kf
 

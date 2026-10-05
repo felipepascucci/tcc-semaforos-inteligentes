@@ -3,7 +3,7 @@
 Sem o throttle, uma simulação a 10 passos/s satura o navegador. Duas espécies de
 mensagem, tratadas de forma diferente:
 
-* **Estado** (`estado_semaforo`, `posicao_ve`, `metrica`): só o mais recente
+* **Estado** (`estado_semaforo`, `posicao_ve`, `metrica`, `trafego`): só o mais recente
   importa. Cada uma tem uma chave (o semáforo, o VE), e uma mensagem nova
   substitui a anterior da mesma chave que ainda não saiu.
 * **Evento** (`evento`): todos saem, em ordem. Um evento perdido no meio de
@@ -32,7 +32,13 @@ import structlog
 
 log = structlog.get_logger(__name__)
 
-TipoEstado = Literal["estado_semaforo", "posicao_ve", "metrica"]
+TipoEstado = Literal["estado_semaforo", "posicao_ve", "metrica", "trafego"]
+
+#: Até que idade o último estado é reenviado a quem conecta (Bloco 7). A mesma
+#: validade do "ao vivo" da simulação (`app/services/ao_vivo.py`): sem ela, quem
+#: abre o dashboard depois de uma simulação acabar a veria "ao vivo", parada no
+#: último instante, e uma bancada desligada pareceria ligada.
+VALIDADE_REENVIO_S: Final = 5.0
 
 #: Mensagens à espera por cliente. Um cliente que fica tão para trás está
 #: travado, e é desligado: segurar a fila dele seria vazar memória (RNF02).
@@ -55,9 +61,9 @@ class Difusor:
         self._clientes: set[asyncio.Queue[str | None]] = set()
         self._estado_pendente: dict[tuple[str, str], str] = {}
         self._eventos_pendentes: list[str] = []
-        # O último estado de cada chave, para quem conecta depois não começar
-        # com a tela vazia até o próximo ciclo da bancada.
-        self._ultimo_estado: dict[tuple[str, str], str] = {}
+        # O último estado de cada chave, com o instante, para quem conecta
+        # depois não começar com a tela vazia até o próximo ciclo da bancada.
+        self._ultimo_estado: dict[tuple[str, str], tuple[str, float]] = {}
         self._ultima_descarga = float("-inf")
         self._agendada: asyncio.TimerHandle | None = None
         self.descargas = 0
@@ -70,7 +76,7 @@ class Difusor:
         """Estado mais recente de `chave`; substitui o que ainda não saiu."""
         texto = mensagem(tipo, dados)
         self._estado_pendente[(tipo, chave)] = texto
-        self._ultimo_estado[(tipo, chave)] = texto
+        self._ultimo_estado[(tipo, chave)] = (texto, self._relogio())
         self._agendar()
 
     def publicar_evento(self, dados: Mapping[str, Any]) -> None:
@@ -80,13 +86,16 @@ class Difusor:
 
     @asynccontextmanager
     async def assinar(self) -> AsyncIterator[asyncio.Queue[str | None]]:
-        """Fila de mensagens de um cliente, já com o último estado conhecido.
+        """Fila de mensagens de um cliente, já com o último estado recente.
 
+        Só o estado publicado há menos de `VALIDADE_REENVIO_S` é reenviado.
         `None` na fila quer dizer "cliente desligado por lentidão".
         """
         fila: asyncio.Queue[str | None] = asyncio.Queue()
-        for texto in self._ultimo_estado.values():
-            fila.put_nowait(texto)
+        agora = self._relogio()
+        for texto, instante in self._ultimo_estado.values():
+            if agora - instante < VALIDADE_REENVIO_S:
+                fila.put_nowait(texto)
         self._clientes.add(fila)
         try:
             yield fila

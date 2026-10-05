@@ -67,6 +67,19 @@ async def test_quem_conecta_depois_recebe_o_ultimo_estado() -> None:
         assert _drenar(nova) == [{"tipo": "posicao_ve", "dados": {"lat": -23.5}}]
 
 
+async def test_estado_velho_nao_e_reenviado_a_quem_conecta() -> None:
+    """Simulação que acabou ou bancada desligada não podem parecer ao vivo (Bloco 7)."""
+    agora = [100.0]
+    difusor = Difusor(intervalo_s=0.01, relogio=lambda: agora[0])
+    difusor.publicar_estado("posicao_ve", "ve_velho", {"lat": 1.0})
+    agora[0] += difusao.VALIDADE_REENVIO_S - 0.1
+    difusor.publicar_estado("posicao_ve", "ve_novo", {"lat": 2.0})
+    agora[0] += 0.2  # o primeiro passou da validade; o segundo não
+
+    async with difusor.assinar() as fila:
+        assert _drenar(fila) == [{"tipo": "posicao_ve", "dados": {"lat": 2.0}}]
+
+
 async def test_cliente_travado_e_desligado(monkeypatch: pytest.MonkeyPatch) -> None:
     """Segurar a fila de quem não lê seria vazar memória (RNF02)."""
     monkeypatch.setattr(difusao, "LIMITE_FILA_CLIENTE", 3)

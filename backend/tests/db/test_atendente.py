@@ -109,6 +109,35 @@ def test_repetir_um_ponto_nao_grava_execucao_de_novo(
     assert recebidas[0].persistir is False
 
 
+@pytest.mark.parametrize(
+    ("velocidade", "url", "esperada"),
+    [(5, "http://backend", 5), (None, "http://backend", None), (5, None, None)],
+    ids=["pedida", "maxima", "sem_transmissao_nao_atrasa"],
+)
+def test_velocidade_do_pedido_chega_ao_executor(
+    sessao: Session,
+    fabrica_sessao: sessionmaker[Session],
+    velocidade: int | None,
+    url: str | None,
+    esperada: int | None,
+) -> None:
+    sessao.add(
+        PedidoSimulacao(
+            nome_cenario="moderado", modo=ModoControle.PREEMPCAO, seed=1001, velocidade=velocidade
+        )
+    )
+    sessao.commit()
+    recebidas: list[executor.Opcoes] = []
+
+    def executar(opcoes: executor.Opcoes) -> ResultadoExecucao:
+        recebidas.append(opcoes)
+        return _resultado(opcoes)
+
+    atendente.atender_pendentes(fabrica_sessao, url_backend=url, regras=REGRAS, executar=executar)
+
+    assert recebidas[0].velocidade == esperada
+
+
 def test_seed_reservada_falha_sem_rodar(
     sessao: Session, fabrica_sessao: sessionmaker[Session]
 ) -> None:

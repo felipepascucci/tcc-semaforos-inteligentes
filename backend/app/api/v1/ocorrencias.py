@@ -12,7 +12,7 @@ from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
-from app.api.dependencias import RecursosDep, SessaoDep
+from app.api.dependencias import EXIGE_OPERADOR, RecursosDep, SessaoDep
 from app.models import Ocorrencia, StatusOperacao, VeiculoEmergencia
 from app.repositories.ocorrencia import (
     OcorrenciaJaEncerradaError,
@@ -34,7 +34,9 @@ LIMITE_HISTORICO = 100
     response_model=OcorrenciaSchema,
     status_code=status.HTTP_201_CREATED,
     summary="Central abre ocorrência",
+    dependencies=[EXIGE_OPERADOR],
     responses={
+        401: {"description": "Login necessário"},
         404: {"description": "Veículo não existe"},
         409: {"description": "Veículo inativo ou já em serviço"},
     },
@@ -80,7 +82,9 @@ def abrir(pedido: PedidoOcorrencia, sessao: SessaoDep, recursos: RecursosDep) ->
     "/ocorrencias/{id_ocorrencia}/encerramento",
     response_model=OcorrenciaSchema,
     summary="Central encerra a ocorrência",
+    dependencies=[EXIGE_OPERADOR],
     responses={
+        401: {"description": "Login necessário"},
         404: {"description": "Ocorrência não existe"},
         409: {"description": "Ocorrência já encerrada"},
     },

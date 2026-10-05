@@ -37,6 +37,8 @@ def _transmissao(t: float, lat: float = -23.55) -> dict[str, Any]:
         ],
         "eventos": [{"nivel": "INFO", "texto": "Preempção iniciada em CRUZ_03 (t=10.0 s)"}],
         "latencia_ms": 0.12,
+        "trafego": [[-23.551, -46.631], [-23.552, -46.632]],
+        "velocidade": 2,
     }
 
 
@@ -69,11 +71,17 @@ def test_mensagens_seguem_o_contrato_de_context_01() -> None:
     ):
         cliente.post("/api/v1/simulacoes/transmissao", json=_transmissao(10.0))
         tipos = {}
-        while len(tipos) < 4:
+        while len(tipos) < 5:
             mensagem = ws.receive_json()
             tipos[mensagem["tipo"]] = mensagem["dados"]
 
-    assert set(tipos) == {"estado_semaforo", "posicao_ve", "evento", "metrica"}
+    assert set(tipos) == {"estado_semaforo", "posicao_ve", "evento", "metrica", "trafego"}
+    # Bloco 7: o tráfego de fundo numa mensagem só, e a velocidade na métrica.
+    assert tipos["trafego"] == {
+        "t_simulacao": 10.0,
+        "posicoes": [[-23.551, -46.631], [-23.552, -46.632]],
+    }
+    assert (tipos["metrica"]["velocidade"], tipos["metrica"]["t_simulacao"]) == (2, 10.0)
     posicao = tipos["posicao_ve"]
     assert (posicao["id_veiculo"], posicao["lat"], posicao["velocidade"]) == (
         "ve_amb_0",
