@@ -394,6 +394,37 @@ pedido de simulação executado pelo atendente com o SUMO e transmissão ao vivo
 ### Bloco 7 — Dashboard (Sprint 6) · ~2 semanas
 
 React + Vite + TS + Tailwind. Mapa Leaflet, painel de semáforos em tempo real, tela de logs com filtro, painel de métricas com Recharts, login simples. Vitest nos componentes de estado. **Painel "Central" (P20):** abrir ocorrência escolhendo veículo e criticidade, encerrar, e ver quem está em serviço — é a central de despacho simulada.
+
+**Estado em 2026-10-05: implementado, esperando o teste da equipe.** Quatro
+decisões tomadas antes do código, registradas em `context/09`: login com PyJWT e
+a credencial do operador no ambiente; o token protege só as escritas do
+operador; HTTPS pelo nginx com certificado autoassinado; o frontend no compose
+padrão, como build estático servido pelo nginx em `https://localhost:8443`.
+
+| Entrega | Onde |
+| --- | --- |
+| Login do operador (`POST /auth/login`, `GET /auth/sessao`) e as escritas protegidas | `backend/app/services/autenticacao.py`, `app/api/v1/autenticacao.py`, `app/api/dependencias.py` |
+| Projeto React + Vite + TS + Tailwind, sem roteador (aba no `#`) | `frontend/` |
+| Estado ao vivo do WebSocket, com reconexão | `frontend/src/stream/` |
+| Aba "Ao vivo": mapa Leaflet com semáforos e VEs, painel da bancada (S1..S4, regime, rua, fila), lista de semáforos, eventos, preempção manual com o motivo do 409 | `frontend/src/componentes/` |
+| Aba "Central" (P20): abrir e encerrar ocorrência, frota e quem está em serviço | `PainelCentral.tsx` |
+| Aba "Logs": filtros, paginação e filtro por `id_correlacao` | `TelaLogs.tsx` |
+| Aba "Métricas": resumo, priorizações por desfecho, RNF01 e H3 separados, latência ao vivo | `PainelMetricas.tsx` |
+| Aba "Simulações": pedir execução e acompanhar os pedidos | `TelaSimulacoes.tsx` |
+| nginx com HTTPS e proxy de `/api` e do WebSocket | `frontend/Dockerfile`, `frontend/nginx/` |
+| **Revisão após o primeiro teste da equipe:** mapa desenhado da malha SUMO (sem mapa de rua), com ponto de sinal por aproximação | `sim/rede/exportar_mapa.py`, `frontend/src/malha/malha.json`, `MapaMalha.tsx` |
+| Tráfego de fundo no mapa | `sim/controlador/transmissor.py`, `executor.py`, mensagem `trafego` |
+| Velocidade da simulação escolhida no pedido (1x, 2x, 5x, 10x ou máxima) | migration `e5a17c3d8b42`, `sim/controlador/ritmo.py`, `atendente.py` |
+| Reenvio do WebSocket limitado a 5 s; aviso de atendente parado; resumo de cada execução na aba Simulações | `app/services/difusao.py`, `TelaSimulacoes.tsx` |
+
+Testes: 70 no Vitest; no backend, a suíte padrão passou de 575 para **645**, e a
+de banco de 89 para **103**; as 23 do SUMO passam. Conferido também de ponta a
+ponta com `docker compose up`, a ponte com o dublê e o atendente no host: login,
+401 sem token, 409 com o motivo, `wss` pelo nginx, cada aba vista num Chrome
+sem janela durante uma simulação a 10x, e o fluxo do operador com digitação e
+cliques (login, abrir e encerrar ocorrência, filtro de logs, sair). O ritmo e o tráfego não mudam o
+resultado (mesma execução com e sem, `context/06` §2).
+
 ---
 
 ### Bloco 8 — Lote completo (Sprint 7) · ~1 semana + tempo de máquina
@@ -444,7 +475,7 @@ convenção declarada, não otimização. Há lacuna genuína a preencher.
 
 | # | Entrega |
 |---|---|
-| 10.1 | **Contagem de conflitos.** ✅ **MEDIDA em 2026-09-10: 60 disputas em 10 execuções, 56 decidíveis, 6 por execução.** Abaixo do piso de 100 de P19, o que **torna a 10.2 obrigatória**. A instrumentação também expôs um defeito de E1/E2 anterior ao bloco — o VE recuava ~490 m ao atravessar um cruzamento —, corrigido e coberto por regressão. Evidência e números em `context/09` P19 |
+| 10.1 | **Contagem de conflitos.** ⚠️ **Remedir:** a rota do segundo VE foi estendida em 2026-10-05 (Bloco 7), e numa execução de demonstração as disputas foram de 6 para 10 por execução. A medição abaixo vale para a rota antiga. ✅ **MEDIDA em 2026-09-10: 60 disputas em 10 execuções, 56 decidíveis, 6 por execução.** Abaixo do piso de 100 de P19, o que **torna a 10.2 obrigatória**. A instrumentação também expôs um defeito de E1/E2 anterior ao bloco — o VE recuava ~490 m ao atravessar um cruzamento —, corrigido e coberto por regressão. Evidência e números em `context/09` P19 |
 | 10.2 | **Cenário de treino mais denso em VEs — agora obrigatório**, pelo volume medido em 10.1. Novos arquivos de demanda, mesma malha. ~~Precisa defasar a rotação de tipos entre as duas rotas~~ — deixou de valer com a P20 (`tipo` não é mais atributo). Precisa de **volume de disputas de mesmo nível de criticidade**, o domínio do modelo, e de alguns pares de nível misto, só para exercitar a regra. É aqui que criticidade e tipo se desacoplam (`criticidades` em rodízio próprio) |
 | 10.3 | ~~Declaração do objetivo de otimização~~ · **já feita** em 2026-09-10: critério **minimax**, minimizar o tempo do VE mais prejudicado. Registrada em P19 e em `context/00` §5 **antes** de existir treino |
 | 10.4 | **Rotulagem por bifurcação da simulação** — `saveState`/`loadState` no instante do conflito, rodando as duas escolhas até os VEs liberarem a rota, e rotulando pelo minimax. Com **divisão treino/teste por seed** e o treino **fora** do intervalo 1..50 (guarda de P16). **Só as disputas de mesmo nível** (`mesmo_nivel = 1`) são bifurcadas — as mistas a regra de criticidade decide, e não há rótulo a aprender (P20) |

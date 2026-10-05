@@ -1,0 +1,27 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* O mapa do Leaflet fica abaixo do cabeçalho e dos menus abertos. */
+.leaflet-container {
+  z-index: 0;
+}
+
+/* Rótulo do cruzamento no mapa da malha: pequeno e sem a seta do tooltip. */
+.rotulo-cruzamento {
+  background: rgba(15, 23, 42, 0.85);
+  border: none;
+  box-shadow: none;
+  color: #e2e8f0;
+  font-size: 11px;
+  padding: 1px 5px;
+}
+.rotulo-cruzamento::before {
+  display: none;
+}
+/* Em preempção, o rótulo ganha o azul da preempção (COR_PREEMPCAO). */
+.rotulo-preempcao {
+  background: #2563eb;
+  color: #ffffff;
+  font-weight: 600;
+}

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, status
 
-from app.api.dependencias import RecursosDep, SessaoDep
+from app.api.dependencias import EXIGE_OPERADOR, RecursosDep, SessaoDep
 from app.schemas.simulacoes import (
     PedidoSimulacaoEntrada,
     PedidoSimulacaoSchema,
@@ -26,7 +26,11 @@ router = APIRouter(tags=["simulacoes"])
     response_model=PedidoSimulacaoSchema,
     status_code=status.HTTP_201_CREATED,
     summary="Pede uma execução de cenário ao atendente do host",
-    responses={422: {"description": "Cenário desconhecido ou seed reservada ao experimento"}},
+    dependencies=[EXIGE_OPERADOR],
+    responses={
+        401: {"description": "Login necessário"},
+        422: {"description": "Cenário desconhecido ou seed reservada ao experimento"},
+    },
 )
 def pedir(
     entrada: PedidoSimulacaoEntrada, sessao: SessaoDep, recursos: RecursosDep

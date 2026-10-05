@@ -26,6 +26,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.dependencias import Recursos
+from app.api.v1.autenticacao import router as router_autenticacao
 from app.api.v1.deteccoes import router as router_deteccoes
 from app.api.v1.health import VERSAO
 from app.api.v1.health import router as router_health
@@ -75,6 +76,7 @@ async def _abrir(config: Configuracao) -> Recursos:
         banco=config.url_banco is not None,
         ponte=config.url_ponte,
         perfil=config.perfil_parametros,
+        login=config.login_configurado,
     )
     return recursos
 
@@ -126,6 +128,7 @@ def criar_app(configuracao: Configuracao | None = None) -> FastAPI:
     )
     for router in (
         router_health,
+        router_autenticacao,
         router_deteccoes,
         router_semaforos,
         router_veiculos,

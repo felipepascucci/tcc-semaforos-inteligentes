@@ -441,6 +441,19 @@ Base: `/api/v1`. Documentação automática em `/docs` (FastAPI).
 | `POST` | `/simulacoes/transmissao` | Estado ao vivo da simulação, empurrado pelo executor (Bloco 6) |
 | `GET` | `/metricas/resumo` | Agregados para o dashboard |
 | `GET` | `/health` | Liveness/readiness |
+| `POST` | `/auth/login` | Login do operador do dashboard: `usuario`, `senha` → token JWT (Bloco 7) |
+| `GET` | `/auth/sessao` | Quem é o dono do token e até quando vale (Bloco 7) |
+
+> **Login do operador (Bloco 7, 2026-10-05).** As escritas do operador exigem
+> `Authorization: Bearer <token>`: `POST` e `DELETE /semaforos/{id}/preempcao`,
+> `POST /ocorrencias`, `POST /ocorrencias/{id}/encerramento`, `POST /veiculos` e
+> `POST /simulacoes`. Sem token, ou com token inválido ou vencido, **401**; sem
+> login configurado no ambiente, **503**, para que falta de configuração não vire
+> porta aberta. Ficam abertos os `GET`, o WebSocket e `/health`. `/deteccoes`
+> continua com `X-Device-Token`, e `/simulacoes/transmissao`, que o executor
+> chama do host, continua sem autenticação (limitação declarada, `02` §6). A
+> autenticação é verificada antes da validação do corpo e antes de abrir sessão
+> no banco.
 
 **`POST /deteccoes` — payload:**
 
@@ -551,6 +564,39 @@ Throttle de 5 Hz no broadcast. Sem isso, uma simulação a 10 passos/s satura o 
 > - **Simulação**, em `posicao_ve`: `id_veiculo` é o id do SUMO (`ve_amb_0`), não
 >   uma chave do cadastro. `lat` e `lon` vêm de `sim/rede/georreferencia.py`,
 >   ancorado em `CRUZ_01` como os seeds.
+>
+> **Acrescentado no Bloco 7 (2026-10-05):**
+>
+> - **`trafego`**, só da simulação: `{"t_simulacao", "posicoes": [[lat, lon], …]}`,
+>   os demais veículos numa fotografia só, para o mapa mostrar a fila se formando
+>   e se desfazendo à frente do VE. O executor lê as posições do SUMO só quando
+>   transmite, a 5 Hz de relógio, fora do trecho cronometrado. Ler não altera a
+>   simulação.
+> - **`metrica` da simulação** traz também `t_simulacao` e `velocidade`.
+> - **Reenvio limitado a 5 s.** Quem conecta só recebe o estado publicado nos
+>   últimos 5 s. Antes, uma simulação já encerrada, ou a bancada desligada,
+>   apareciam "ao vivo" para quem abria o dashboard depois.
+> - **`POST /simulacoes` aceita `velocidade`** (1, 2, 5 ou 10 vezes o tempo
+>   real, padrão 1; nula roda o mais rápido possível). O atendente aplica o
+>   ritmo dormindo no fim de cada passo (`sim/controlador/ritmo.py`), fora do
+>   SUMO e do trecho cronometrado: a mesma seed dá a mesma execução em qualquer
+>   velocidade. O lote do Bloco 8 roda sem ritmo e sem transmissão.
+>
+> **O dashboard consome assim (Bloco 7, `frontend/src/stream/estado.ts`).** O
+> estado é um reducer puro, testado no Vitest. `estado_semaforo` com
+> `aproximacoes` é da bancada; sem, da simulação. Na bancada, `rua_ativa` e
+> `rua_fila` chegam nulas quando não há rua. A posição de VE sem atualização há
+> 5 s sai do mapa, a mesma validade do "ao vivo" do backend. A `metrica` da
+> bancada repete a última amostra de H3 em toda telemetria, então só uma latência
+> diferente da anterior conta como amostra nova. O cliente reconecta sozinho,
+> com espera de 1 s dobrando até 10 s.
+>
+> **O mapa desenha a malha SUMO, e não um mapa de rua** (as coordenadas são
+> fictícias, `db/seeds/dados.yaml`). O desenho vem de `frontend/src/malha/malha.json`,
+> gerado de `malha.net.xml` por `python -m sim.rede.exportar_mapa`, com teste
+> que acusa arquivo desatualizado. Cada aproximação tem um ponto de sinal 30 m
+> antes da linha de retenção, pintado pela regra de `core/priorizacao/fases.py`:
+> a fase corrente mostra o sinal transmitido, e as demais ficam vermelhas.
 
 ## 8. Estrutura de diretórios do backend
 
@@ -559,6 +605,7 @@ backend/
 ├── app/
 │   ├── main.py                 # FastAPI app, lifespan, CORS
 │   ├── api/v1/
+│   │   ├── autenticacao.py     # Bloco 7: login do operador (JWT)
 │   │   ├── deteccoes.py
 │   │   ├── semaforos.py
 │   │   ├── veiculos.py
@@ -574,7 +621,7 @@ backend/
 │   ├── schemas/                # Pydantic v2
 │   ├── repositories/           # acesso a dados
 │   └── services/               # bancada (leitura da ponte), deteccoes, difusao,
-│                               # ao_vivo, simulacoes, metricas
+│                               # ao_vivo, simulacoes, metricas, autenticacao
 ├── core/                       # ⚠️ SEM I/O, SEM FRAMEWORK
 │   ├── priorizacao/
 │   │   ├── motor.py            # avaliar() -> list[Comando]

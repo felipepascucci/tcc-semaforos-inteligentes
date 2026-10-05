@@ -22,7 +22,7 @@ from fastapi import APIRouter, HTTPException, Response, status
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
-from app.api.dependencias import Recursos, RecursosDep, SessaoDep
+from app.api.dependencias import EXIGE_OPERADOR, Recursos, RecursosDep, SessaoDep
 from app.configuracao import CODIGO_BANCADA
 from app.models import LogPrioridade, Semaforo
 from app.repositories.cadastro import listar_semaforos
@@ -130,7 +130,9 @@ _SEM_ATUADOR = (
     "/semaforos/{codigo}/preempcao",
     response_model=RespostaPreempcao,
     summary="Preempção manual (bancada, pela injeção da ponte)",
+    dependencies=[EXIGE_OPERADOR],
     responses={
+        401: {"description": "Login necessário"},
         409: {"description": "Cruzamento sem atuador ligado ao backend"},
         503: {"description": "Ponte não configurada ou fora do ar"},
         504: {"description": "O UNO não decidiu: o fio do NodeMCU está no RX?"},
@@ -170,7 +172,11 @@ async def preemptar(
     response_class=Response,
     response_model=None,
     summary="Cancela preempção ativa — não suportado pelos atuadores",
-    responses={409: {"description": "Nenhum atuador aceita cancelamento"}},
+    dependencies=[EXIGE_OPERADOR],
+    responses={
+        401: {"description": "Login necessário"},
+        409: {"description": "Nenhum atuador aceita cancelamento"},
+    },
 )
 def cancelar(codigo: str) -> None:
     """Sempre 409, com o motivo: nenhum atuador ligado ao backend aceita cancelar."""

@@ -46,6 +46,8 @@ Não introduzir dependência fora desta lista sem registrar em `09-pendencias-e-
 | Observabilidade | structlog | — |
 | Driver do banco | psycopg | 3.x |
 | Qualidade | ruff, mypy | — |
+| Autenticação do dashboard | **PyJWT** (HS256); senha em PBKDF2 do `hashlib` | 2.x |
+| Proxy reverso / TLS do dashboard | **nginx** (imagem `nginx:1.27-alpine`) | 1.27 |
 
 > **As quatro últimas linhas e o `hypothesis` foram acrescentados durante os
 > Blocos 0 a 2**, cada um com a decisão registrada em
@@ -61,6 +63,18 @@ Não introduzir dependência fora desta lista sem registrar em `09-pendencias-e-
 > **`httpx` passou a dependência de runtime no Bloco 6 (2026-10-05).** Já estava
 > na stack, para teste. O backend o usa para ler `GET /estado` da ponte, e o
 > executor para transmitir o estado ao vivo. Registrado em `09`.
+>
+> **Acrescentados no Bloco 7 (2026-10-05)**, registrados em `09`: o **`PyJWT`**,
+> para o token do login do operador (o §6 já pedia "JWT simples"), e o
+> **nginx**, que o §3 e o §6 já previam. No frontend, além de React, Vite, TS,
+> Tailwind, Leaflet, react-leaflet, Recharts, Vitest e Testing Library, entram
+> só os pacotes de apoio que essas ferramentas exigem: `@vitejs/plugin-react`,
+> `postcss` e `autoprefixer` (Tailwind 3), `jsdom` (ambiente do Vitest),
+> `@testing-library/user-event` e `@testing-library/jest-dom`, e os tipos
+> `@types/react`, `@types/react-dom` e `@types/leaflet`. As versões ficam
+> fixadas em `frontend/package.json`. **react-leaflet fica na 4.x**, a última
+> compatível com React 18, e o **TypeScript na 5.x**. Não há biblioteca de rotas:
+> a aba fica no `#` da URL.
 >
 > **Acrescentados no Bloco 5 (2026-10-05)**, registrados em `09`: o
 > **`arduino-cli`**, para compilar o firmware do UNO sem a IDE, com o core e a
@@ -89,9 +103,18 @@ services:
   db:         # postgres:16-alpine, volume nomeado, healthcheck
   migracoes:  # one-shot: alembic upgrade head + seeds, depois sai
   backend:    # FastAPI, depends_on db healthy + migracoes concluído
-  frontend:   # Vite dev server (dev) ou nginx (prod) — perfil "frontend"
+  frontend:   # build estático do Vite servido por nginx, HTTPS em :8443
   adminer:    # inspeção do banco em dev — perfil "dev"
 ```
+
+> **`frontend` (Bloco 7, 2026-10-05).** Dockerfile em dois estágios: `node`
+> compila o build do Vite, e o `nginx` o serve em **https://localhost:8443**, com
+> proxy reverso de `/api` (REST e WebSocket, `wss`) para o `backend`. O serviço
+> está no compose **padrão**, sem perfil, então `docker compose up` sobe o
+> dashboard junto, como pede a Definition of Done. O certificado autoassinado é
+> gerado na primeira subida, num volume (`certificados`). Para desenvolver o
+> frontend com recarga a quente, `npm run dev` no host (:5173), cujo proxy
+> repassa `/api` ao backend da porta 8000.
 
 > **`migracoes` (acrescentado em 2026-08-25).** Serviço de vida curta que cria o
 > schema e aplica os seeds antes de o `backend` subir
@@ -133,7 +156,15 @@ PONTE_URL=http://localhost:8001      # o backend lê GET /estado da ponte (vazio
 PONTE_URL_CONTEINER=http://host.docker.internal:8001   # a mesma, vista do compose
 BACKEND_URL=http://localhost:8000    # para onde o executor e o atendente transmitem
 LOG_LEVEL=INFO
+OPERADOR_USUARIO=operador            # login do dashboard (Bloco 7)
+OPERADOR_SENHA_HASH=pbkdf2_sha256:…  # python -m app.services.autenticacao
+JWT_SEGREDO=…                        # ≥ 32 caracteres; o backend não sobe com menos
+DASHBOARD_PORT=8443                  # porta HTTPS do nginx no host (opcional)
 ```
+
+> **As três variáveis do login têm padrão de desenvolvimento no compose** (senha
+> `operador`), como `POSTGRES_PASSWORD`, para um clone limpo subir sem passo
+> manual. Trocar antes da apresentação.
 
 > **Sem Wi-Fi desde 2026-10-05.** `WIFI_SSID`, `WIFI_PASSWORD`,
 > `BACKEND_URL_DISPOSITIVO` e o `secrets.h` gerado saíram: os NodeMCUs se falam
@@ -151,7 +182,7 @@ acesso. O notebook se liga ao UNO só por USB.
    (veículo)                       (cruzamento)                                                ├── bridge (só escuta)
                                                                                                ├── backend :8000
                                                                                                ├── postgres :5432
-                                                                                               └── frontend :5173
+                                                                                               └── frontend :8443 (nginx, HTTPS)
 ```
 
 O MAC do receptor está fixo no sketch do emissor (`40:91:51:58:A8:E1`). Trocar
@@ -181,6 +212,26 @@ Escopo realista para TCC, com honestidade sobre o que é demonstração:
 > pode mandar `RUA3,AMBULANCIA` e preemptar o cruzamento. O ESP-NOW suporta
 > chave por par (CCMP), e ativá-la é o primeiro item de trabalho futuro de
 > segurança, ao lado dos certificados abaixo.
+
+> **Implementado no Bloco 7 (2026-10-05)** — as duas primeiras linhas da tabela:
+>
+> - **HTTPS.** O nginx do serviço `frontend` termina o TLS (TLS 1.2 e 1.3) com
+>   certificado autoassinado gerado na primeira subida, e repassa ao backend
+>   pela rede interna do Docker. O navegador fala só HTTPS e `wss`. **A porta
+>   8000 do backend continua exposta em HTTP**, para os processos do host (o
+>   executor e o atendente transmitem por ela) e para o Swagger local; o
+>   Swagger também está no HTTPS, em `/docs`.
+> - **Login.** `POST /auth/login` confere a credencial do operador, lida do
+>   ambiente, e devolve um JWT HS256 válido por 8 h. A senha fica como
+>   PBKDF2-SHA256 com sal, 600 mil iterações, nunca em claro. O token protege
+>   as escritas do operador (`01` §7). Os `GET` e o WebSocket ficam abertos,
+>   por decisão da equipe: o dashboard só mostra a tela depois do login, mas a
+>   leitura pela API não exige token.
+> - **Limitações a declarar:** sem limite de tentativas no login; sem revogação
+>   de token (trocar `JWT_SEGREDO` derruba todas as sessões); o token fica no
+>   `localStorage` do navegador; `/simulacoes/transmissao` aceita transmissão
+>   sem autenticação de quem alcança a porta 8000; certificado autoassinado,
+>   que o navegador recusa até o operador aceitar a exceção.
 
 **Ser explícito no texto do TCC:** UID de tag Mifare S50 é clonável; num sistema real seria necessário criptografia assimétrica com certificados por veículo (padrão IEEE 1609.2). Reconhecer essa limitação vale mais na banca do que fingir que não existe. Anotar como trabalho futuro.
 

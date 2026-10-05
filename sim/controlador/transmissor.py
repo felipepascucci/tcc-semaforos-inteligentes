@@ -14,11 +14,20 @@ não é dado do experimento.
 A cada envio vai o estado mais recente. Os eventos ("preempção iniciada em
 CRUZ_03") saem de **todas** as fotografias acumuladas desde o envio anterior, e
 não só da última, para que uma preempção curta entre dois envios não suma.
+
+**Tráfego de fundo (Bloco 7).** O mapa do dashboard mostra também os demais
+veículos, para que a fila se formando no vermelho e se desfazendo à frente do VE
+fique visível. O `EstadoMalha` só tem os VEs, então o laço lê as posições do
+resto direto do SUMO, mas só quando `quer_trafego()` diz que já passou um
+intervalo de envio: a 5 Hz de relógio, e não a cada passo. Ler a posição não
+altera a simulação. A leitura fica fora do trecho cronometrado, e o lote, que
+não transmite, nunca a faz.
 """
 
 from __future__ import annotations
 
 import threading
+import time
 from collections import deque
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
@@ -37,6 +46,10 @@ LIMITE_FOTOS: Final = 600
 
 Foto = tuple[EstadoMalha, float | None]
 
+#: Casas decimais das coordenadas do tráfego: 6 casas são ~0,1 m, e cada
+#: veículo a menos de bytes conta quando são centenas a 5 Hz.
+CASAS_TRAFEGO: Final = 6
+
 
 @dataclass
 class Transmissor:
@@ -47,7 +60,9 @@ class Transmissor:
         cenario, modo, seed: O ponto que está rodando.
         georreferencia: Converte a posição do VE em latitude/longitude.
         id_pedido: O pedido do atendente, se houver.
+        velocidade: Múltiplo do tempo real em que roda; `None` é o máximo.
         enviar: Substitui o POST (testes).
+        relogio: Relógio monotônico (testes).
     """
 
     url_backend: str
@@ -56,11 +71,17 @@ class Transmissor:
     seed: int
     georreferencia: Georreferencia
     id_pedido: int | None = None
+    velocidade: float | None = None
     intervalo_s: float = INTERVALO_S
     enviar: Callable[[dict[str, Any]], None] | None = None
+    relogio: Callable[[], float] = time.monotonic
     enviados: int = 0
     falhas: int = 0
     _fotos: deque[Foto] = field(default_factory=lambda: deque(maxlen=LIMITE_FOTOS))
+    # Posições na rede, em metros. Trocado por inteiro a cada leitura: a thread
+    # de envio só lê a referência, sem trava.
+    _trafego: list[tuple[float, float]] = field(default_factory=list)
+    _ultimo_trafego: float = float("-inf")
     _preempcao: dict[str, bool] = field(default_factory=dict)
     _parar: threading.Event = field(default_factory=threading.Event)
     _thread: threading.Thread | None = None
@@ -69,6 +90,15 @@ class Transmissor:
     def publicar(self, estado: EstadoMalha, latencia_ms: float | None) -> None:
         """Chamado pelo laço, a cada passo. Só anexa."""
         self._fotos.append((estado, latencia_ms))
+
+    def quer_trafego(self) -> bool:
+        """Se já passou um intervalo de envio desde a última leitura do tráfego."""
+        return self.relogio() - self._ultimo_trafego >= self.intervalo_s
+
+    def publicar_trafego(self, posicoes: Sequence[tuple[float, float]]) -> None:
+        """Chamado pelo laço quando `quer_trafego()`: posições na rede, em metros."""
+        self._ultimo_trafego = self.relogio()
+        self._trafego = list(posicoes)
 
     def iniciar(self) -> None:
         if self.enviar is None:
@@ -151,7 +181,13 @@ class Transmissor:
             "veiculos": veiculos,
             "eventos": eventos,
             "latencia_ms": latencia_ms,
+            "trafego": [self._lat_lon(x, y) for x, y in self._trafego],
+            "velocidade": self.velocidade,
         }
+
+    def _lat_lon(self, x: float, y: float) -> tuple[float, float]:
+        lat, lon = self.georreferencia.para_lat_lon(x, y)
+        return round(lat, CASAS_TRAFEGO), round(lon, CASAS_TRAFEGO)
 
     def _rodar(self) -> None:
         while not self._parar.wait(self.intervalo_s):

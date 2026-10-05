@@ -9,6 +9,7 @@
 | Unitário | `tests/firmware/` | Núcleo do firmware do UNO contra o dublê, linha por linha; sketches dos NodeMCUs iguais aos da equipe; compilação para o UNO | pytest + Hypothesis + `ziglang` + `arduino-cli` |
 | Integração | `backend/tests/api/` | Rotas, persistência, WebSocket | pytest + httpx + testcontainers |
 | Integração | `sim/tests/` | Adaptador TraCI em cenário curto (60 s) | pytest |
+| Unitário / componente | `frontend/src/**/*.test.ts(x)` | Estado ao vivo do WebSocket (reducer), cliente HTTP, sessão do operador, painéis (bancada, central, preempção manual, logs), o `App` inteiro com API e WebSocket falsos | Vitest + Testing Library (jsdom) |
 | Sistema | `tests/e2e/` | Fluxo completo com adaptador simulado | pytest |
 | Aceitação | Manual roteirizado | Protótipo físico | Checklist assinado |
 
@@ -24,15 +25,16 @@ Cada RF/RNF vira pelo menos um teste automatizado. Esta tabela é a rastreabilid
 | RF01 | VE a 100 m em linha reta mas **fora da rota** não é detectado | Distância de rota, não euclidiana | `test_deteccao.py` |
 | RF02 | Da detecção ao **início da atuação** < 3 s (decisão P14) | `t_atuacao - t_deteccao < 3000 ms`. Na bancada, `t_atuacao` é a chegada do `EV,PREEMP_INI` do UNO (`05` §4.3) | `test_e2e_preempcao.py` + checklist HW |
 | RF03 | VE atravessa 8 cruzamentos sem parada | `waitingCount == 0` para o VE | `test_corredor_verde.py` |
-| RF04 | WebSocket emite mudança de estado em < 500 ms | Evento recebido no cliente de teste. Na bancada, da `ST` na ponte ao cliente, no ritmo de produção (leitura e difusão a 5 Hz), com o dublê | `test_ws.py` + `test_bancada_integrada.py` |
+| RF04 | WebSocket emite mudança de estado em < 500 ms | Evento recebido no cliente de teste. Na bancada, da `ST` na ponte ao cliente, no ritmo de produção (leitura e difusão a 5 Hz), com o dublê. **No dashboard:** cada mensagem de estado muda a tela, e a conexão perdida é refeita | `test_ws.py` + `test_bancada_integrada.py` + `frontend/src/stream/*.test.ts(x)` |
 | RF05 | Toda preempção gera linha em `log_prioridade` | Contagem bate com nº de eventos. Na bancada, uma linha por evento de decisão do UNO, e o backend que reinicia não regrava | `test_persistencia.py` + `test_bancada_integrada.py` |
-| RF06 | Posição do VE é publicada a ≥ 1 Hz | Intervalo entre eventos ≤ 1 s | `test_ws.py` |
+| RF06 | Posição do VE é publicada a ≥ 1 Hz | Intervalo entre eventos ≤ 1 s. **No dashboard:** a posição recebida vai para o mapa, e a que para de chegar sai dele em 5 s | `test_ws.py` + `frontend/src/stream/*.test.ts(x)` |
 | RF07 | Mudança de rota do VE recalcula os TLS-alvo | Novo conjunto de TLS após reroute | `test_recalculo.py` |
 | RNF01 | p95 de `latencia_decisao_ms` < 100 ms em 10.000 chamadas | Percentil, não média. **Latência de decisão** — só `motor.avaliar()`, sem I/O (decisão P2) | `test_desempenho.py` |
 | H3 | `latencia_total_ms` (t_deteccao→t_atuacao) < 200 ms em **5 repetições de bancada** | **Latência fim-a-fim**: da leitura da tag no veículo ao `PREEMP_INI` do UNO, os dois carimbados no relógio do notebook pela ponte (`05` §4.3). Inclui ESP-NOW, a serial e a decisão do UNO. Com n = 5 o p95 **não é estimável**: reportar mín/mediana/máx com o n declarado e verificar o limiar sobre o **máximo observado** (decisão de 2026-08-31) | `test_e2e_preempcao.py` + checklist HW |
 | RNF02 | Sistema opera 60 min contínuos sem vazamento de memória | RSS estável ± 10% | `test_soak.py` |
 | RNF03 | Motor processa malha de 32 TLS mantendo p95 < 100 ms | Escala linear ou melhor | `test_desempenho.py` |
 | RNF04 | POST sem `X-Device-Token` válido → 401; UID não cadastrado → 403 | Códigos corretos. Vale para a API; na bancada nenhum dispositivo chama a API, e a ausência de criptografia no ESP-NOW é limitação declarada (`02` §6) | `backend/tests/api/test_seguranca.py` |
+| RNF04 (dashboard) | Login certo → token de 8 h; credencial errada → 401 sem dizer qual parte errou; cada escrita do operador sem token, com token vencido, falso ou malformado → 401; com token → passa; GETs e `/simulacoes/transmissao` abertos; sem login configurado → 503; `alg: none` recusado | Códigos corretos. O HTTPS do nginx é conferido de ponta a ponta à mão (`README`), não na suíte | `backend/tests/api/test_autenticacao.py` + `backend/tests/test_autenticacao.py` + `frontend/src/auth/sessao.test.tsx` |
 | RF01 (P20, API) | Tag reconhecida sem ocorrência → 200 `SEM_OCORRENCIA`; com ocorrência → `PREEMPCAO_SOLICITADA` com a criticidade, e `id_correlacao` igual na detecção e no log; repetição em 2 s não grava | Corpo e linhas gravadas | `backend/tests/api/test_deteccoes.py` |
 | RNF05 | Taxa de reconhecimento de tag ≥ 95% em 100 leituras | Medição manual em bancada | Checklist HW |
 | RNF07 | `core/` não importa framework nem I/O | Teste de arquitetura via AST | `test_arquitetura.py` |
@@ -72,6 +74,26 @@ posição do VE chega ao cliente a cada ≤ 1 s com o executor transmitindo a 5 
 Os testes da bancada usam o dublê, e **nenhum número deles é dado
 experimental**. RF02, RF07 e H3 continuam dependendo da bancada e da simulação
 longa.
+>
+> **Estado em 2026-10-05 (Bloco 7).** O dashboard tem 70 testes no Vitest. No
+> backend, a suíte padrão foi de 575 para 645 (autenticação, ritmo, tráfego na
+> transmissão, desenho da malha, rota secundária), e a de banco, de 89 para 103
+> (velocidade do pedido). As 23 do SUMO passam. RF04 e RF06 passam a ter evidência também no cliente: o reducer do
+> WebSocket e o hook de conexão. O RNF04 passa a cobrir o dashboard (login e
+> HTTPS). Os dados dos testes do frontend são artificiais (`TST1A01`,
+> `ve_teste_0`), e nenhum é dado experimental.
+>
+> **Conferido também fora da suíte, no mesmo dia:**
+> - o dashboard aberto num Chrome sem janela, com captura de cada aba,
+>   durante uma simulação real transmitida a 10x;
+> - o fluxo do operador com digitação e cliques de verdade, no mesmo navegador:
+>   senha errada (mostra o motivo), login, abrir ocorrência com descrição,
+>   encerrar, filtrar os logs pela correlação clicada e sair, sem erro no console;
+> - o ritmo e a leitura do tráfego **não mudam o resultado**: `moderado`,
+>   `PREEMPCAO`, seed 900, 700 s, rodado sem transmissão e a 10x com tráfego,
+>   deu as mesmas 472 transições, os mesmos 754 veículos concluídos e a mesma
+>   viagem de VE (327,3 s, 0 paradas). A conferência não virou teste da suíte
+>   porque leva ~80 s de relógio com o SUMO.
 
 `RNF03` foi realocado de `test_escala.py` para `test_desempenho.py`: as duas
 > medições compartilham o mesmo aparato de medição de percentil, e separá-las em

@@ -102,6 +102,18 @@ São 4.500 m — os ~5 km do pré-projeto — e **oito** cruzamentos semaforizad
 
 Isso é o que torna o "corredor verde" mensurável — se o VE cruzasse só um semáforo, não haveria efeito de coordenação para medir. E há um ganho de brinde: o corredor **muda de eixo** no meio do percurso (em CRUZ_04 o VE converte à direita para a transversal; em CRUZ_08 ele chega **pela** transversal e pede a fase transversal, não a arterial), o que exercita E4 de verdade.
 
+**Rota do segundo VE em `multiplas_emergencias`** (estendida em 2026-10-05, `context/09`):
+
+```
+T2_S0   T2_S1    A2_L2   A2_L3   A2_L4
+└ 02 ┘  └ 06 ┘   └ 07 ┘  └ 08 ┘  (sai pelo leste)
+```
+
+Encontra o corredor em CRUZ_02 (arterial × transversal) e, se os dois chegarem
+juntos, de novo em CRUZ_08 (o corredor pela transversal, este pela arterial). A
+conversão em CRUZ_06 é à esquerda e **permissiva**: o VE cede ao tráfego oposto,
+o que aparece como paradas do VE nesse cenário e precisa ser declarado.
+
 **Comando de build da rede:**
 
 ```bash

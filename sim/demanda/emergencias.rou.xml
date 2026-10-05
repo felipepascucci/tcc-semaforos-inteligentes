@@ -22,7 +22,12 @@
 
   ROTA_VE_TRANSVERSAL — usada só no cenário `multiplas_emergencias`
 
-      EXT_T2_N ↓[02]↓[06]↓ EXT_T2_S
+      EXT_T2_N
+         ↓
+       [02]                  ← encontro com o corredor: fases conflitantes
+         ↓
+       [06] → [07] → [08] → EXT_A2_L
+                      ↑      ← possível segundo encontro (ver abaixo)
 
   Existe para criar CONFLITO REAL em CRUZ_02: o VE do corredor chega pela
   arterial e este chega pela transversal, e as duas fases são conflitantes. É
@@ -30,6 +35,17 @@
   veículos rápidos em cantos opostos da malha, e a regra de desempate nunca
   seria acionada. O atraso entre as duas partidas (`atraso_secundario_s` em
   cenarios.yaml) é dimensionado para que os dois cheguem a CRUZ_02 juntos.
+
+  Estendida em 2026-10-05 (Bloco 7, context/09). A versão anterior seguia reto
+  pela transversal 2 e saía da malha depois de CRUZ_06: passado o conflito, o
+  segundo VE só tinha mais um cruzamento pela frente. Agora ele vira à esquerda
+  em CRUZ_06 e segue pela arterial 2 até o leste, por CRUZ_07 e CRUZ_08. Isso
+  dá à escolha de E8 uma consequência adiante, que é o que H4 avalia (P19). O
+  VE do corredor desce a transversal 4 até CRUZ_08 e pede ali a fase
+  transversal, enquanto este chega pela arterial: um segundo encontro é
+  possível, se os dois chegarem juntos. A conversão em CRUZ_06 é à esquerda e
+  PERMISSIVA (`state="o"` na rede): no verde da transversal, o VE cede ao
+  tráfego que vem no sentido oposto.
 -->
 <routes xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
         xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/routes_file.xsd">
@@ -37,6 +53,6 @@
     <route id="ROTA_VE_CORREDOR"
            edges="A1_L0 A1_L1 A1_L2 A1_L3 T4_S1 A2_O3 A2_O2 A2_O1 A2_O0"/>
 
-    <route id="ROTA_VE_TRANSVERSAL" edges="T2_S0 T2_S1 T2_S2"/>
+    <route id="ROTA_VE_TRANSVERSAL" edges="T2_S0 T2_S1 A2_L2 A2_L3 A2_L4"/>
 
 </routes>

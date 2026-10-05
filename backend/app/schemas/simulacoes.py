@@ -9,6 +9,13 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.models import ModoControle
 
+#: As velocidades que o dashboard oferece, em múltiplos do tempo real.
+Velocidade = Literal[1, 2, 5, 10]
+
+#: Teto de veículos de fundo numa transmissão. O cenário `intenso` tem algumas
+#: centenas na malha ao mesmo tempo; o teto só barra um corpo absurdo.
+LIMITE_TRAFEGO = 5000
+
 
 class PedidoSimulacaoEntrada(BaseModel):
     """`POST /simulacoes`: um ponto (cenário, modo, seed) para o atendente rodar."""
@@ -18,6 +25,11 @@ class PedidoSimulacaoEntrada(BaseModel):
     seed: int = Field(ge=0, description="Não pode ser seed reservada ao experimento")
     duracao_s: int | None = Field(
         default=None, gt=0, le=3600, description="Nula usa a de cenarios.yaml"
+    )
+    velocidade: Velocidade | None = Field(
+        default=1,
+        description="Múltiplo do tempo real (Bloco 7). Nula roda o mais rápido possível. "
+        "Não muda o resultado: o ritmo fica fora do SUMO",
     )
 
 
@@ -43,6 +55,7 @@ class PedidoSimulacaoSchema(BaseModel):
     modo: ModoControle
     seed: int
     duracao_s: int | None
+    velocidade: int | None
     status: Literal["PENDENTE", "RODANDO", "CONCLUIDA", "FALHA"]
     mensagem: str | None
     resumo: dict[str, Any] | None = Field(
@@ -93,4 +106,12 @@ class TransmissaoSimulacao(BaseModel):
     eventos: list[EventoTransmitido] = []
     latencia_ms: float | None = Field(
         default=None, description="Última latência de decisão do motor; nula no FIXO"
+    )
+    trafego: list[tuple[float, float]] = Field(
+        default=[],
+        max_length=LIMITE_TRAFEGO,
+        description="Latitude e longitude dos demais veículos (Bloco 7), para o mapa",
+    )
+    velocidade: int | None = Field(
+        default=None, description="Múltiplo do tempo real; nula é a velocidade máxima"
     )

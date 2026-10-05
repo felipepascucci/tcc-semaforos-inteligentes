@@ -19,6 +19,7 @@ from sqlalchemy import (
     Index,
     Integer,
     Numeric,
+    SmallInteger,
     String,
     UniqueConstraint,
     func,
@@ -131,6 +132,9 @@ class PedidoSimulacao(Base):
             "status IN ('PENDENTE', 'RODANDO', 'CONCLUIDA', 'FALHA')", name="status_conhecido"
         ),
         CheckConstraint("duracao_s IS NULL OR duracao_s > 0", name="duracao_positiva"),
+        CheckConstraint(
+            "velocidade IS NULL OR velocidade IN (1, 2, 5, 10)", name="velocidade_conhecida"
+        ),
         # O atendente procura sempre "o pendente mais antigo".
         Index("idx_pedido_status_criado", "status", "criado_em"),
     )
@@ -141,6 +145,9 @@ class PedidoSimulacao(Base):
     seed: Mapped[int] = mapped_column(Integer, nullable=False)
     # Nulo usa a duração de cenarios.yaml.
     duracao_s: Mapped[int | None] = mapped_column(Integer)
+    # Múltiplo do tempo real em que o atendente roda (Bloco 7). Nulo é o máximo
+    # que a máquina permite. Não muda o resultado: o ritmo fica fora do SUMO.
+    velocidade: Mapped[int | None] = mapped_column(SmallInteger)
     status: Mapped[str] = mapped_column(String(12), nullable=False, server_default="PENDENTE")
     fk_execucao: Mapped[int | None] = mapped_column(
         ForeignKey("execucao_simulacao.id_execucao", ondelete="SET NULL")

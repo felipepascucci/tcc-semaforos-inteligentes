@@ -72,6 +72,12 @@ services:
       # ar não impede o backend de subir: o /health mostra `ponte: falha`.
       # Vazio desliga a leitura.
       PONTE_URL: ${PONTE_URL_CONTEINER-http://host.docker.internal:8001}
+      # Login do operador do dashboard (context/02 §6, Bloco 7). Os padrões são
+      # SÓ de desenvolvimento (senha `operador`), para um clone limpo subir com
+      # `docker compose up`; o .env sobrescreve. Trocar antes da apresentação.
+      OPERADOR_USUARIO: ${OPERADOR_USUARIO:-operador}
+      OPERADOR_SENHA_HASH: ${OPERADOR_SENHA_HASH:-pbkdf2_sha256:600000:65awAm2aT0qAXsGu_kbctw:YZXX7T2N8xDCvCnxMoPilTWOxpKrnItbJ9k4mWoq56E}
+      JWT_SEGREDO: ${JWT_SEGREDO:-dev-somente-local-troque-antes-da-apresentacao}
     # No Docker Desktop (Windows/Mac) o nome já existe; no Linux, isto o cria.
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -108,18 +114,26 @@ services:
       db:
         condition: service_healthy
 
-  # Só existe a partir do Bloco 7. Fica sob perfil próprio para que
-  # `docker compose up` não tente construir um diretório vazio até lá.
+  # Dashboard (Bloco 7): o build estático do Vite servido pelo nginx, em HTTPS
+  # com certificado autoassinado, e proxy reverso de /api (REST e WebSocket)
+  # para o backend — context/02 §3 e §6. https://localhost:8443
+  #
+  # Para desenvolver o frontend com recarga a quente, `npm run dev` no host
+  # (http://localhost:5173), que repassa /api ao backend da porta 8000.
   frontend:
-    profiles: ["frontend"]
     build:
       context: ./frontend
     ports:
-      - "5173:5173"
-    environment:
-      VITE_API_URL: http://localhost:${API_PORT:-8000}
+      - "${DASHBOARD_PORT:-8443}:443"
+    volumes:
+      # O certificado gerado na primeira subida, para o navegador não pedir
+      # exceção nova a cada `up`.
+      - certificados:/etc/nginx/certs
     depends_on:
-      - backend
+      # O nginx resolve `backend` ao subir; sem ele de pé, não sobe.
+      backend:
+        condition: service_healthy
 
 volumes:
   pgdata:
+  certificados:

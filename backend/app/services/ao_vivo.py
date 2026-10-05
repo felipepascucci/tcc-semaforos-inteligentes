@@ -65,6 +65,14 @@ class SimulacaoAoVivo:
                     "t_simulacao": transmissao.t,
                 },
             )
+        # O tráfego de fundo vai numa mensagem só, a fotografia inteira: chaves
+        # por veículo fariam o throttle segurar centenas de entradas, e um
+        # veículo que saiu da malha ficaria no mapa até alguém o apagar.
+        self.difusor.publicar_estado(
+            "trafego",
+            "SIMULACAO",
+            {"t_simulacao": transmissao.t, "posicoes": transmissao.trafego},
+        )
         for evento in transmissao.eventos:
             self.difusor.publicar_evento(
                 {"nivel": evento.nivel, "texto": evento.texto, "origem": "SIMULACAO", **origem}
@@ -76,6 +84,8 @@ class SimulacaoAoVivo:
                 "origem": "SIMULACAO",
                 "latencia_ms": transmissao.latencia_ms,
                 "priorizacoes_ativas": sum(s.em_preempcao for s in transmissao.semaforos),
+                "t_simulacao": transmissao.t,
+                "velocidade": transmissao.velocidade,
                 **origem,
             },
         )

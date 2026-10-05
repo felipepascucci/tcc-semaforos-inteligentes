@@ -62,6 +62,7 @@ class Tarefa:
     modo: str
     seed: int
     duracao_s: int | None
+    velocidade: int | None = None
 
 
 def pegar_proximo(sessao: Session) -> Tarefa | None:
@@ -78,7 +79,12 @@ def pegar_proximo(sessao: Session) -> Tarefa | None:
     pedido.status = "RODANDO"
     pedido.iniciado_em = datetime.now(UTC)
     return Tarefa(
-        pedido.id_pedido, pedido.nome_cenario, pedido.modo.value, pedido.seed, pedido.duracao_s
+        pedido.id_pedido,
+        pedido.nome_cenario,
+        pedido.modo.value,
+        pedido.seed,
+        pedido.duracao_s,
+        pedido.velocidade,
     )
 
 
@@ -109,7 +115,12 @@ def atender(
     executar: Executar = executor.executar,
 ) -> str:
     """Roda a tarefa e grava o desfecho. Devolve o status final."""
-    log.info("pedido_iniciado", id_pedido=tarefa.id_pedido, cenario=tarefa.cenario)
+    log.info(
+        "pedido_iniciado",
+        id_pedido=tarefa.id_pedido,
+        cenario=tarefa.cenario,
+        velocidade=tarefa.velocidade or "maxima",
+    )
     try:
         regras.validar(tarefa.cenario, tarefa.seed)
         with sessao_de(fabrica) as sessao:
@@ -135,6 +146,8 @@ def atender(
                 diretorio_csv=pasta,
                 transmitir=url_backend,
                 id_pedido=tarefa.id_pedido,
+                # Sem transmissão ninguém assiste: o ritmo só atrasaria.
+                velocidade=None if url_backend is None else tarefa.velocidade,
             )
         )
     except Exception as erro:

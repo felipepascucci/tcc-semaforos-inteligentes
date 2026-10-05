@@ -48,6 +48,41 @@ def test_seed_vizinha_das_reservadas_e_aceita(cliente: TestClient, seed: int) ->
     assert resposta.status_code == 201
 
 
+def test_velocidade_padrao_e_tempo_real(cliente: TestClient) -> None:
+    """O dashboard é para acompanhar a olho (Bloco 7)."""
+    corpo = {"cenario": "leve", "modo": "FIXO", "seed": 1001}
+    assert cliente.post("/api/v1/simulacoes", json=corpo).json()["velocidade"] == 1
+
+
+@pytest.mark.parametrize("velocidade", [1, 2, 5, 10, None])
+def test_velocidades_aceitas(cliente: TestClient, velocidade: int | None) -> None:
+    """Nula é o mais rápido possível, como o lote."""
+    corpo = {"cenario": "leve", "modo": "FIXO", "seed": 1001, "velocidade": velocidade}
+    resposta = cliente.post("/api/v1/simulacoes", json=corpo)
+    assert resposta.status_code == 201
+    assert resposta.json()["velocidade"] == velocidade
+
+
+@pytest.mark.parametrize("velocidade", [0, 3, 100, -1])
+def test_velocidade_fora_da_lista_e_422(cliente: TestClient, velocidade: int) -> None:
+    corpo = {"cenario": "leve", "modo": "FIXO", "seed": 1001, "velocidade": velocidade}
+    assert cliente.post("/api/v1/simulacoes", json=corpo).status_code == 422
+
+
+def test_banco_recusa_velocidade_fora_da_lista(semeado: Session) -> None:
+    """O CHECK da migration vale mesmo para quem grava sem passar pela API."""
+    from sqlalchemy.exc import IntegrityError
+
+    from app.models import ModoControle, PedidoSimulacao
+
+    semeado.add(
+        PedidoSimulacao(nome_cenario="leve", modo=ModoControle.FIXO, seed=1001, velocidade=3)
+    )
+    with pytest.raises(IntegrityError, match="velocidade_conhecida"):
+        semeado.commit()
+    semeado.rollback()
+
+
 def test_cenario_desconhecido_e_422(cliente: TestClient) -> None:
     resposta = cliente.post(
         "/api/v1/simulacoes", json={"cenario": "caotico", "modo": "FIXO", "seed": 1001}

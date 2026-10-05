@@ -79,6 +79,46 @@ def test_envio_leva_o_estado_mais_recente_no_formato_da_api() -> None:
     assert (ve["lat"], ve["lon"]) == pytest.approx(GEO.para_lat_lon(600.0, 1000.0))
 
 
+def test_sem_trafego_lido_o_envio_leva_lista_vazia_e_a_velocidade() -> None:
+    enviados: list[dict[str, Any]] = []
+    transmissor = _transmissor(enviados)
+    transmissor.velocidade = 5
+    transmissor.publicar(_estado(1.0, False), None)
+
+    transmissor.enviar_pendentes()
+
+    assert enviados[0]["trafego"] == []
+    assert enviados[0]["velocidade"] == 5
+
+
+def test_trafego_vai_em_lat_lon_arredondado() -> None:
+    enviados: list[dict[str, Any]] = []
+    transmissor = _transmissor(enviados)
+    transmissor.publicar(_estado(1.0, False), None)
+    transmissor.publicar_trafego([(500.0, 1000.0), (750.25, 990.5)])
+
+    transmissor.enviar_pendentes()
+
+    trafego = enviados[0]["trafego"]
+    assert trafego[0] == (-23.55, -46.63)
+    lat, lon = GEO.para_lat_lon(750.25, 990.5)
+    assert trafego[1] == (round(lat, 6), round(lon, 6))
+
+
+def test_trafego_e_lido_no_maximo_uma_vez_por_intervalo() -> None:
+    """A leitura custa uma chamada ao SUMO por veículo: só a 5 Hz de relógio."""
+    agora = [100.0]
+    transmissor = _transmissor([])
+    transmissor.relogio = lambda: agora[0]
+
+    assert transmissor.quer_trafego()
+    transmissor.publicar_trafego([(1.0, 2.0)])
+    agora[0] = 100.0 + transmissor.intervalo_s * 0.9
+    assert not transmissor.quer_trafego()
+    agora[0] = 100.0 + transmissor.intervalo_s * 1.1
+    assert transmissor.quer_trafego()
+
+
 def test_preempcao_curta_entre_dois_envios_nao_some() -> None:
     """Os eventos saem de todas as fotos acumuladas, não só da última."""
     enviados: list[dict[str, Any]] = []

@@ -17,15 +17,19 @@ viabilidade, sem papel estatístico).
 
 ## Começando
 
-Pré-requisitos: **Docker Desktop**, **Python 3.11+**, **SUMO 1.19+**, **Node 18+**
-(só a partir do Bloco 7).
+Pré-requisitos: **Docker Desktop**, **Python 3.11+**, **SUMO 1.19+**. **Node 20+**
+só para desenvolver o dashboard: o compose compila o frontend sozinho.
 
 ```powershell
 Copy-Item .env.example .env      # ajuste se precisar; .env nunca é commitado
 
-docker compose up -d --build     # db -> migrations + seeds -> backend
+docker compose up -d --build     # db -> migrations + seeds -> backend -> dashboard
 curl http://localhost:8000/api/v1/health
 ```
+
+O dashboard fica em **https://localhost:8443**. O certificado é autoassinado: o
+navegador avisa na primeira vez, e basta aceitar a exceção. Login de
+desenvolvimento: usuário `operador`, senha `operador` (ver "Dashboard", abaixo).
 
 É só isso. O serviço `migracoes` cria o schema e aplica os seeds antes de o
 backend subir, então um clone limpo vira um sistema utilizável com um comando.
@@ -46,7 +50,56 @@ WebSocket em `ws://localhost:8000/api/v1/stream`, com throttle de 5 Hz.
 | `migracoes` | — | padrão | one-shot: migrations + seeds, depois sai com código 0 |
 | `backend` (FastAPI) | 8000 | padrão | `--reload`, `/docs` para a API interativa |
 | `adminer` | 8080 | `dev` | `docker compose --profile dev up -d adminer` |
-| `frontend` (Vite) | 5173 | `frontend` | só existe a partir do Bloco 7 |
+| `frontend` (nginx) | 8443 | padrão | dashboard em HTTPS, proxy de `/api` e do WebSocket |
+
+## Dashboard
+
+React + Vite + TypeScript + Tailwind, com mapa Leaflet e gráficos Recharts
+(`context/02` §2). Cinco abas: **Ao vivo** (mapa, bancada, semáforos, eventos,
+preempção manual), **Central** (as ocorrências de P20), **Logs**, **Métricas** e
+**Simulações**.
+
+No compose, o nginx serve o build em HTTPS e repassa `/api` ao backend, então
+dashboard e API ficam na mesma origem. Dois processos rodam **no host**, fora do
+compose, e sem eles a tela fica parada:
+
+```powershell
+.\.venv\Scripts\python.exe -m bridge.main --simulado      # a bancada, com o dublê do UNO
+.\.venv\Scripts\python.exe -m sim.controlador.atendente   # executa os pedidos da aba Simulações
+```
+
+**Sem o atendente, o pedido de simulação fica "pendente" para sempre**, e os
+CRUZ_01..08 ficam "sem dado ao vivo": só a simulação transmite o estado deles. A
+aba Simulações avisa quando um pedido passa de 10 s pendente. O pedido escolhe a
+velocidade: 1x é tempo real (3600 s levam 1 h, então ponha uma duração), e
+"máxima" roda a ~50x. A velocidade não muda o resultado.
+
+O mapa desenha a malha SUMO a partir de `frontend/src/malha/malha.json`. Se a
+rede (`sim/rede/malha.net.xml`) ou o mapa de fases mudarem, regenere-o com
+`python -m sim.rede.exportar_mapa`; um teste acusa o arquivo desatualizado.
+
+**Login.** Uma credencial só, a do operador (`context/02` §6), lida do ambiente:
+`OPERADOR_USUARIO`, `OPERADOR_SENHA_HASH` e `JWT_SEGREDO`. O compose traz
+padrões **só de desenvolvimento** (senha `operador`). Para trocar a senha:
+
+```powershell
+docker compose exec backend python -m app.services.autenticacao   # imprime OPERADOR_SENHA_HASH=…
+```
+
+Copie a linha para o `.env`, troque também o `JWT_SEGREDO` (32 caracteres ou
+mais) e rode `docker compose up -d backend`. **Trocar os dois antes da
+apresentação.** O token vale 8 h e protege só as escritas do operador; a leitura
+e o WebSocket ficam abertos (decisão do Bloco 7, `context/09`).
+
+**Desenvolvendo o frontend**, com recarga a quente:
+
+```powershell
+cd frontend
+npm ci
+npm run dev          # http://localhost:5173, com /api repassado ao backend da porta 8000
+npm test             # Vitest
+npm run typecheck    # tsc
+```
 
 ## Ambiente Python local
 
@@ -281,8 +334,12 @@ O executor transmite o estado ao backend a 5 Hz quando pedido; o lote roda sem:
 
 ```powershell
 python -m sim.controlador.executor --cenario leve --modo PREEMPCAO --seed 1001 `
-    --duracao 900 --gui --sem-banco --transmitir   # padrão: $BACKEND_URL
+    --duracao 900 --sem-banco --transmitir --velocidade 5   # padrão: $BACKEND_URL
 ```
+
+`--velocidade N` roda a N vezes o tempo real, para acompanhar no dashboard; sem
+ela, o executor roda o mais rápido que a máquina permite (~50x). Não muda o
+resultado. Com `--gui`, o ritmo é o `--atraso-ms` da sumo-gui.
 
 `POST /api/v1/simulacoes` não roda o SUMO (ele está no host, e o backend no
 contêiner): grava um pedido, que o **atendente** executa com transmissão ligada:

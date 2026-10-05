@@ -77,6 +77,7 @@ def criar_pedido(
         modo=entrada.modo,
         seed=entrada.seed,
         duracao_s=entrada.duracao_s,
+        velocidade=entrada.velocidade,
     )
     sessao.add(pedido)
     sessao.flush()

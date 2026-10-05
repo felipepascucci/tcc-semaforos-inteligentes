@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
-from app.api.dependencias import SessaoDep
+from app.api.dependencias import EXIGE_OPERADOR, SessaoDep
 from app.models import Ocorrencia, TagRfid, VeiculoEmergencia
 from app.schemas.cadastro import PedidoVeiculo, VeiculoSchema
 
@@ -42,7 +42,11 @@ def listar(sessao: SessaoDep) -> list[VeiculoSchema]:
     response_model=VeiculoSchema,
     status_code=status.HTTP_201_CREATED,
     summary="Cadastra VE e tag",
-    responses={409: {"description": "Placa ou UID já cadastrados"}},
+    dependencies=[EXIGE_OPERADOR],
+    responses={
+        401: {"description": "Login necessário"},
+        409: {"description": "Placa ou UID já cadastrados"},
+    },
 )
 def cadastrar(pedido: PedidoVeiculo, sessao: SessaoDep) -> VeiculoSchema:
     """Cadastra o VE e, se vier `uid_tag`, a tag dele, ativa e normalizada."""

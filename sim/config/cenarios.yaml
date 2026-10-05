@@ -125,7 +125,9 @@ cenarios:
     objetivo: Validar resolução de conflitos (2 VEs simultâneos)
     ves_simultaneos: 2
     # O segundo VE desce a transversal 2 e encontra o primeiro em CRUZ_02, onde
-    # as duas fases são conflitantes — é esse encontro que exercita E8.
+    # as duas fases são conflitantes — é esse encontro que exercita E8. Desde
+    # 2026-10-05 (Bloco 7) ele segue depois pela arterial 2 até o leste
+    # (CRUZ_06, 07, 08): ver sim/demanda/emergencias.rou.xml.
     rota_secundaria: ROTA_VE_TRANSVERSAL
     # Atraso da segunda partida, em segundos. Dimensionado para os dois
     # chegarem juntos a CRUZ_02: o primeiro percorre 1.000 m de arterial a
