@@ -82,10 +82,23 @@ Arduino UNO DECIDE (prioridade por tipo, fila de 1) e emite "EV,…,PREEMP_INI,3
   ▼
 UNO executa a transição segura até o verde exclusivo da Rua 3 e atualiza o LCD
   ▼
-bridge/ (só escuta, pelo USB) -> backend: log_prioridade, metrica_latencia   (Bloco 6)
+bridge/ (só escuta, pelo USB; expõe GET /estado)
+  ▲
+  │ o backend LÊ /estado a 5 Hz (decisão de 2026-10-05, Bloco 6)
+backend: log_prioridade (um registro por decisão do UNO), metrica_latencia (amostras de H3)
   ▼
 Broadcast WebSocket -> Dashboard
 ```
+
+> **Bloco 6 (2026-10-05).** A ponte continua sem saber que o backend existe: é
+> ele que consulta `GET /estado` (`app/services/bancada.py`). Os eventos do UNO
+> não passam por `core/autorizacao`, porque o UNO já decidiu, e o backend só
+> **registra**. Cada evento de decisão (`PREEMP_INI`, `RENOVADO`, `FILA`,
+> `DESCARTADO`) vira uma linha em `log_prioridade` no `PROTO_CRUZ_01`, com
+> `id_correlacao` próprio. A aproximação (S1..S4) vai em `motivo`, e
+> `fase_aplicada` fica nula. As amostras de H3 vão para `metrica_latencia` com
+> `t_decisao` nulo, ligadas ao `PREEMP_INI` pelo carimbo. A tabela de tradução
+> evento → status está no docstring do módulo.
 
 ### 4.1 Por que o NodeMCU fala direto com o UNO
 
@@ -422,8 +435,10 @@ Base: `/api/v1`. Documentação automática em `/docs` (FastAPI).
 | `POST` | `/ocorrencias/{id}/encerramento` | Central encerra a ocorrência; o VE deixa de ter prioridade |
 | `GET` | `/ocorrencias?ativas=true` | Ocorrências abertas — o painel "Central" do dashboard |
 | `GET` | `/logs/prioridade` | Logs paginados, com filtros |
-| `POST` | `/simulacoes` | Dispara execução de cenário |
+| `POST` | `/simulacoes` | Pede execução de cenário ao atendente do host (Bloco 6) |
+| `GET` | `/simulacoes` | Pedidos mais recentes (Bloco 6) |
 | `GET` | `/simulacoes/{id}` | Status e métricas da execução |
+| `POST` | `/simulacoes/transmissao` | Estado ao vivo da simulação, empurrado pelo executor (Bloco 6) |
 | `GET` | `/metricas/resumo` | Agregados para o dashboard |
 | `GET` | `/health` | Liveness/readiness |
 
@@ -475,14 +490,37 @@ desconhecida ou inativa.
 A decisão entre os dois casos é de `core/autorizacao.autorizar()`, pura, e a
 tentativa negada é gravada em `deteccao` com `autorizado = false`.
 
-> **A rever no Bloco 6 (decisão de 2026-10-05).** Na bancada nenhum dispositivo
-> chama a API: os NodeMCUs não têm rede, e o UNO decide sozinho. O que chega ao
-> backend são os eventos do UNO pela ponte (`05` §6), com rua e tipo do VE e
-> **sem UID** (o UID é da rua e fica no emissor). O payload abaixo, o
-> `X-Device-Token` e a resposta com `mensagem_lcd` foram desenhados para o NodeMCU
-> chamar a API. O Bloco 6 decide se `POST /deteccoes` vira a rota da ponte ou dá
-> lugar a outra. A autorização de P20 (`core/autorizacao`) continua valendo para
-> a API e para a simulação.
+> **Decidido no Bloco 6 (2026-10-05).** `POST /deteccoes` **continua** como o
+> contrato do V2I com rede (a arquitetura-alvo), com payload, `X-Device-Token`,
+> anti-replay e P20 como acima. **Na bancada nenhum dispositivo chama a rota**:
+> os eventos do UNO entram pela leitura de `GET /estado` da ponte (§4), só para
+> registro. A rota é exercitada pelos testes e pelo Swagger. Três pontos a
+> declarar no texto:
+>
+> - **`PREEMPCAO_SOLICITADA` não aciona atuador.** Na simulação o motor roda no
+>   processo do executor, e na bancada quem decide é o UNO. A rota grava a
+>   detecção e, se o leitor pertence a um cruzamento, uma linha `SUCESSO` em
+>   `log_prioridade` com o mesmo `id_correlacao`, e o `motivo` diz isso por
+>   extenso.
+> - **Anti-replay.** A mesma tag (UID normalizado) ou a mesma `sequencia` do
+>   mesmo leitor dentro de 2 s recebe a resposta da primeira, com
+>   `duplicada: true`, e nada é gravado.
+> - **`VEICULO_INATIVO`**, tag reconhecida de veículo fora de operação, responde
+>   200 sem prioridade, como `SEM_OCORRENCIA`. O 403 é só da tag desconhecida
+>   ou inativa (`acao: ACESSO_NEGADO`).
+>
+> **Preempção manual.** `POST /semaforos/PROTO_CRUZ_01/preempcao` (`rua`,
+> `veiculo`) usa a injeção da ponte, que exige o fio do NodeMCU solto do RX
+> (`05` §6). Nos cruzamentos da simulação a resposta é 409, porque a API não
+> comanda o executor. `DELETE .../preempcao` é sempre 409: o UNO não aceita
+> cancelamento, porque a emergência termina sozinha (I6), e na simulação vale o
+> mesmo motivo.
+>
+> **Simulações pela API.** O backend está no contêiner, e o SUMO no host
+> (`02` §3). `POST /simulacoes` grava em `pedido_simulacao`, e
+> `python -m sim.controlador.atendente` executa o pedido com transmissão ao
+> vivo. A API e o atendente recusam as seeds 1..50 e 101..105, que são do
+> experimento, e a execução nunca escreve em `analysis/data/`.
 
 `timestamp_dispositivo` é `millis()` do ESP8266 — sem sincronia com o relógio do servidor. Serve apenas para detectar reordenação e para calcular *deltas* dentro do dispositivo. **A latência oficial é medida com o relógio do servidor.** `sequencia` é um contador monotônico para descartar duplicatas (o RC522 lê a mesma tag várias vezes por segundo).
 
@@ -499,6 +537,21 @@ tentativa negada é gravada em `deteccao` com `autorizado = false`.
 
 Throttle de 5 Hz no broadcast. Sem isso, uma simulação a 10 passos/s satura o navegador.
 
+> **Implementado no Bloco 6** (`app/services/difusao.py`). O throttle é pela
+> **borda de subida**: sem descarga recente, a mensagem sai na hora; senão, no
+> fim do intervalo. Estado (`estado_semaforo`, `posicao_ve`, `metrica`) é fundido
+> por chave, e só o mais recente sai. `evento` nunca é descartado. Quem conecta
+> recebe primeiro o último estado de cada semáforo e VE. Duas extensões do
+> contrato acima:
+>
+> - **Bancada**, em `estado_semaforo` do `PROTO_CRUZ_01`: `aproximacoes`
+>   (`"RRGR"`, S1..S4), `regime`, `rua_ativa` e `rua_fila`. `fase` é o eixo do
+>   ciclo aberto (1 ou 2), nula em emergência e no all-red, porque o verde
+>   exclusivo não é fase.
+> - **Simulação**, em `posicao_ve`: `id_veiculo` é o id do SUMO (`ve_amb_0`), não
+>   uma chave do cadastro. `lat` e `lon` vêm de `sim/rede/georreferencia.py`,
+>   ancorado em `CRUZ_01` como os seeds.
+
 ## 8. Estrutura de diretórios do backend
 
 ```
@@ -511,11 +564,17 @@ backend/
 │   │   ├── veiculos.py
 │   │   ├── simulacoes.py
 │   │   ├── metricas.py
+│   │   ├── ocorrencias.py      # P20: a central de despacho simulada
+│   │   ├── logs.py
 │   │   └── ws.py
+│   ├── api/dependencias.py     # recursos do processo, sessão (commit explícito)
+│   ├── configuracao.py         # ambiente -> Configuracao (testes montam a sua)
+│   ├── logs.py                 # structlog: os seis campos obrigatórios (02 §7)
 │   ├── models/                 # SQLAlchemy ORM
 │   ├── schemas/                # Pydantic v2
 │   ├── repositories/           # acesso a dados
-│   └── services/               # orquestração (usa core + repositories)
+│   └── services/               # bancada (leitura da ponte), deteccoes, difusao,
+│                               # ao_vivo, simulacoes, metricas
 ├── core/                       # ⚠️ SEM I/O, SEM FRAMEWORK
 │   ├── priorizacao/
 │   │   ├── motor.py            # avaliar() -> list[Comando]

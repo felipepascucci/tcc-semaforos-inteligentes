@@ -1,22 +1,32 @@
-"""Liveness/readiness — context/01 §7 e context/02 §7.
+"""Liveness/readiness — `context/01` §7 e `context/02` §7.
 
-O `/health` deve reportar o estado do banco, dos adaptadores e do watchdog
-serial. No Bloco 0 só o banco existe; os demais são declarados como
-`nao_configurado` — que é a verdade, e não um verde falso.
+Reporta o banco, a ponte da bancada e a transmissão da simulação. **Só o banco
+decide o `estado`**: a ponte e a simulação são opcionais (a bancada pode não
+estar na mesa, e nenhuma simulação precisa estar rodando), e dizer "degradado"
+por isso faria o `/health` ficar vermelho no uso normal.
+
+O `watchdog_serial` do Bloco 0 saiu: I6 foi redefinida em 2026-10-05, e o UNO
+não depende mais de comunicação (`context/01` §6).
 """
 
 from __future__ import annotations
 
-import os
-from functools import lru_cache
-from typing import Literal
+from datetime import UTC, datetime, timedelta
+from typing import Any, Final, Literal
 
 from fastapi import APIRouter, Response, status
-from pydantic import BaseModel
-from sqlalchemy import Engine, create_engine, text
+from pydantic import BaseModel, Field
+from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
+from app.api.dependencias import RecursosDep
+
 router = APIRouter(tags=["infraestrutura"])
+
+VERSAO = "0.2.0"
+
+#: O UNO manda `ST` a 2 Hz; o mesmo limite da ponte (`bridge.ponte.SILENCIO_MAXIMO_S`).
+SILENCIO_DO_UNO: Final = timedelta(seconds=2)
 
 EstadoComponente = Literal["ok", "falha", "nao_configurado"]
 
@@ -28,24 +38,29 @@ class RespostaHealth(BaseModel):
     versao: str
     perfil_parametros: str
     banco: EstadoComponente
-    adaptador_sumo: EstadoComponente
-    adaptador_hardware: EstadoComponente
-    watchdog_serial: EstadoComponente
+    ponte: EstadoComponente = Field(description="GET /estado da ponte respondendo")
+    uno_respondendo: bool | None = Field(
+        description="Telemetria recente do UNO pela ponte; nulo sem ponte"
+    )
+    simulacao_ao_vivo: bool = Field(description="Transmissão do executor nos últimos 5 s")
+    clientes_websocket: int
     detalhe: str | None = None
 
 
-@lru_cache(maxsize=1)
-def _motor(url: str) -> Engine:
-    """Devolve um Engine único por URL — criar um por requisição vaza conexões."""
-    return create_engine(url, pool_pre_ping=True, connect_args={"connect_timeout": 3})
+def _telemetria_recente(estado: dict[str, Any] | None) -> bool:
+    """A ponte guarda a última `ST` mesmo com o UNO calado; vale a idade dela."""
+    telemetria = (estado or {}).get("telemetria")
+    if telemetria is None:
+        return False
+    recebida = datetime.fromisoformat(telemetria["recebida_em"])
+    return datetime.now(UTC) - recebida < SILENCIO_DO_UNO
 
 
-def _verificar_banco() -> tuple[EstadoComponente, str | None]:
-    url = os.getenv("DATABASE_URL")
-    if not url:
+def _banco(recursos: RecursosDep) -> tuple[EstadoComponente, str | None]:
+    if recursos.engine is None:
         return "nao_configurado", "DATABASE_URL ausente"
     try:
-        with _motor(url).connect() as conexao:
+        with recursos.engine.connect() as conexao:
             conexao.execute(text("SELECT 1"))
     except SQLAlchemyError as erro:
         return "falha", type(erro).__name__
@@ -53,19 +68,25 @@ def _verificar_banco() -> tuple[EstadoComponente, str | None]:
 
 
 @router.get("/health", response_model=RespostaHealth, summary="Liveness/readiness")
-def health(resposta: Response) -> RespostaHealth:
+def health(recursos: RecursosDep, resposta: Response) -> RespostaHealth:
     """Reporta o estado do backend e de suas dependências."""
-    banco, detalhe = _verificar_banco()
+    banco, detalhe = _banco(recursos)
+    leitor = recursos.leitor
+    ponte: EstadoComponente = "nao_configurado"
+    uno: bool | None = None
+    if leitor is not None:
+        ponte = "ok" if leitor.disponivel else "falha"
+        uno = leitor.disponivel and _telemetria_recente(leitor.ultimo_estado)
 
     corpo = RespostaHealth(
         estado="ok" if banco == "ok" else "degradado",
-        versao="0.1.0",
-        perfil_parametros=os.getenv("PERFIL_PARAMETROS", "simulacao"),
+        versao=VERSAO,
+        perfil_parametros=recursos.configuracao.perfil_parametros,
         banco=banco,
-        # Bloco 3 e Bloco 5, respectivamente.
-        adaptador_sumo="nao_configurado",
-        adaptador_hardware="nao_configurado",
-        watchdog_serial="nao_configurado",
+        ponte=ponte,
+        uno_respondendo=uno,
+        simulacao_ao_vivo=recursos.ao_vivo.ativa(),
+        clientes_websocket=recursos.difusor.clientes,
         detalhe=detalhe,
     )
     if corpo.estado != "ok":

@@ -32,8 +32,13 @@ backend subir, então um clone limpo vira um sistema utilizável com um comando.
 As duas operações são idempotentes — subir de novo não duplica nada.
 
 `/api/v1/health` responde `estado: "ok"` quando o banco está acessível, e
-`degradado` com HTTP 503 caso contrário. Componentes ainda não implementados são
-declarados como `nao_configurado` — nunca como verde falso.
+`degradado` com HTTP 503 caso contrário. Também mostra a ponte da bancada
+(`ponte`, `uno_respondendo`) e a simulação ao vivo (`simulacao_ao_vivo`), que são
+opcionais e não derrubam o `estado`. O que não está configurado aparece como
+`nao_configurado` — nunca como verde falso.
+
+A API está em `http://localhost:8000/docs` (rotas de `context/01` §7) e o
+WebSocket em `ws://localhost:8000/api/v1/stream`, com throttle de 5 Hz.
 
 | Serviço | Porta | Perfil | Observação |
 | --- | --- | --- | --- |
@@ -194,7 +199,7 @@ mexendo em migration ou em seed:
 
 ```powershell
 docker compose up -d db          # o banco precisa estar no ar
-alembic upgrade head             # cria as 13 tabelas (12 + `ocorrencia`, P20) e os 5 enums
+alembic upgrade head             # 14 tabelas (12 + `ocorrencia`, P20, + `pedido_simulacao`, Bloco 6) e 5 enums
 python -m db.seeds.carregar      # cadastros mínimos; idempotente
 python -m db.seeds.carregar --resumo
 
@@ -210,8 +215,12 @@ ambiente, nunca do `.ini`.
 depois de qualquer migration:
 
 ```powershell
-docker compose exec -T db pg_dump -s -U tcc semaforo
+docker compose exec -T db pg_dump -s -O -x -U tcc semaforo
 ```
+
+`-O -x` tira dono e permissões: o anexo descreve o schema, não o usuário do
+ambiente. O cabeçalho do arquivo (comentários e revisão do Alembic) é mantido à
+mão.
 
 Duas coisas nos seeds são deliberadas e não devem surpreender:
 
@@ -240,7 +249,12 @@ Ambos usam a `DATABASE_URL` do `.env` e falam com o backend em
 
 A ponte roda a partir da raiz do repositório, só **escuta** o UNO e expõe a
 própria API em `http://127.0.0.1:8001` (`/health`, `/estado`, `/injecao`,
-documentação em `/docs`):
+documentação em `/docs`). **O backend lê a ponte**, e não o contrário: o
+contêiner consulta `GET /estado` a 5 Hz em `http://host.docker.internal:8001`
+(`PONTE_URL_CONTEINER` no `.env`), grava os eventos do UNO em `log_prioridade` e
+as amostras de H3 em `metrica_latencia`, e os repassa ao WebSocket. Sem ponte no
+ar, o backend sobe do mesmo jeito. No Linux, rode a ponte com `--host 0.0.0.0`,
+porque o `host-gateway` não alcança o 127.0.0.1 do host.
 
 ```powershell
 .venv\Scripts\python.exe -m bridge.main             # porta do .env (SERIAL_PORT)
@@ -256,6 +270,31 @@ a **9600 baud**: confira `SERIAL_BAUDRATE` no `.env`.
 Para conferir a ponte de ponta a ponta (~3 min), noutro terminal, logo depois de
 subi-la: `.venv\Scripts\python.exe -m bridge.verificar`. Na placa, com o fio do
 NodeMCU solto do RX do UNO.
+
+Com a ponte e o compose no ar, `POST /api/v1/semaforos/PROTO_CRUZ_01/preempcao`
+(`{"rua": 3, "veiculo": "AMBULANCIA"}`) faz o VE "chegar" pela injeção da ponte
+(fio solto do RX), e a decisão do UNO aparece em `/api/v1/logs/prioridade`.
+
+### Simulação ao vivo e pedidos pela API
+
+O executor transmite o estado ao backend a 5 Hz quando pedido; o lote roda sem:
+
+```powershell
+python -m sim.controlador.executor --cenario leve --modo PREEMPCAO --seed 1001 `
+    --duracao 900 --gui --sem-banco --transmitir   # padrão: $BACKEND_URL
+```
+
+`POST /api/v1/simulacoes` não roda o SUMO (ele está no host, e o backend no
+contêiner): grava um pedido, que o **atendente** executa com transmissão ligada:
+
+```powershell
+python -m sim.controlador.atendente              # atende até Ctrl+C
+python -m sim.controlador.atendente --uma-vez    # atende o que houver e sai
+```
+
+As seeds 1..50 (Bloco 8) e 101..105 (calibração) são recusadas pela API e pelo
+atendente, e os CSV de uma execução pedida vão para `sim/saida/<ponto>/`, nunca
+para `analysis/data/`.
 
 ## Firmware
 

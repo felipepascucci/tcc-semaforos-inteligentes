@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
@@ -14,7 +15,7 @@ from fastapi import FastAPI
 from bridge.api import criar_app
 from bridge.ponte import Ponte
 from bridge.tests.conftest import PortaAusente, PortaRoteirizada, ate, transporte_rapido
-from bridge.transporte import Transporte
+from bridge.transporte import LinhaRecebida, Transporte
 
 
 @asynccontextmanager
@@ -85,6 +86,29 @@ async def test_estado_mostra_telemetrias_e_eventos(cliente: httpx.AsyncClient) -
     eventos = [(ev["tipo"], ev["rua"], ev["veiculo"]) for ev in corpo["eventos"]]
     assert ("BOOT", None, None) in eventos
     assert ("PREEMP_INI", 3, "AMBULANCIA") in eventos
+
+
+async def test_estado_traz_as_amostras_de_h3_com_o_carimbo_do_evento() -> None:
+    """O backend liga a amostra ao `PREEMP_INI` pelo carimbo: os dois precisam ser iguais."""
+    uno, emissor = PortaRoteirizada(), PortaRoteirizada()
+    t = time.perf_counter()
+    async with _cliente(uno, transporte_veiculo=emissor) as (cliente, ponte):
+        await ate(lambda: ponte.emissor_conectado)
+        emissor.entregar(LinhaRecebida(b"Tag B7EF8FA0 lida -> Enviando RUA3\r\n", t))
+        uno.entregar(LinhaRecebida(b"EV,142350,PREEMP_INI,3,AMBULANCIA\r\n", t + 0.045))
+        await ate(lambda: len(ponte.amostras_h3) == 1)
+        corpo = (await cliente.get("/estado")).json()
+
+    (amostra,) = corpo["amostras_h3"]
+    assert (amostra["rua"], amostra["uid"], amostra["veiculo"]) == (3, "B7EF8FA0", "AMBULANCIA")
+    assert amostra["uno_ms"] == 142350
+    assert amostra["latencia_total_ms"] == pytest.approx(45.0, abs=0.002)
+    (evento,) = [ev for ev in corpo["eventos"] if ev["tipo"] == "PREEMP_INI"]
+    assert amostra["t_atuacao"] == evento["recebido_em"]
+
+
+async def test_estado_sem_medicao_nao_tem_amostras(cliente: httpx.AsyncClient) -> None:
+    assert (await cliente.get("/estado")).json()["amostras_h3"] == []
 
 
 @pytest.mark.parametrize(

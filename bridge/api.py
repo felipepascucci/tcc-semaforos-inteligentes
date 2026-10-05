@@ -1,9 +1,10 @@
 """HTTP da ponte — `/health`, `/estado` e `/injecao` (`context/05` §6).
 
 A ponte é um processo separado do backend (`context/02` §3: precisa da porta
-USB, e o backend roda no compose). Desde 2026-10-05 ela só **escuta** o UNO: o
-backend e o dashboard leem a bancada em `GET /estado`. Se a ponte também deve
-empurrar os eventos ao backend, decide-se no Bloco 6.
+USB, e o backend roda no compose). Desde 2026-10-05 ela só **escuta** o UNO, e
+**não sabe que o backend existe**: é o backend que lê `GET /estado` a 5 Hz
+(decisão de 2026-10-05, Bloco 6). O histórico de telemetrias, eventos e amostras
+de H3 existe para isso: quem lê entre duas consultas não perde nada.
 
 `POST /injecao` é a única escrita, e é de teste: com o fio do NodeMCU solto do
 RX, faz o papel do receptor. É o que o roteiro de aceitação (`bridge/verificar.py`)
@@ -22,6 +23,7 @@ from typing import Literal
 from fastapi import FastAPI, HTTPException, Response, status
 from pydantic import BaseModel, Field
 
+from bridge.latencia import AmostraH3
 from bridge.ponte import Ponte
 from bridge.protocolo import N_SEMAFOROS, Deteccao, Regime, Telemetria, TipoEvento
 from bridge.transporte import ConexaoPerdidaError
@@ -49,12 +51,27 @@ class EventoSchema(BaseModel):
     veiculo: TipoVeiculo | None
 
 
+class AmostraH3Schema(BaseModel):
+    """Uma amostra de H3, a mesma linha que vai para o `latencia_bancada.csv`."""
+
+    t_deteccao: datetime = Field(description="Primeiro byte de `Tag … lida`, no emissor")
+    t_atuacao: datetime = Field(description="Primeiro byte do `EV,…,PREEMP_INI` do UNO")
+    latencia_total_ms: float
+    rua: int
+    uid: str
+    veiculo: TipoVeiculo
+    uno_ms: int = Field(description="millis() do UNO no PREEMP_INI")
+
+
 class RespostaEstado(BaseModel):
     telemetria: TelemetriaSchema | None = Field(description="A mais recente")
     telemetrias: list[TelemetriaSchema] = Field(
         description="As mais recentes, em ordem; a ST sai a cada mudança de estado"
     )
     eventos: list[EventoSchema]
+    amostras_h3: list[AmostraH3Schema] = Field(
+        description="As desta sessão da ponte; vazia fora da medição de H3"
+    )
 
 
 class RespostaHealth(BaseModel):
@@ -102,6 +119,20 @@ class PedidoInjecaoBruta(BaseModel):
 class RespostaInjecaoBruta(BaseModel):
     linha: str
     t_envio: datetime
+
+
+def _amostra(amostra: AmostraH3) -> AmostraH3Schema:
+    evento = amostra.decisao.evento
+    assert evento.veiculo is not None  # PREEMP_INI sempre traz o VE
+    return AmostraH3Schema(
+        t_deteccao=amostra.deteccao.t,
+        t_atuacao=amostra.decisao.t,
+        latencia_total_ms=amostra.latencia_total_ms,
+        rua=amostra.deteccao.rua,
+        uid=amostra.deteccao.leitura.uid,
+        veiculo=evento.veiculo,
+        uno_ms=evento.t_dispositivo_ms,
+    )
 
 
 def _telemetria(recebida_em: datetime, telemetria: Telemetria) -> TelemetriaSchema:
@@ -166,7 +197,7 @@ def criar_app(ponte: Ponte, porta: str) -> FastAPI:
 
     @app.get("/estado", response_model=RespostaEstado)
     def estado() -> RespostaEstado:
-        """Telemetrias e eventos mais recentes do UNO."""
+        """Telemetrias, eventos e amostras de H3 mais recentes do UNO."""
         telemetrias = [_telemetria(quando, st) for quando, st in ponte.telemetrias]
         return RespostaEstado(
             telemetria=telemetrias[-1] if telemetrias else None,
@@ -181,6 +212,7 @@ def criar_app(ponte: Ponte, porta: str) -> FastAPI:
                 )
                 for quando, ev in ponte.eventos
             ],
+            amostras_h3=[_amostra(amostra) for amostra in ponte.amostras_h3],
         )
 
     @app.post(

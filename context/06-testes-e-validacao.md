@@ -24,15 +24,16 @@ Cada RF/RNF vira pelo menos um teste automatizado. Esta tabela é a rastreabilid
 | RF01 | VE a 100 m em linha reta mas **fora da rota** não é detectado | Distância de rota, não euclidiana | `test_deteccao.py` |
 | RF02 | Da detecção ao **início da atuação** < 3 s (decisão P14) | `t_atuacao - t_deteccao < 3000 ms`. Na bancada, `t_atuacao` é a chegada do `EV,PREEMP_INI` do UNO (`05` §4.3) | `test_e2e_preempcao.py` + checklist HW |
 | RF03 | VE atravessa 8 cruzamentos sem parada | `waitingCount == 0` para o VE | `test_corredor_verde.py` |
-| RF04 | WebSocket emite mudança de estado em < 500 ms | Evento recebido no cliente de teste | `test_ws.py` |
-| RF05 | Toda preempção gera linha em `log_prioridade` | Contagem bate com nº de eventos | `test_persistencia.py` |
+| RF04 | WebSocket emite mudança de estado em < 500 ms | Evento recebido no cliente de teste. Na bancada, da `ST` na ponte ao cliente, no ritmo de produção (leitura e difusão a 5 Hz), com o dublê | `test_ws.py` + `test_bancada_integrada.py` |
+| RF05 | Toda preempção gera linha em `log_prioridade` | Contagem bate com nº de eventos. Na bancada, uma linha por evento de decisão do UNO, e o backend que reinicia não regrava | `test_persistencia.py` + `test_bancada_integrada.py` |
 | RF06 | Posição do VE é publicada a ≥ 1 Hz | Intervalo entre eventos ≤ 1 s | `test_ws.py` |
 | RF07 | Mudança de rota do VE recalcula os TLS-alvo | Novo conjunto de TLS após reroute | `test_recalculo.py` |
 | RNF01 | p95 de `latencia_decisao_ms` < 100 ms em 10.000 chamadas | Percentil, não média. **Latência de decisão** — só `motor.avaliar()`, sem I/O (decisão P2) | `test_desempenho.py` |
 | H3 | `latencia_total_ms` (t_deteccao→t_atuacao) < 200 ms em **5 repetições de bancada** | **Latência fim-a-fim**: da leitura da tag no veículo ao `PREEMP_INI` do UNO, os dois carimbados no relógio do notebook pela ponte (`05` §4.3). Inclui ESP-NOW, a serial e a decisão do UNO. Com n = 5 o p95 **não é estimável**: reportar mín/mediana/máx com o n declarado e verificar o limiar sobre o **máximo observado** (decisão de 2026-08-31) | `test_e2e_preempcao.py` + checklist HW |
 | RNF02 | Sistema opera 60 min contínuos sem vazamento de memória | RSS estável ± 10% | `test_soak.py` |
 | RNF03 | Motor processa malha de 32 TLS mantendo p95 < 100 ms | Escala linear ou melhor | `test_desempenho.py` |
-| RNF04 | POST sem `X-Device-Token` válido → 401; UID não cadastrado → 403 | Códigos corretos. Vale para a API; na bancada nenhum dispositivo chama a API, e a ausência de criptografia no ESP-NOW é limitação declarada (`02` §6) | `test_seguranca.py` |
+| RNF04 | POST sem `X-Device-Token` válido → 401; UID não cadastrado → 403 | Códigos corretos. Vale para a API; na bancada nenhum dispositivo chama a API, e a ausência de criptografia no ESP-NOW é limitação declarada (`02` §6) | `backend/tests/api/test_seguranca.py` |
+| RF01 (P20, API) | Tag reconhecida sem ocorrência → 200 `SEM_OCORRENCIA`; com ocorrência → `PREEMPCAO_SOLICITADA` com a criticidade, e `id_correlacao` igual na detecção e no log; repetição em 2 s não grava | Corpo e linhas gravadas | `backend/tests/api/test_deteccoes.py` |
 | RNF05 | Taxa de reconhecimento de tag ≥ 95% em 100 leituras | Medição manual em bancada | Checklist HW |
 | RNF07 | `core/` não importa framework nem I/O | Teste de arquitetura via AST | `test_arquitetura.py` |
 | RF01 (P20) | Tag reconhecida **sem** ocorrência ativa não é autorizada; com ocorrência, é, e carrega a criticidade | Os quatro desfechos de `autorizar()`: tag desconhecida, veículo inativo, sem ocorrência, autorizado | `test_autorizacao.py` |
@@ -65,7 +66,14 @@ Cada RF/RNF vira pelo menos um teste automatizado. Esta tabela é a rastreabilid
 > IoT e a API (Blocos 5 e 6); RF04, RF05, RF06 e RNF04 exigem a API e o WebSocket
 > (Bloco 6); RNF02 e RNF05 exigem execução longa e bancada (Blocos 8 e 5).
 >
-> `RNF03` foi realocado de `test_escala.py` para `test_desempenho.py`: as duas
+> **Estado em 2026-10-05 (Bloco 6).** RF04, RF05, RNF04 e RF06 ganharam teste
+automatizado na API (`backend/tests/api/`). RF06 mede o caminho da simulação: a
+posição do VE chega ao cliente a cada ≤ 1 s com o executor transmitindo a 5 Hz.
+Os testes da bancada usam o dublê, e **nenhum número deles é dado
+experimental**. RF02, RF07 e H3 continuam dependendo da bancada e da simulação
+longa.
+
+`RNF03` foi realocado de `test_escala.py` para `test_desempenho.py`: as duas
 > medições compartilham o mesmo aparato de medição de percentil, e separá-las em
 > dois arquivos duplicaria o código sem separar conceito nenhum.
 

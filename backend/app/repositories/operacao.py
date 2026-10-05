@@ -113,7 +113,7 @@ def registrar_latencia(
     *,
     id_correlacao: uuid.UUID,
     t_deteccao: datetime,
-    t_decisao: datetime,
+    t_decisao: datetime | None,
     ambiente: str,
     fk_log: int | None = None,
     t_atuacao: datetime | None = None,
@@ -124,10 +124,10 @@ def registrar_latencia(
     partir de `t_decisao - t_deteccao`, para que não exista a possibilidade de o
     valor gravado divergir dos carimbos que o originaram.
 
-    `latencia_total_ms` é calculada aqui porque `t_atuacao` pode não existir
-    (preempção abortada) e porque é carimbada **na chegada do ACK**, não no envio
-    do comando — medir o envio mediria só a velocidade do próprio código
-    (`contrato-hardware-software.md` §10).
+    `t_decisao` é `None` na bancada (`ambiente = 'HARDWARE'`): o UNO decide sem
+    expor o instante (`context/05` §4.3), e a latência de decisão sai nula em vez
+    de inventada. `latencia_total_ms` é calculada aqui porque `t_atuacao` pode
+    não existir; na bancada ela é a chegada do `PREEMP_INI` (H3).
     """
     latencia = MetricaLatencia(
         id_correlacao=id_correlacao,

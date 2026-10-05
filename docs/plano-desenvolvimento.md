@@ -364,6 +364,31 @@ Todas as rotas do `context/01` §7, schemas Pydantic v2, WebSocket com throttle 
 
 **P20 (2026-09-29) acrescenta:** `POST /ocorrencias`, `POST /ocorrencias/{id}/encerramento` e `GET /ocorrencias?ativas=true`; e o serviço de `/deteccoes` passa a chamar `core/autorizacao.autorizar()` com o que buscou no banco, responder `acao = "SEM_OCORRENCIA"` (HTTP 200) à tag reconhecida sem ocorrência e gravar `deteccao.autorizado` e `fk_ocorrencia`. A tabela, o ORM e o repositório (`abrir_ocorrencia`, `encerrar_ocorrencia`, `ocorrencia_ativa_do_veiculo`) já existem desde a P20.
 
+**Estado em 2026-10-05: implementado, esperando o teste da equipe.** Sete
+decisões tomadas antes do código, registradas em `context/09`: o backend lê
+`GET /estado` da ponte a 5 Hz; `/deteccoes` fica como contrato do V2I com rede,
+e a bancada entra pela leitura da ponte; a aproximação vai em `motivo`;
+`metrica_latencia.t_decisao` passa a aceitar nulo (migration `c4d81f2b9a60`);
+`POST /simulacoes` grava em `pedido_simulacao` e o atendente do host executa; o
+executor transmite ao vivo com `--transmitir`; a API recusa as seeds do
+experimento.
+
+| Entrega | Onde |
+| --- | --- |
+| Todas as rotas de `context/01` §7, mais `GET /simulacoes` e `POST /simulacoes/transmissao` | `backend/app/api/v1/` |
+| Schemas Pydantic v2 | `backend/app/schemas/` |
+| WebSocket `/api/v1/stream`, throttle de 5 Hz pela borda de subida | `app/services/difusao.py`, `api/v1/ws.py` |
+| `X-Device-Token`, anti-replay de 2 s, P20 com `SEM_OCORRENCIA` em 200 | `app/services/deteccoes.py` |
+| `id_correlacao` da detecção à métrica (API: detecção → log; bancada: decisão → log → H3) | `app/services/deteccoes.py`, `app/services/bancada.py` |
+| structlog com os seis campos de `context/02` §7 | `app/logs.py` |
+| Bancada → backend: tradução dos eventos do UNO, gravação, WebSocket | `app/services/bancada.py` |
+| Simulação ao vivo e atendente de pedidos | `sim/controlador/transmissor.py`, `sim/controlador/atendente.py`, `sim/rede/georreferencia.py` |
+
+Testes: a suíte padrão passou de 544 para **575**, e a de banco de 31 para
+**89**. Conferido também de ponta a ponta com `docker compose up`: a ponte com o
+dublê no host, o backend no contêiner lendo-a, a preempção manual pela API e um
+pedido de simulação executado pelo atendente com o SUMO e transmissão ao vivo.
+
 ---
 
 ### Bloco 7 — Dashboard (Sprint 6) · ~2 semanas

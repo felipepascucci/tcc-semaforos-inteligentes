@@ -67,12 +67,22 @@ services:
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
       PERFIL_PARAMETROS: ${PERFIL_PARAMETROS:-simulacao}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      # A ponte da bancada roda no HOST (precisa da USB). O backend lê
+      # GET /estado dela a 5 Hz (decisão de 2026-10-05, Bloco 6). Ponte fora do
+      # ar não impede o backend de subir: o /health mostra `ponte: falha`.
+      # Vazio desliga a leitura.
+      PONTE_URL: ${PONTE_URL_CONTEINER-http://host.docker.internal:8001}
+    # No Docker Desktop (Windows/Mac) o nome já existe; no Linux, isto o cria.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "${API_PORT:-8000}:8000"
     volumes:
       # Recarga a quente em desenvolvimento. O pacote é instalado em modo
       # editável no Dockerfile, então o mount aponta para o mesmo caminho.
       - ./backend:/app/backend
+      # Cenários e seeds reservadas, que validam POST /simulacoes.
+      - ./sim/config:/app/sim/config:ro
     depends_on:
       db:
         condition: service_healthy

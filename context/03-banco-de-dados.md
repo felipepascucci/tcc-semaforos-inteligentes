@@ -43,6 +43,10 @@ Nunca renomeie uma coluna existente sem sinalizar que isso exige correção no d
 └───────────────────┘        └────────────────────────┘
 ```
 
+> **`PEDIDO_SIMULACAO` (Bloco 6, 2026-10-05)** fica fora do diagrama acima: é a
+> fila dos pedidos de `POST /simulacoes`, e aponta N:1, opcionalmente, para
+> `EXECUCAO_SIMULACAO`. É tabela operacional, e não do experimento.
+
 ## 3. DDL
 
 Arquivo de referência: `db/schema.sql`. A fonte da verdade operacional são as migrations Alembic; este DDL existe para o anexo do TCC e deve ser mantido em sincronia.
@@ -211,12 +215,30 @@ CREATE TABLE metrica_latencia (
     id_correlacao   UUID NOT NULL,
     fk_log          INT REFERENCES log_prioridade(id_log),
     t_deteccao      TIMESTAMPTZ NOT NULL,
-    t_decisao       TIMESTAMPTZ NOT NULL,
+    t_decisao       TIMESTAMPTZ,                  -- NULL na bancada (Bloco 6, 2026-10-05)
     t_atuacao       TIMESTAMPTZ,
     latencia_decisao_ms  INT GENERATED ALWAYS AS
         (EXTRACT(EPOCH FROM (t_decisao - t_deteccao)) * 1000)::INT STORED,
     latencia_total_ms    INT,
     ambiente        VARCHAR(20) NOT NULL          -- SIMULACAO | HARDWARE
+);
+
+-- Bloco 6 (2026-10-05): POST /simulacoes grava aqui; o atendente do host executa.
+-- Demonstração, não experimento: seeds 1..50 e 101..105 são recusadas.
+CREATE TABLE pedido_simulacao (
+    id_pedido      SERIAL PRIMARY KEY,
+    nome_cenario   VARCHAR(50) NOT NULL,
+    modo           modo_controle NOT NULL,
+    seed           INT NOT NULL,
+    duracao_s      INT CHECK (duracao_s IS NULL OR duracao_s > 0),  -- NULL: a de cenarios.yaml
+    status         VARCHAR(12) NOT NULL DEFAULT 'PENDENTE'
+                   CHECK (status IN ('PENDENTE', 'RODANDO', 'CONCLUIDA', 'FALHA')),
+    fk_execucao    INT REFERENCES execucao_simulacao(id_execucao) ON DELETE SET NULL,
+    mensagem       VARCHAR(200),
+    resumo         JSONB,                         -- o que o executor mediu; não é capítulo 5
+    criado_em      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    iniciado_em    TIMESTAMPTZ,
+    finalizado_em  TIMESTAMPTZ
 );
 
 CREATE TABLE metrica_via_transversal (
@@ -239,6 +261,7 @@ CREATE INDEX idx_log_inicio            ON log_prioridade (timestamp_inicio DESC)
 CREATE INDEX idx_amostra_exec_t        ON estado_semaforo_amostra (fk_execucao, t_simulacao);
 CREATE INDEX idx_deteccao_uid_tempo    ON deteccao (uid_bruto, recebido_em DESC);
 CREATE INDEX idx_metrica_exec          ON metrica_simulacao (id_execucao);
+CREATE INDEX idx_pedido_status_criado  ON pedido_simulacao (status, criado_em);
 
 -- P20: no máximo UMA ocorrência aberta por veículo. É o banco, e não o código,
 -- que impede duas criticidades concorrentes para o mesmo VE.
@@ -273,8 +296,9 @@ Consequência para o coletor: ele mantém a fase corrente de cada TLS em memóri
   | 2 | Eixo transversal | S3 + S4 |
 
   A emergência abre o verde de **uma** aproximação (S1..S4), que não é fase do
-  ciclo. Como registrá-la em `log_prioridade` (aproximação em `fase_aplicada` ou
-  em `motivo`) decide-se no Bloco 6. **Aplicado nos seeds em 2026-10-05
+  ciclo. **Decidido no Bloco 6 (2026-10-05):** a aproximação vai em `motivo`, e
+  `fase_aplicada` fica nula. Assim `fase_aplicada` continua significando índice
+  de `fase_semaforo`, como na simulação. **Aplicado nos seeds em 2026-10-05
   (entrega 5.8)**, com `tempo_ciclo = 12`. Um banco semeado antes dessa data é
   corrigido pela migration `7b2e4d9a1c35`, só de dados: os seeds são
   idempotentes por chave e nunca apagam, então sozinhos deixariam as fases 3 e 4

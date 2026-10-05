@@ -95,6 +95,12 @@ execucao:
   # vazia; medir os primeiros minutos misturaria o transiente de enchimento com
   # o regime que se quer caracterizar.
   aquecimento_s: 300
+  # Seeds do experimento, que execuções de demonstração (POST /simulacoes) NÃO
+  # podem usar: 1..50 são as do Bloco 8, 101..105 as da calibração (P16, P17).
+  # Uma execução pedida pelo dashboard ocuparia em execucao_simulacao o ponto
+  # (cenário, modo, seed) do lote, que rodaria aquele ponto sem registro no banco
+  # (decisão de 2026-10-05, Bloco 6). Intervalos fechados.
+  seeds_reservadas: [[1, 50], [101, 105]]
 
 modos: [FIXO, PREEMPCAO, PREEMPCAO_COMPENSADA]
 
