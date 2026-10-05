@@ -288,7 +288,7 @@ A ponte carimba o **primeiro byte** das duas linhas (`Tag … lida` e `EV,…,PR
 - ✅ **P9** — não se aplica: o LCD está no UNO, de 5 V.
 - ✅ **P10** — resistores integrados nos módulos.
 - **Fotos da bancada** — pendentes (questionário, seção 7).
-- **Versões das bibliotecas** (`MFRC522`, `LiquidCrystal_I2C`) **e do pacote `esp8266`** — não informadas; necessárias para compilar de forma reprodutível.
+- **Versões das bibliotecas** (`MFRC522`, `LiquidCrystal_I2C`) **e do pacote `esp8266`** — não informadas; necessárias para compilar de forma reprodutível. O firmware novo do UNO foi compilado com `arduino:avr` 1.8.8 e `LiquidCrystal I2C` 1.1.2 (Frank de Brabander); faltam as do emissor e do receptor.
 
 ---
 
@@ -310,7 +310,9 @@ Registro completo em `context/09`.
 
 ## §14 — Plano do Bloco 5
 
-Detalhado em [`docs/plano-desenvolvimento.md`](plano-desenvolvimento.md). Feito em 2026-10-05: protocolo (5.1), dublê com a regra da bancada (5.2) e a ponte que escuta, com o `bridge.verificar` passando 16 de 16 contra o dublê (5.7, faltando só a medição de H3). Falta: o firmware do UNO (5.3), versionar os sketches dos NodeMCUs (5.6) e ajustar os seeds (5.8).
+Detalhado em [`docs/plano-desenvolvimento.md`](plano-desenvolvimento.md). Feito em 2026-10-05: protocolo (5.1), dublê com a regra da bancada (5.2), a ponte que escuta e mede H3 (5.7), os sketches dos NodeMCUs versionados como estão (5.6), os seeds da bancada (5.8) e o firmware do UNO (5.3), em `firmware/uno/semaforo/`, compilado e comparado com o dublê linha por linha no PC.
+
+**Falta, e exige a bancada:** gravar o firmware no UNO e rodar a aceitação (§7, 16 de 16), e medir H3 (§10). O firmware dos NodeMCUs não muda.
 
 ---
 

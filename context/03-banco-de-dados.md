@@ -135,8 +135,8 @@ CREATE TABLE tag_rfid (
 
 CREATE TABLE dispositivo_iot (
     id_dispositivo SERIAL PRIMARY KEY,
-    codigo         VARCHAR(50) NOT NULL UNIQUE,   -- "LEITOR_CRUZ_01"
-    tipo           VARCHAR(30) NOT NULL,          -- LEITOR_RFID | CONTROLADOR_SEMAFORO
+    codigo         VARCHAR(50) NOT NULL UNIQUE,   -- "CTRL_PROTO_01"
+    tipo           VARCHAR(30) NOT NULL,          -- EMISSOR_V2I | RECEPTOR_V2I | CONTROLADOR_SEMAFORO
     fk_semaforo    INT REFERENCES semaforo(id_semaforo),
     token_hash     VARCHAR(128) NOT NULL,
     ultimo_contato TIMESTAMPTZ,
@@ -274,7 +274,13 @@ Consequência para o coletor: ele mantém a fase corrente de cada TLS em memóri
 
   A emergência abre o verde de **uma** aproximação (S1..S4), que não é fase do
   ciclo. Como registrá-la em `log_prioridade` (aproximação em `fase_aplicada` ou
-  em `motivo`) decide-se no Bloco 6. Aplicado nos seeds na entrega 5.8.
+  em `motivo`) decide-se no Bloco 6. **Aplicado nos seeds em 2026-10-05
+  (entrega 5.8)**, com `tempo_ciclo = 12`. Um banco semeado antes dessa data é
+  corrigido pela migration `7b2e4d9a1c35`, só de dados: os seeds são
+  idempotentes por chave e nunca apagam, então sozinhos deixariam as fases 3 e 4
+  e o `LEITOR_CRUZ_01` no lugar. A migration tira as fases 3 e 4, reescreve as
+  fases 1 e 2 e o ciclo, e tira o `LEITOR_CRUZ_01`. Se alguma `deteccao` apontar
+  para ele, ele fica, marcado `INATIVO`, para não apagar histórico.
 
   > **Correção de P13 (histórico).** Até 2026-10-05 esta seção pedia 4 fases em
   > *split phasing*, uma por aproximação. O firmware que a equipe de hardware
@@ -286,10 +292,11 @@ Consequência para o coletor: ele mantém a fase corrente de cada TLS em memóri
   bancada identificam **ruas**, não veículos (`05` §1), e não entram em
   `tag_rfid`: o mapa UID → rua vive no sketch do emissor, e o backend recebe a
   rua já resolvida. `tag_rfid` continua servindo à API e à autorização de P20.
-- Dispositivos IoT: `EMISSOR_VE_01` (NodeMCU + RC522, no veículo),
-  `RECEPTOR_CRUZ_01` (NodeMCU do cruzamento) e `CTRL_PROTO_01` (UNO).
-  Substituem o `LEITOR_CRUZ_01` na entrega 5.8. Nenhum deles chama a API, então
-  `token_hash` não é exercitado pela bancada.
+- Dispositivos IoT: `EMISSOR_VE_01` (NodeMCU + RC522, no veículo, tipo
+  `EMISSOR_V2I`, **sem** `fk_semaforo`), `RECEPTOR_CRUZ_01` (NodeMCU do
+  cruzamento, `RECEPTOR_V2I`) e `CTRL_PROTO_01` (UNO, `CONTROLADOR_SEMAFORO`).
+  Substituíram o `LEITOR_CRUZ_01` em 2026-10-05 (entrega 5.8). Nenhum deles
+  chama a API, então `token_hash` não é exercitado pela bancada.
 - **Nenhuma ocorrência** — de propósito (P20). O sistema sobe sem VE em
   serviço. *(A demonstração na bancada não passa mais por aqui: desde
   2026-10-05 o UNO decide sem consultar ocorrência, `05` §7.)*

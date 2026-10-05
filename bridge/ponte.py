@@ -14,7 +14,13 @@ se perde, e a injeção volta sem decisão.
 O relógio é o do notebook, lido com a resolução do `perf_counter` (100 ns) e
 ancorado no relógio de parede uma vez: no Windows o relógio de parede declara
 resolução de 15,6 ms, grosseira demais para um intervalo que se quer abaixo de
-200 ms (H3).
+200 ms (H3). Cada linha é carimbada na chegada do **primeiro byte**, pelo
+transporte (`LinhaRecebida`).
+
+**Medição de H3** (`context/05` §4.3). Com `transporte_veiculo`, a ponte ouve
+também a serial do NodeMCU emissor, casa cada `Tag … lida -> Enviando RUAn` com
+a decisão do UNO para ela (`bridge/latencia.py`) e entrega as amostras ao
+gravador do CSV.
 """
 
 from __future__ import annotations
@@ -29,6 +35,14 @@ from typing import Final
 
 import structlog
 
+from bridge.latencia import (
+    AmostraH3,
+    CasadorH3,
+    DecisaoCarimbada,
+    Desfecho,
+    GravadorCsv,
+    LeituraCarimbada,
+)
 from bridge.protocolo import (
     EVENTOS_DE_DECISAO,
     TERMINADOR,
@@ -38,8 +52,9 @@ from bridge.protocolo import (
     Resposta,
     Telemetria,
     interpretar,
+    interpretar_leitura_veiculo,
 )
-from bridge.transporte import ConexaoPerdidaError, Transporte
+from bridge.transporte import ConexaoPerdidaError, LinhaRecebida, Transporte
 
 log = structlog.get_logger(__name__)
 
@@ -67,7 +82,11 @@ class Relogio:
         self._perf = time.perf_counter()
 
     def agora(self) -> datetime:
-        return self._parede + timedelta(seconds=time.perf_counter() - self._perf)
+        return self.em(time.perf_counter())
+
+    def em(self, perf: float) -> datetime:
+        """O instante de parede de uma leitura de `time.perf_counter()`."""
+        return self._parede + timedelta(seconds=perf - self._perf)
 
 
 @dataclass(frozen=True)
@@ -106,6 +125,8 @@ class Ponte:
         transporte: A porta — `TransporteSerial` na bancada, `TransporteSimulado`
             sem ela.
         relogio: Fonte dos carimbos; injetável nos testes.
+        transporte_veiculo: A serial do NodeMCU emissor, só na medição de H3.
+        gravador: Onde as amostras de H3 vão parar; só com `transporte_veiculo`.
     """
 
     def __init__(
@@ -115,8 +136,14 @@ class Ponte:
         relogio: Relogio | None = None,
         timeout_decisao_s: float = TIMEOUT_DECISAO_S,
         espera_reconexao_s: float = ESPERA_RECONEXAO_S,
+        transporte_veiculo: Transporte | None = None,
+        gravador: GravadorCsv | None = None,
     ) -> None:
+        if gravador is not None and transporte_veiculo is None:
+            raise ValueError("o gravador de H3 exige a porta do emissor")
         self.transporte = transporte
+        self.transporte_veiculo = transporte_veiculo
+        self.gravador = gravador
         self.relogio = relogio or Relogio()
         self._timeout_decisao_s = timeout_decisao_s
         self._espera_reconexao_s = espera_reconexao_s
@@ -127,6 +154,12 @@ class Ponte:
         self.telemetrias_violando_i1 = 0
         self.telemetrias: deque[tuple[datetime, Telemetria]] = deque(maxlen=TELEMETRIAS_GUARDADAS)
         self.eventos: deque[tuple[datetime, Evento]] = deque(maxlen=EVENTOS_GUARDADOS)
+
+        # Medição de H3: só existe com a porta do emissor.
+        self.emissor_conectado = False
+        self.amostras_h3: list[AmostraH3] = []
+        self.deteccoes_sem_amostra: dict[str, int] = {}
+        self._casador = None if transporte_veiculo is None else CasadorH3()
 
         self._pendentes: deque[tuple[Deteccao, asyncio.Future[tuple[Evento, datetime]]]] = deque()
         self._trava_escrita = asyncio.Lock()
@@ -154,8 +187,24 @@ class Ponte:
         """Abre a porta e a mantém aberta até `parar()`, reabrindo quando cai.
 
         Abrir a porta reinicia o UNO (DTR), que volta pelo all-red; fechar não.
+        A porta do emissor, se houver, é mantida à parte: cair uma não derruba
+        a outra.
         """
         self._parar.clear()
+        emissor = (
+            None
+            if self.transporte_veiculo is None
+            else asyncio.create_task(self._escutar_emissor(self.transporte_veiculo), name="emissor")
+        )
+        try:
+            await self._manter_uno()
+        finally:
+            if emissor is not None:
+                emissor.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await emissor
+
+    async def _manter_uno(self) -> None:
         while not self._parar.is_set():
             try:
                 await self.transporte.abrir()
@@ -205,15 +254,22 @@ class Ponte:
     async def _ler(self) -> None:
         while True:
             linha = await self.transporte.ler_linha()
-            chegada = self.relogio.agora()  # antes de interpretar
+            chegada = self.relogio.em(linha.t_chegada)
             try:
-                resposta = interpretar(linha)
+                resposta = interpretar(linha.dados)
             except LinhaInvalidaError as erro:
                 # Ruído é esperado: o UNO imprime lixo a cada reset.
                 self.linhas_invalidas += 1
-                log.debug("linha_invalida", linha=linha, erro=str(erro))
+                log.debug("linha_invalida", linha=linha.dados, erro=str(erro))
                 continue
             self._despachar(resposta, chegada)
+            if self._casador is not None:
+                if isinstance(resposta, Evento):
+                    decisao = DecisaoCarimbada(chegada, resposta, linha.bytes_em_espera)
+                    self._concluir(self._casador.evento(decisao))
+                # As linhas do UNO chegam em ordem, e a `ST` sai a 2 Hz: cada uma
+                # é a deixa para fechar o que passou da janela.
+                self._concluir(self._casador.expirar(chegada))
 
     def _despachar(self, resposta: Resposta, chegada: datetime) -> None:
         if isinstance(resposta, Telemetria):
@@ -242,6 +298,67 @@ class Ponte:
                 if not futuro.done():
                     futuro.set_result((evento, chegada))
                 return
+
+    # -- medição de H3 ---------------------------------------------------------
+
+    async def _escutar_emissor(self, transporte: Transporte) -> None:
+        """Ouve o NodeMCU emissor e reabre a porta dele quando cai."""
+        while not self._parar.is_set():
+            try:
+                await transporte.abrir()
+            except ConexaoPerdidaError as erro:
+                log.warning("porta_emissor_indisponivel", erro=str(erro))
+                await self._dormir(self._espera_reconexao_s)
+                continue
+            self.emissor_conectado = True
+            log.info("porta_emissor_aberta")
+            try:
+                while True:
+                    self._ouvir_emissor(await transporte.ler_linha())
+            except ConexaoPerdidaError as erro:
+                log.warning("porta_emissor_perdida", erro=str(erro))
+            finally:
+                self.emissor_conectado = False
+                await transporte.fechar()
+            await self._dormir(self._espera_reconexao_s)
+
+    def _ouvir_emissor(self, linha: LinhaRecebida) -> None:
+        assert self._casador is not None
+        try:
+            leitura = interpretar_leitura_veiculo(linha.dados)
+        except LinhaInvalidaError:
+            # O emissor imprime outras coisas, e lixo a 74880 baud no boot.
+            log.debug("linha_do_emissor_ignorada", linha=linha.dados)
+            return
+        t_deteccao = self.relogio.em(linha.t_chegada)
+        deteccao = LeituraCarimbada(t_deteccao, leitura, linha.bytes_em_espera)
+        log.info("deteccao_do_emissor", uid=leitura.uid, rua=leitura.rua)
+        self._concluir(self._casador.deteccao(deteccao))
+
+    def _concluir(self, desfechos: list[Desfecho]) -> None:
+        for desfecho in desfechos:
+            amostra = desfecho.amostra
+            if amostra is None:
+                # FILA, RENOVADO e DESCARTADO não têm atuação para medir;
+                # SEM_DECISAO é detecção que não chegou ao UNO.
+                tipo = desfecho.tipo
+                self.deteccoes_sem_amostra[tipo] = self.deteccoes_sem_amostra.get(tipo, 0) + 1
+                log.warning("deteccao_sem_amostra_h3", decisao=tipo, rua=desfecho.deteccao.rua)
+                continue
+            self.amostras_h3.append(amostra)
+            log.info(
+                "amostra_h3",
+                latencia_total_ms=round(amostra.latencia_total_ms, 3),
+                rua=amostra.deteccao.rua,
+                n=len(self.amostras_h3),
+            )
+            if self.gravador is not None:
+                try:
+                    self.gravador.gravar(amostra)
+                except OSError as erro:
+                    # A amostra continua em memória; perder o arquivo não pode
+                    # derrubar a escuta.
+                    log.error("csv_h3_nao_gravado", erro=str(erro))
 
     def _falhar_pendentes(self) -> None:
         while self._pendentes:

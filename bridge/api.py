@@ -66,6 +66,15 @@ class RespostaHealth(BaseModel):
     reconexoes: int
     linhas_invalidas: int
     telemetrias_violando_i1: int
+    emissor_conectado: bool | None = Field(
+        description="Porta do NodeMCU emissor; null fora da medição de H3"
+    )
+    amostras_h3: int | None = Field(
+        description="Amostras de H3 desta sessão; null fora da medição de H3"
+    )
+    deteccoes_sem_amostra: dict[str, int] = Field(
+        description="Detecções que viraram FILA, RENOVADO, DESCARTADO ou SEM_DECISAO"
+    )
 
 
 class PedidoInjecao(BaseModel):
@@ -135,6 +144,7 @@ def criar_app(ponte: Ponte, porta: str) -> FastAPI:
     def health(resposta: Response) -> RespostaHealth:
         """Estado da porta serial e do UNO do outro lado."""
         ultima = ponte.t_ultima_telemetria
+        medindo = ponte.transporte_veiculo is not None
         corpo = RespostaHealth(
             estado="ok" if ponte.uno_respondendo() else "degradado",
             porta=porta,
@@ -146,6 +156,9 @@ def criar_app(ponte: Ponte, porta: str) -> FastAPI:
             reconexoes=ponte.reconexoes,
             linhas_invalidas=ponte.linhas_invalidas,
             telemetrias_violando_i1=ponte.telemetrias_violando_i1,
+            emissor_conectado=ponte.emissor_conectado if medindo else None,
+            amostras_h3=len(ponte.amostras_h3) if medindo else None,
+            deteccoes_sem_amostra=dict(ponte.deteccoes_sem_amostra),
         )
         if corpo.estado != "ok":
             resposta.status_code = status.HTTP_503_SERVICE_UNAVAILABLE

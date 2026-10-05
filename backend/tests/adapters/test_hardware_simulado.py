@@ -513,7 +513,7 @@ def test_config_incoerente_falha_cedo(alteracao: dict[str, object], trecho: str)
 async def _ler_ate(transporte: TransporteSimulado, tipo: TipoEvento, limite_s: float = 2.0) -> None:
     async def _laco() -> None:
         while True:
-            mensagem = interpretar(await transporte.ler_linha())
+            mensagem = interpretar((await transporte.ler_linha()).dados)
             if isinstance(mensagem, Evento) and mensagem.tipo is tipo:
                 return
 
@@ -538,8 +538,8 @@ async def test_transporte_entrega_boot_e_telemetria_sem_ser_pedido() -> None:
     transporte = TransporteSimulado()
     await transporte.abrir()
     try:
-        primeiras = [interpretar(await asyncio.wait_for(transporte.ler_linha(), 2.0))]
-        primeiras.append(interpretar(await asyncio.wait_for(transporte.ler_linha(), 2.0)))
+        primeiras = [interpretar((await asyncio.wait_for(transporte.ler_linha(), 2.0)).dados)]
+        primeiras.append(interpretar((await asyncio.wait_for(transporte.ler_linha(), 2.0)).dados))
         assert primeiras[0] == Evento(0, TipoEvento.BOOT)
         assert isinstance(primeiras[1], Telemetria)
     finally:

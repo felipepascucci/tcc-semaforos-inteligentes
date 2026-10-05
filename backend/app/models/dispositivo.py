@@ -30,7 +30,7 @@ if TYPE_CHECKING:
 
 
 class DispositivoIot(Base):
-    """NodeMCU leitor ou controlador do Arduino — o que fala com a API pela rede.
+    """Uma placa da bancada: NodeMCU emissor ou receptor, ou o UNO controlador.
 
     `token_hash` guarda o *hash* do token pré-compartilhado, nunca o token. É o
     que o header `X-Device-Token` valida (`context/02` §6).
@@ -40,7 +40,7 @@ class DispositivoIot(Base):
 
     id_dispositivo: Mapped[int] = mapped_column(Integer, primary_key=True)
     codigo: Mapped[str] = mapped_column(String(50), nullable=False, unique=True)
-    # LEITOR_RFID | CONTROLADOR_SEMAFORO
+    # EMISSOR_V2I | RECEPTOR_V2I | CONTROLADOR_SEMAFORO (bancada de 2026-10-05)
     tipo: Mapped[str] = mapped_column(String(30), nullable=False)
     fk_semaforo: Mapped[int | None] = mapped_column(ForeignKey("semaforo.id_semaforo"))
     token_hash: Mapped[str] = mapped_column(String(128), nullable=False)

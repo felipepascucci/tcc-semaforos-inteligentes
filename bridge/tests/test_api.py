@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from typing import Any
 
 import httpx
 import pytest
@@ -12,13 +13,13 @@ from fastapi import FastAPI
 
 from bridge.api import criar_app
 from bridge.ponte import Ponte
-from bridge.tests.conftest import PortaAusente, ate, transporte_rapido
+from bridge.tests.conftest import PortaAusente, PortaRoteirizada, ate, transporte_rapido
 from bridge.transporte import Transporte
 
 
 @asynccontextmanager
 async def _cliente(
-    transporte: Transporte, **opcoes: float
+    transporte: Transporte, **opcoes: Any
 ) -> AsyncIterator[tuple[httpx.AsyncClient, Ponte]]:
     ponte = Ponte(transporte, **opcoes)
     app: FastAPI = criar_app(ponte, "simulada")
@@ -47,6 +48,20 @@ async def test_health_com_o_uno_respondendo(cliente: httpx.AsyncClient) -> None:
     assert corpo["porta"] == "simulada"
     assert corpo["conectada"] is True
     assert corpo["telemetrias_violando_i1"] == 0
+    # Fora da medição de H3, os campos dela vêm nulos — não zero.
+    assert corpo["emissor_conectado"] is None
+    assert corpo["amostras_h3"] is None
+
+
+async def test_health_na_medicao_de_h3_mostra_o_emissor() -> None:
+    emissor = PortaRoteirizada()
+    async with _cliente(transporte_rapido(), transporte_veiculo=emissor) as (cliente, ponte):
+        await ate(lambda: ponte.uno_respondendo() and ponte.emissor_conectado)
+        corpo = (await cliente.get("/health")).json()
+
+    assert corpo["emissor_conectado"] is True
+    assert corpo["amostras_h3"] == 0
+    assert corpo["deteccoes_sem_amostra"] == {}
 
 
 async def test_injecao_devolve_a_decisao(cliente: httpx.AsyncClient) -> None:

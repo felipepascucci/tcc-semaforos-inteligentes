@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from collections.abc import Callable
 
 from adapters.hardware.simulado import (
@@ -11,7 +12,7 @@ from adapters.hardware.simulado import (
     UnoSimulado,
     config_da_bancada,
 )
-from bridge.transporte import ConexaoPerdidaError
+from bridge.transporte import ConexaoPerdidaError, LinhaRecebida
 
 CONFIG_BANCADA = config_da_bancada()
 
@@ -40,16 +41,24 @@ async def ate(condicao: Callable[[], bool], limite_s: float = 2.0) -> None:
 
 
 class PortaRoteirizada:
-    """`Transporte` que entrega linhas fixas e nunca responde a nada."""
+    """`Transporte` que entrega linhas fixas e nunca responde a nada.
 
-    def __init__(self, linhas: list[bytes] | None = None) -> None:
-        self._linhas: asyncio.Queue[bytes] = asyncio.Queue()
+    Linha dada como `bytes` é carimbada quando é lida; como `LinhaRecebida`,
+    chega com o carimbo que trouxer — é como os testes de H3 fixam os instantes.
+    """
+
+    def __init__(self, linhas: list[bytes | LinhaRecebida] | None = None) -> None:
+        self._linhas: asyncio.Queue[bytes | LinhaRecebida] = asyncio.Queue()
         for linha in linhas or []:
-            self._linhas.put_nowait(linha)
+            self.entregar(linha)
         self.escritas: list[bytes] = []
+        self.aberturas = 0
+
+    def entregar(self, linha: bytes | LinhaRecebida) -> None:
+        self._linhas.put_nowait(linha)
 
     async def abrir(self) -> None:
-        pass
+        self.aberturas += 1
 
     async def fechar(self) -> None:
         pass
@@ -57,8 +66,11 @@ class PortaRoteirizada:
     async def escrever(self, linha: bytes) -> None:
         self.escritas.append(linha)
 
-    async def ler_linha(self) -> bytes:
-        return await self._linhas.get()
+    async def ler_linha(self) -> LinhaRecebida:
+        linha = await self._linhas.get()
+        if isinstance(linha, LinhaRecebida):
+            return linha
+        return LinhaRecebida(linha, time.perf_counter())
 
 
 class PortaAusente:
@@ -76,5 +88,5 @@ class PortaAusente:
     async def escrever(self, linha: bytes) -> None:
         raise ConexaoPerdidaError("fechada")
 
-    async def ler_linha(self) -> bytes:
+    async def ler_linha(self) -> LinhaRecebida:
         raise ConexaoPerdidaError("fechada")

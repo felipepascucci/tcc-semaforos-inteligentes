@@ -5,7 +5,8 @@
 | Nível | Onde | O que cobre | Ferramenta |
 | --- | --- | --- | --- |
 | Unitário | `backend/tests/core/` | Motor de decisão, invariantes, compensação, conflito | pytest |
-| Unitário | `bridge/tests/` | Serialização do protocolo serial | pytest |
+| Unitário | `bridge/tests/` | Protocolo serial, ponte, carimbo no primeiro byte, casamento de H3 | pytest + Hypothesis |
+| Unitário | `tests/firmware/` | Núcleo do firmware do UNO contra o dublê, linha por linha; sketches dos NodeMCUs iguais aos da equipe; compilação para o UNO | pytest + Hypothesis + `ziglang` + `arduino-cli` |
 | Integração | `backend/tests/api/` | Rotas, persistência, WebSocket | pytest + httpx + testcontainers |
 | Integração | `sim/tests/` | Adaptador TraCI em cenário curto (60 s) | pytest |
 | Sistema | `tests/e2e/` | Fluxo completo com adaptador simulado | pytest |
@@ -162,7 +163,7 @@ ver a nota abaixo da tabela.
 | 5 | Tag fora das 4 ruas não gera envio nem mexe no semáforo | ☐ |
 | 6 | LCD mostra o VE e a rua em < 1 s após a leitura | ☐ |
 | 7 | Preempção iniciada (`PREEMP_INI`) em < 3 s da leitura da tag — RF02 | ☐ |
-| 7b | **H3** — `latencia_total_ms` < 200 ms em **5 repetições**, com o emissor no USB do notebook, mín/mediana/máx registrados | ☐ |
+| 7b | **H3** — `latencia_total_ms` < 200 ms em **5 repetições**, com o emissor no USB do notebook, mín/mediana/máx registrados. `python -m bridge.main --porta COM3 --porta-veiculo COM4`; cada passagem atendida vira uma linha de `analysis/data/latencia_bancada.csv` (`05` §6) | ☐ |
 | 8 | Dashboard mostra o evento em tempo real | ☐ |
 | 9 | Log gravado no PostgreSQL com `id_correlacao` completo | ☐ |
 | 10 | Com o fio do RX solto, a injeção pela ponte mostra a regra de prioridade: ambulância interrompe bombeiro pelo amarelo e all-red, o bombeiro vai para a fila (LCD `Fila:BOMB na R1`) e é atendido depois | ☐ |

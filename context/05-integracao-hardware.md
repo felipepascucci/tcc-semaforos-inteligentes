@@ -60,7 +60,8 @@ Livres: **A0–A3** e o TX (1), que vai só para o USB.
 ### Subsistema B — Veículo (NodeMCU 1.0 ESP-12E "emissor" + RC522)
 
 Bateria de 9 V em VIN/GND. Lê a tag a **2–5 cm**. Sketch:
-`docs/hardware/veiculo_ambulancia.ino`.
+`firmware/nodemcu/veiculo_ambulancia/` (o original da equipe está em
+`docs/hardware/`).
 
 | RC522 | NodeMCU | Função |
 | --- | --- | --- |
@@ -78,7 +79,7 @@ receptor (`40:91:51:58:A8:E1`). Há **um** emissor: a bancada tem um veículo.
 ### Subsistema C — Cruzamento (NodeMCU 1.0 ESP-12E "receptor")
 
 Recebe o ESP-NOW e repassa ao UNO pelo TX, a 9600 baud. Sem outros periféricos.
-Sketch: `docs/hardware/nodeMCU_semaforo.ino`.
+Sketch: `firmware/nodemcu/nodeMCU_semaforo/`.
 
 ### Tags RFID — identificam a **rua**, não o veículo
 
@@ -269,6 +270,50 @@ Com fila:         "AMBULANCIA na R3"  /  "Fila:BOMB na R1 "
 Cabem em 16 colunas (`AMBULANCIA na R1` tem exatamente 16). O LCD é decidido
 pelo próprio UNO; não há texto vindo do backend.
 
+### 3.7 Implementação (entrega 5.3, 2026-10-05)
+
+`firmware/uno/semaforo/`, em duas partes:
+
+- **`controlador.h` e `.cpp` — o núcleo.** A decisão, as quatro regras das luzes
+  (§8) e o protocolo. Não inclui nada do Arduino: o tempo entra como argumento,
+  e pinos e serial entram pela interface `Placa`. Segue o dublê função a função,
+  com os mesmos nomes.
+- **`semaforo.ino` — a placa.** Pinos (tabela e índice), `Serial` a 9600, LCD e o
+  `loop()`: `millis()`, depois `avancar()`, depois a serial byte a byte, e o LCD
+  **por último**, só quando o texto muda e sem `lcd.clear()`.
+
+**A guarda de I1 lê os pinos** (`digitalRead` do verde de cada aproximação), não o
+vetor de cores da máquina de estados. Se ela recusar, nada acende e o cruzamento
+fica em all-red, que é o estado seguro. No dublê essa recusa é exceção, porque
+nunca deve acontecer.
+
+**O núcleo é testado contra o dublê no PC, linha por linha**
+(`tests/firmware/test_firmware_uno.py`). O mesmo `controlador.cpp` da placa é
+compilado com o compilador C++ do pacote `ziglang` (`firmware/uno/teste_host/`),
+recebe as mesmas entradas nos mesmos instantes e precisa escrever na serial
+**exatamente** as mesmas linhas, com o mesmo `millis()`. O teste roda os cenários
+de §3 e §4, entradas aceitas e recusadas pelo parser, e 200 sequências
+aleatórias (Hypothesis) com VEs, lixo e linhas quase válidas. Acrescenta o que o
+dublê não modela: as mensagens do LCD, a `ST` periódica pulada com o buffer
+cheio e a guarda de I1 diante de um pino verde aceso por fora da máquina.
+
+**Verificação por mutação, 2026-10-05.** Nove sabotagens no `controlador.cpp`,
+todas pegas: sem all-red, sem verde mínimo, renovação que não reinicia o verde,
+rua 0 aceita, espaço ASCII de controle não aparado, teto que não descarta a
+fila, volta pelo mesmo eixo, guarda lendo a máquina em vez do pino, e `ST`
+periódica nunca pulada.
+
+**Compilado com `arduino-cli`** (core `arduino:avr` 1.8.8, `LiquidCrystal I2C`
+1.1.2): 8.722 bytes de flash (27%) e 841 bytes de RAM global (41%), sem aviso nos
+arquivos do projeto. O teste confere que a RAM global fica abaixo de 1 KB:
+
+```powershell
+arduino-cli compile --fqbn arduino:avr:uno firmware/uno/semaforo
+```
+
+**O que só a placa confirma:** os pinos, a serial a 9600, o LCD físico e o tempo
+real do `loop()`. É a aceitação abaixo (§6), com `bridge.verificar`.
+
 ## 4. Protocolo serial do UNO
 
 Texto ASCII, linhas terminadas em `\r\n`, **9600 baud** nos dois sentidos — é a
@@ -305,7 +350,10 @@ ponte escreve a **mesma** linha que o receptor escreveria (§6).
 **Cada linha válida recebida gera exatamente um evento de decisão**
 (`PREEMP_INI`, `RENOVADO`, `FILA` ou `DESCARTADO`), escrito **antes** de
 qualquer outra linha. É o que mantém o carimbo de H3 sem fila de saída à frente
-(§4.3).
+(§4.3). A única linha que pode sair antes é uma `ST` que já estava vencida
+naquele mesmo milissegundo (a periódica, ou uma transição de luz): o firmware e
+o dublê aplicam primeiro o que venceu, e só então decidem. É o caso de "uma
+`ST` saindo quando o VE chega", declarado em §4.3.
 
 Exemplo — VE na Rua 3 chegando com o eixo principal verde há 1 s:
 
@@ -357,8 +405,14 @@ medida na simulação, sobre o motor (`00` §5, decisão P2).
 ## 5. Firmware dos NodeMCUs — ficam como estão
 
 Os sketches do emissor e do receptor **não mudam** (decisão de 2026-10-05).
-Entram em `firmware/` como estão em `docs/hardware/` (entrega 5.6), com o MAC do
-receptor e o tipo do veículo documentados no cabeçalho.
+**Versionados em 2026-10-05 (entrega 5.6)** em
+`firmware/nodemcu/veiculo_ambulancia/` e `firmware/nodemcu/nodeMCU_semaforo/`,
+byte a byte iguais aos de `docs/hardware/`, com um cabeçalho de comentário: MAC
+do receptor, tipo do veículo, mapa UID → rua e pinagem.
+`tests/firmware/test_sketches_nodemcu.py` confere que o corpo continua idêntico
+ao original, que o cabeçalho diz o que o código faz (MAC, tipo, mapa e pinos do
+RC522), que o mapa bate com a tabela de §1 e que a linha `Tag … lida` impressa
+pelo emissor é a que a ponte interpreta para H3.
 
 O que eles já fazem e o protótipo usa:
 
@@ -381,15 +435,39 @@ Processo Python no notebook. Responsabilidades:
   fechar não reinicia.
 - Carimbar cada linha na chegada do **primeiro byte**, com `perf_counter`
   ancorado no relógio de parede (resolução de 100 ns contra os 15,6 ms do
-  relógio de parede do Windows). *Hoje o carimbo é o da linha completa; o do
-  primeiro byte entra com a medição de H3, que é a única que depende dele.*
+  relógio de parede do Windows; o `datetime` final guarda microssegundos).
+  Entre uma linha e outra o transporte lê **um** byte só (`read(1)`), que volta
+  assim que ele chega, e lê o `perf_counter` ali mesmo, na thread da leitura; o
+  resto da linha vem depois. Cada linha carrega também `bytes_em_espera`:
+  quantos bytes já esperavam na porta quando o primeiro foi lido. Zero quer
+  dizer que a ponte estava esperando o byte chegar; um número alto denuncia um
+  carimbo atrasado.
 - Interpretar `ST` e `EV` e expor o estado em `GET /estado` e `GET /health`
   (`503` enquanto não chegar `ST`).
 - **Na medição de H3**, abrir também a serial do emissor
-  (`--porta-veiculo COM4`), casar cada `Tag … lida -> Enviando RUAn` com o
-  `PREEMP_INI` seguinte da mesma rua e gravar a amostra em
+  (`--porta-veiculo COM4`), casar cada `Tag … lida -> Enviando RUAn` com a
+  decisão do UNO para ela e gravar a amostra em
   `analysis/data/latencia_bancada.csv`. Detecção que vira `FILA`, `RENOVADO` ou
-  `DESCARTADO` não é amostra de H3: não houve atuação para medir.
+  `DESCARTADO` não é amostra de H3: não houve atuação para medir. O casamento
+  está em `bridge/latencia.py`:
+  - cada detecção casa com o **primeiro evento de decisão da mesma rua**
+    carimbado depois dela, seja qual for. Só se ele for `PREEMP_INI` há amostra.
+    Casar com "o próximo `PREEMP_INI`" estaria errado: a detecção que virou
+    `FILA` seria casada com a saída da fila, segundos depois;
+  - **pelos carimbos, não pela ordem de leitura.** As duas portas são lidas em
+    paralelo, e a linha do emissor (~36 caracteres) pode terminar de chegar
+    depois do começo da decisão;
+  - **janela de 3 s** (o limite do RF02), folgada de propósito: uma janela justa
+    descartaria justamente as amostras lentas, a favor da hipótese. Detecção sem
+    decisão na janela é `SEM_DECISAO`;
+  - quem não vira amostra vai para o log da ponte e para o contador
+    `deteccoes_sem_amostra` do `/health`, não para o CSV.
+
+  O CSV acumula sessões, uma linha por amostra, gravada na hora:
+  `sessao, t_deteccao, t_atuacao, latencia_total_ms, rua, uid, veiculo, uno_ms,
+  bytes_em_espera_deteccao, bytes_em_espera_atuacao, versao_codigo`. A ponte
+  **recusa** `--porta-veiculo` com `--simulado`: nenhum número do dublê chega
+  ao CSV.
 - **Injeção de teste** (`POST /injecao` com `rua` e `veiculo`): escreve no RX do
   UNO a mesma linha que o receptor escreveria e devolve a decisão do UNO, com o
   `millis()` dela. **Só funciona com o fio do NodeMCU solto do RX**; com ele
@@ -406,9 +484,11 @@ Processo Python no notebook. Responsabilidades:
 (`POST /comandos`, `PING` a cada 1 s, tradução `Comando` → linha) e o
 `t_atuacao` na chegada do `ACK`. Ficaram a estrutura (transporte real × dublê,
 laço asyncio, API FastAPI em `:8001`, relógio). O protocolo, o dublê e o
-`bridge.verificar` foram reescritos. **Falta da 5.7** só o que serve à medição
-de H3: o carimbo no primeiro byte, a segunda porta (`--porta-veiculo`) e o
-`latencia_bancada.csv`.
+`bridge.verificar` foram reescritos. **A parte de H3 entrou no mesmo dia**: o
+carimbo no primeiro byte (`Transporte.ler_linha` devolve `LinhaRecebida`), a
+segunda porta e o `latencia_bancada.csv`, testados sem hardware com `loop://` e
+portas roteirizadas. O CSV ainda não existe: ele só nasce de medição na
+bancada.
 
 **Aceitação do firmware (5.3).** Com a placa gravada e o fio do RX solto, subir
 `python -m bridge.main --porta COM3` e rodar o `python -m bridge.verificar`
@@ -466,7 +546,9 @@ interface da porta real. O transporte modela a fiação: com
 `simular_receptor()` faz o papel do NodeMCU.
 
 **O dublê é o modelo de referência do firmware:** o firmware deve se comportar
-como ele, e o `bridge.verificar` passa igual contra os dois.
+como ele, e o `bridge.verificar` passa igual contra os dois. Desde 2026-10-05 o
+núcleo do firmware também é comparado com ele no PC, linha por linha (§3.7).
+Mudar a regra é mudar os dois juntos: um teste quebra se só um mudar.
 
 **Como ele anda, e por que isso interessa ao firmware.** Em vez de enumerar
 estados, o dublê persegue um *destino* (o eixo do ciclo, ou a aproximação do

@@ -334,13 +334,19 @@ a menos que `--repetir MOTIVO` autorize.
 |---|---|
 | 5.1 | `bridge/protocolo.py` — ✅ **refeito em 2026-10-05**: `ST` e `EV` de `context/05` §4.2, a linha `<RUA>,<VEICULO>` do receptor e da injeção, a linha `Tag … lida` do emissor. Saiu a tradução `Comando` → linha |
 | 5.2 | `adapters/hardware/simulado.py` — ✅ **refeito em 2026-10-05** com a regra de `context/05` §3: 2 fases, verde exclusivo, fila por tipo, transição segura, teto de 30 s. 44 testes, Hypothesis para I1–I5, verificação por mutação (4 sabotagens, todas pegas) |
-| 5.3 | Firmware UNO reescrito em `firmware/uno/`, conforme `context/05` §3 e §4: decisão local preservada, transição segura, **zero `delay()`** no `loop()`, **zero `String`**, `ST` a 2 Hz e a cada mudança de estado, eventos antes do LCD |
+| 5.3 | Firmware UNO reescrito em `firmware/uno/`, conforme `context/05` §3 e §4: decisão local preservada, transição segura, **zero `delay()`** no `loop()`, **zero `String`**, `ST` a 2 Hz e a cada mudança de estado, eventos antes do LCD — ✅ **escrito e compilado em 2026-10-05** (27% da flash, 41% da RAM). O núcleo roda no PC contra o dublê, linha por linha, em cenários fixos e 200 sequências aleatórias; 9 sabotagens, todas pegas (`context/05` §3.7). **Falta** a aceitação na placa: `bridge.verificar` com 16 de 16 |
 | 5.4 | ~~**P8**~~ ✅ **2026-10-05** — boot normal com o RC522 no D3 (questionário, 3.3) |
 | 5.5 | ~~**P9**~~ ✅ **2026-10-05** — não se aplica: o LCD está no UNO, de 5 V |
-| 5.6 | Sketches dos NodeMCUs (emissor e receptor) versionados **como estão** em `firmware/nodemcu/`, com cabeçalho documentando o MAC do receptor, o tipo do veículo e o mapa UID → rua |
-| 5.7 | `bridge/` — ✅ **em parte, 2026-10-05**: só escuta a 9600, `/estado` com histórico, `/health`, `POST /injecao` e `/injecao/bruta`, `bridge.verificar` reescrito (**16 de 16 contra o dublê**), `.env.example` sem Wi-Fi, `parametros.hardware.yaml` com 2 fases. **Falta**, para a medição de H3: carimbo no primeiro byte, `--porta-veiculo` e `analysis/data/latencia_bancada.csv` |
-| 5.8 | ✅ UIDs lidos (identificam ruas, `context/05` §1). **Falta:** seeds com as 2 fases de `PROTO_CRUZ_01` e os dispositivos `EMISSOR_VE_01`, `RECEPTOR_CRUZ_01` e `CTRL_PROTO_01` (`context/03` §5) |
+| 5.6 | Sketches dos NodeMCUs (emissor e receptor) versionados **como estão** em `firmware/nodemcu/`, com cabeçalho documentando o MAC do receptor, o tipo do veículo e o mapa UID → rua — ✅ **2026-10-05**, com teste que confere o corpo idêntico ao original e o cabeçalho de acordo com o código |
+| 5.7 | `bridge/` — ✅ **em parte, 2026-10-05**: só escuta a 9600, `/estado` com histórico, `/health`, `POST /injecao` e `/injecao/bruta`, `bridge.verificar` reescrito (**16 de 16 contra o dublê**), `.env.example` sem Wi-Fi, `parametros.hardware.yaml` com 2 fases. ✅ **H3 também, 2026-10-05**: carimbo no primeiro byte, `--porta-veiculo` e o casamento detecção → decisão que grava `analysis/data/latencia_bancada.csv` (`context/05` §6). O CSV só nasce de medição na bancada |
+| 5.8 | ✅ UIDs lidos (identificam ruas, `context/05` §1). ✅ **2026-10-05:** seeds com as 2 fases de `PROTO_CRUZ_01` e os dispositivos `EMISSOR_VE_01`, `RECEPTOR_CRUZ_01` e `CTRL_PROTO_01`; migration de dados para bancos já semeados (`context/03` §5) |
 | 5.9 | ~~**P20** na bancada~~ — **não se aplica desde 2026-10-05**: o UNO decide sem consultar ocorrência. P20 segue no motor, na API e na simulação |
+
+> **Pendente de bancada (2026-10-05).** A bancada não está com o Felipe. Tudo o
+> que dá para fazer sem a placa está feito; ficam para quando ela chegar a
+> aceitação do firmware na placa (`bridge.verificar`, 16 de 16), a medição de H3,
+> o checklist de `context/06` §6 e o ensaio da demonstração. O projeto segue
+> para o Bloco 6 enquanto isso.
 
 **Pronto quando:**
 - o carrinho passa pela tag → o UNO inicia a preempção em < 3 s (RF02) e chega ao verde exclusivo pelo amarelo e pelo all-red;

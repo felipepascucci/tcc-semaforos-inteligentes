@@ -43,6 +43,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Final
@@ -60,7 +61,7 @@ from bridge.protocolo import (
     interpretar_deteccao,
     parece_deteccao,
 )
-from bridge.transporte import ConexaoPerdidaError
+from bridge.transporte import ConexaoPerdidaError, LinhaRecebida
 from core.excecoes import ConfiguracaoInvalidaError
 from core.modelos import TipoVeiculo
 
@@ -508,7 +509,7 @@ class TransporteSimulado:
         self._passo_s = passo_s
         self.fio_do_nodemcu_no_rx = fio_do_nodemcu_no_rx
         self.uno: UnoSimulado | None = None
-        self._fila: asyncio.Queue[bytes | None] = asyncio.Queue()
+        self._fila: asyncio.Queue[LinhaRecebida | None] = asyncio.Queue()
         self._conectado = False
         self._relogio: asyncio.Task[None] | None = None
 
@@ -534,7 +535,7 @@ class TransporteSimulado:
             return  # o NodeMCU domina o RX; a linha não chega ao UNO
         asyncio.get_running_loop().call_later(self._latencia_s, self._entregar, linha)
 
-    async def ler_linha(self) -> bytes:
+    async def ler_linha(self) -> LinhaRecebida:
         if not self._conectado:
             raise ConexaoPerdidaError("porta simulada fechada")
         linha = await self._fila.get()
@@ -571,8 +572,10 @@ class TransporteSimulado:
 
     def _publicar(self, linhas: Sequence[bytes]) -> None:
         if self._conectado:
+            # A linha "chega" quando o UNO a escreve: o carimbo é desse instante.
+            agora = time.perf_counter()
             for linha in linhas:
-                self._fila.put_nowait(linha)
+                self._fila.put_nowait(LinhaRecebida(linha, agora))
 
     async def _rodar_relogio(self) -> None:
         while self.uno is not None:

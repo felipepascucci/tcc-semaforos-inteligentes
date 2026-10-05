@@ -19,8 +19,9 @@
 #      `.net.xml` e do `sim/config/mapa_fases.yaml` (Bloco 3). Inventá-las agora
 #      criaria um cadastro que conflitaria com a rede real.
 #
-# O cruzamento do protótipo (`PROTO_CRUZ_01`) NÃO é provisório: os tempos vêm da
-# decisão P13 e do perfil de bancada fechado em 2026-08-24.
+# O cruzamento do protótipo (`PROTO_CRUZ_01`) NÃO é provisório: espelha a bancada
+# como está montada (decisão de 2026-10-05, context/05) e o perfil de tempos de
+# parametros.hardware.yaml.
 # ─────────────────────────────────────────────────────────────────────────────
 
 malha_sumo:
@@ -44,33 +45,40 @@ malha_sumo:
   prefixo_codigo: CRUZ
 
 prototipo:
-  # UM cruzamento com quatro aproximações, em split phasing (decisão P13).
-  # A versão anterior de context/03 §5 pedia quatro semáforos PROTO_S1..S4;
-  # isso modelava cada módulo como um cruzamento independente e foi corrigido.
-  # S1..S4 seguem existindo como nomes de aproximação no firmware e no
-  # protocolo serial — não como chaves de `semaforo`.
+  # UM cruzamento com quatro aproximações (S1..S4) e um ciclo de DUAS fases:
+  # eixo principal (S1+S2) e eixo transversal (S3+S4) — decisão de 2026-10-05,
+  # que revê P13 (context/03 §5). S1..S4 continuam sendo nomes de aproximação no
+  # firmware e no protocolo serial, não chaves de `semaforo`.
+  #
+  # A emergência abre o verde EXCLUSIVO de uma aproximação, que não é fase do
+  # ciclo e por isso não tem linha em `fase_semaforo`. Como registrá-la em
+  # log_prioridade decide-se no Bloco 6.
   semaforo:
     codigo_externo: PROTO_CRUZ_01
-    descricao: Protótipo físico — cruzamento de 4 aproximações (split phasing)
+    descricao: Protótipo físico — cruzamento de 4 aproximações, ciclo de 2 fases
     # A bancada não fica em lugar nenhum do mapa. A coordenada existe só para o
     # marcador do dashboard, e está deslocada ~1 km ao sul da grade de propósito:
     # na origem, o marcador do protótipo cairia exatamente sobre o de CRUZ_01 e
     # os dois ficariam empilhados.
     latitude: -23.55898000
     longitude: -46.64000000
-    tempo_ciclo: 24 # 4 x (3 verde + 2 amarelo + 1 all-red) — perfil de bancada
+    tempo_ciclo: 12 # 2 x (3 verde + 2 amarelo + 1 all-red) — perfil de bancada
   # duracao_base e verde_min vêm de parametros.hardware.yaml (verde_s = 3,0 s).
-  # verde_max é 30 s = preempcao_timeout_s da bancada: durante a preempção o
-  # verde pode ser estendido, mas nunca além do timeout do firmware.
+  # verde_max é 30 s = preempcao_timeout_s da bancada: nenhuma emergência
+  # contínua passa disso, renovações incluídas.
   fase_padrao:
     duracao_base_s: 3
     verde_min_s: 3
     verde_max_s: 30
   fases:
-    - { indice_fase: 1, descricao: "Principal — Sentido A", movimentos: [PRINCIPAL_A], modulo: S1 }
-    - { indice_fase: 2, descricao: "Principal — Sentido B", movimentos: [PRINCIPAL_B], modulo: S2 }
-    - { indice_fase: 3, descricao: "Transversal — Sentido A", movimentos: [TRANSVERSAL_A], modulo: S3 }
-    - { indice_fase: 4, descricao: "Transversal — Sentido B", movimentos: [TRANSVERSAL_B], modulo: S4 }
+    - indice_fase: 1
+      descricao: Eixo principal
+      movimentos: [PRINCIPAL_A, PRINCIPAL_B]
+      modulos: S1+S2
+    - indice_fase: 2
+      descricao: Eixo transversal
+      movimentos: [TRANSVERSAL_A, TRANSVERSAL_B]
+      modulos: S3+S4
 
 veiculos:
   # Placas fictícias no padrão Mercosul (LLLNLNN). Não pertencem a veículo real.
@@ -79,23 +87,35 @@ veiculos:
   - { placa: POL3C03, tipo: POLICIA, identificacao: Polícia Militar — Viatura 45 }
 
 tags:
-  # PLACEHOLDER até a leitura real do RC522 (entrega 5.8).
+  # UIDs fictícios, INATIVOS. As tags reais da bancada identificam RUAS, não
+  # veículos (context/05 §1), e NÃO entram aqui: o mapa UID -> rua vive no
+  # sketch do emissor, e o que chega ao backend é a rua já resolvida.
+  # `tag_rfid` continua servindo à API e à autorização de P20.
   #
-  # `ativo: false` não é detalhe: enquanto o UID for placeholder, ele NÃO pode
-  # autorizar preempção. Uma tag placeholder ativa é uma credencial válida
-  # conhecida por qualquer um que leia o repositório.
+  # `ativo: false` não é detalhe: uma tag placeholder ativa seria uma credencial
+  # válida conhecida por qualquer um que leia o repositório.
   - { uid: PLACEHOLDER01, placa: AMB1A01, ativo: false }
   - { uid: PLACEHOLDER02, placa: BMB2B02, ativo: false }
 
 dispositivos:
+  # As três placas da bancada (context/05 §1). Desde 2026-10-05 nenhuma delas
+  # chama a API: os NodeMCUs se falam por ESP-NOW, e o UNO só escreve na serial
+  # que a ponte escuta. O `token_hash` existe porque a coluna é obrigatória, mas
+  # não é exercitado pela bancada.
+  #
   # token_dev é SOMENTE para desenvolvimento e é hasheado (SHA-256) antes de ir
-  # para o banco — a coluna guarda `token_hash`, nunca o token.
-  # Sobrescreva por ambiente: TOKEN_LEITOR_CRUZ_01 / TOKEN_CTRL_PROTO_01.
-  # TROCAR antes da apresentação (context/02 §6).
-  - codigo: LEITOR_CRUZ_01
-    tipo: LEITOR_RFID
+  # para o banco — a coluna guarda `token_hash`, nunca o token. Sobrescreva por
+  # ambiente: TOKEN_<CODIGO> (ex.: TOKEN_CTRL_PROTO_01). TROCAR antes da
+  # apresentação (context/02 §6).
+  #
+  # O emissor vai no veículo, não num cruzamento: fica sem `semaforo`.
+  - codigo: EMISSOR_VE_01
+    tipo: EMISSOR_V2I
+    token_dev: dev-somente-local-emissor
+  - codigo: RECEPTOR_CRUZ_01
+    tipo: RECEPTOR_V2I
     semaforo: PROTO_CRUZ_01
-    token_dev: dev-somente-local-leitor
+    token_dev: dev-somente-local-receptor
   - codigo: CTRL_PROTO_01
     tipo: CONTROLADOR_SEMAFORO
     semaforo: PROTO_CRUZ_01

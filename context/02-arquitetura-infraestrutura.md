@@ -38,10 +38,10 @@ Não introduzir dependência fora desta lista sem registrar em `09-pendencias-e-
 | Mapa | Leaflet + react-leaflet | — |
 | Gráficos | Recharts | — |
 | Análise | pandas, numpy, scipy, matplotlib | — |
-| Testes backend | pytest, pytest-asyncio, httpx, testcontainers, **hypothesis** | — |
+| Testes backend | pytest, pytest-asyncio, httpx, testcontainers, **hypothesis**, **ziglang** | — |
 | Testes frontend | Vitest + Testing Library | — |
 | Container | Docker + Docker Compose | — |
-| Firmware | Arduino IDE 2.3.10 / PlatformIO | — |
+| Firmware | Arduino IDE 2.3.10 (equipe) / **arduino-cli** 1.5 · core `arduino:avr` 1.8.8 · `LiquidCrystal I2C` 1.1.2 (Frank de Brabander) | — |
 | Configuração | **PyYAML**, **python-dotenv** | — |
 | Observabilidade | structlog | — |
 | Driver do banco | psycopg | 3.x |
@@ -57,6 +57,13 @@ Não introduzir dependência fora desta lista sem registrar em `09-pendencias-e-
 > para o property-based testing de I1 — e é dependência **só de teste**;
 > `psycopg` já estava implícita na `DATABASE_URL` do §4; `structlog` já constava
 > do §7 deste arquivo; `ruff` e `mypy` já constavam do §3 de `08`.
+>
+> **Acrescentados no Bloco 5 (2026-10-05)**, registrados em `09`: o
+> **`arduino-cli`**, para compilar o firmware do UNO sem a IDE, com o core e a
+> biblioteca do LCD fixados na versão acima; e o **`ziglang`**, dependência
+> **só de teste**, que traz um compilador C++ dentro do `.venv` e permite rodar o
+> núcleo do firmware no PC contra o dublê (`05` §3.7). Sem ele, esse teste é
+> pulado; sem o `arduino-cli`, o de compilação para a placa.
 
 **Sobre `libsumo`:** é ~10x mais rápido que `traci` porque roda no mesmo processo, mas não permite múltiplos clientes nem GUI. Estratégia: usar `traci` no desenvolvimento (com `sumo-gui`, para gravar vídeo da demonstração) e `libsumo` nas 50 execuções em lote. A camada de adaptador deve abstrair os dois atrás da mesma interface.
 
