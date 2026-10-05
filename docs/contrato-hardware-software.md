@@ -297,6 +297,18 @@ const uint8_t VERM_DE[4]  = {13, 10, 7, 4};
 
 > **O item 7 é o que trava apresentação.** Sketches com `String` costumam rodar bem por 15–20 min e travar depois. Por isso o checklist de aceitação (`context/06` §6, item 12) exige um teste de **30 minutos contínuos**, feito antes do dia da apresentação.
 
+### Comportamento de referência — o dublê do UNO (entrega 5.2)
+
+`backend/adapters/hardware/simulado.py` é um UNO em Python, e **o firmware deve se comportar como ele**. A tabela completa está em `context/05` §8. Os pontos que o texto acima não dizia:
+
+1. **Liga em all-red**, e só então abre a fase 1.
+2. **`PRE` chegando em amarelo ou all-red é aceito**, e só o destino da transição muda. É o que mantém o pior caso em 6 s.
+3. **A preempção termina sozinha** quando o verde de `dur_s` acaba (com o verde mínimo como piso), emitindo `EV,PREEMP_FIM`.
+4. **`SAFE` segura o all-red** até `CLR` ou watchdog. **`ST?` responde só com `ST`**, sem `ACK`.
+5. **Só comando válido alimenta o watchdog.** Linha malformada recebe `NAK,<cmd>,FORMATO` quando o nome é reconhecível, e é ignorada quando não é.
+
+**Aceitação do firmware na bancada:** com a placa gravada, suba `python -m bridge.main --porta COM3` e rode `python -m bridge.verificar` logo em seguida. É o mesmo roteiro que passou 17 de 17 contra o dublê; o firmware está de acordo quando passa igual.
+
 ### Perfil de tempos da bancada
 
 `backend/config/parametros.hardware.yaml` — reduzido para caber numa demonstração (definido em 2026-08-24):

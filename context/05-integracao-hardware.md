@@ -233,17 +233,29 @@ Processo Python separado, responsabilidades:
 - Carimbar `t_atuacao` na chegada do `ACK`.
 - Expor `/health` próprio com estado da porta serial.
 
-Estrutura:
+Estrutura (implementada nas entregas 5.1 e 5.7, 2026-10-04):
 
 ```
 bridge/
-├── main.py            # loop principal, asyncio
+├── main.py            # CLI: python -m bridge.main [--porta COM3 | --simulado]
+├── api.py             # HTTP da ponte: /health, /estado, /comandos (FastAPI, :8001)
+├── ponte.py           # laço asyncio: PING 1 s, reconexão, ACK -> t_atuacao
 ├── protocolo.py       # serialização/parsing das linhas
-├── serial_client.py   # pyserial + reconexão
-└── tests/test_protocolo.py   # testável sem hardware
+├── serial_client.py   # pyserial, uma thread por leitura/escrita com timeout curto
+├── transporte.py      # a interface comum à porta real e ao dublê
+├── verificar.py       # roteiro de conferência pelo HTTP — dublê ou bancada
+└── tests/             # protocolo, ponte, API e cliente serial — tudo sem hardware
 ```
 
+**Conferência de ponta a ponta.** `python -m bridge.verificar`, rodado logo depois de subir a ponte, dirige `/comandos` como o backend vai dirigir e confere pela telemetria: boot em all-red, ciclo de 24 s, recusas, `PRE` em verde (≤ 6 s) e em amarelo, fim por `dur_s`, extensão, fail-safe, timeout de 30 s e I1 a I3 em toda a telemetria. Leva ~2 min. Contra o dublê, em 2026-10-05: **17 de 17**. O mesmo roteiro serve para aceitar o firmware da 5.3 na bancada. Watchdog, reconexão, `SAFE` e modo de teste não têm `Comando` que os acione pelo HTTP: ficam com os testes automatizados e o checklist.
+
 `protocolo.py` deve ser 100% testável sem hardware conectado: entra `Comando`, sai `bytes`; entra `bytes`, sai evento. Isso permite desenvolver e testar o protocolo mesmo quando o Arduino não está na mesa.
+
+**Como o backend fala com a ponte (5.7).** A ponte expõe HTTP em `127.0.0.1:8001`, e o sentido é **backend → ponte**: o backend chama `POST /comandos` com o `Comando` do motor e o `id_correlacao` da detecção, e recebe de volta a linha enviada, o `ACK`/`NAK` e o **`t_atuacao`**, numa só ida e volta, que é o que `metrica_latencia` precisa. A telemetria e os eventos do UNO ficam em `GET /estado`. Se a ponte deve **empurrar** telemetria ao backend, em vez de o backend ler, decide-se no Bloco 6, que é quando ele passa a ter rota para recebê-la. Códigos: `503` com a porta fechada, `504` se o UNO não responde em 1 s, `422` para comando sem fase ou duração. `/health` responde `503` enquanto o UNO não estiver mandando telemetria.
+
+**Relógio.** `t_atuacao` é carimbado pela tarefa que lê a porta **no instante em que a linha chega**, antes de interpretá-la. O relógio é o do notebook, em UTC, mas lido com a resolução do `perf_counter` (100 ns) e ancorado no relógio de parede uma vez, porque no Windows o relógio de parede declara resolução de 15,6 ms. **O backend precisa carimbar `t_deteccao` do mesmo jeito** (Bloco 6). Senão a subtração de H3 mistura duas resoluções.
+
+**A ponte não sabe se há Arduino.** `ponte.py` fala com um `Transporte`. `serial_client.py` implementa a porta real e `adapters/hardware/simulado.py`, o dublê (§8). `python -m bridge.main --simulado` sobe a ponte inteira sem bancada.
 
 ## 7. Modo de demonstração
 
@@ -262,3 +274,25 @@ O item 6 é o mais impressionante para a banca e é o mais barato de implementar
 ## 8. Testes com hardware desconectado
 
 Implementar `adapters/hardware/simulado.py`: um dublê que responde ao protocolo em memória, com latências artificiais. Sem ele, ninguém consegue desenvolver o backend quando o protótipo não está disponível — e num trabalho em trio isso é a regra, não a exceção.
+
+**Implementado na entrega 5.2 (2026-10-04).** Duas camadas: `UnoSimulado`, o firmware puro e dirigido por tempo injetado, e `TransporteSimulado`, a mesma interface da porta real, com relógio de verdade e latência artificial.
+
+**O semáforo do dublê é a máquina de estados de `core/priorizacao/fases.py`**, que já era o modelo de referência do firmware e o alvo dos testes de I1 a I4. O dublê só acrescenta o que é do firmware: `ACK`/`NAK`, eventos, telemetria a 2 Hz, watchdog, modo de teste e `SAFE`. Os testes verificam I1 a I4 com Hypothesis sobre sequências aleatórias de linhas, e uma verificação por mutação confirmou que eles pegam uma guarda de I1 e um all-red sabotados.
+
+**O dublê fixa o comportamento que o contrato deixava em aberto, e isso vira requisito do firmware (5.3):**
+
+| Situação | Comportamento |
+| --- | --- |
+| Boot | Liga em **all-red** e só então abre a fase 1. Nenhum verde acende no reset |
+| `PRE` durante amarelo ou all-red | **Aceito**: muda o destino da transição em curso, sem refazê-la. Recusar e esperar levaria o pior caso a 9 s, contra os **6 s** que o contrato §7 promete. Verificado em qualquer instante do ciclo |
+| Fim de `PRE,<fase>,<dur_s>` | O verde alvo vale até `dur_s` contados do recebimento, com o verde mínimo como piso. Quando ele acaba, a preempção acaba junto, com `EV,PREEMP_FIM`. Na bancada não há como ver o VE cruzar e mandar `CLR` |
+| `CLR` sem preempção | `NAK,CLR,MODO` |
+| `SAFE` | Termina o verde (respeitando o mínimo) e o amarelo, e **segura o all-red**. Sai por `CLR` ou pelo watchdog. Vale em qualquer regime, e no modo de teste encerra o teste |
+| `CFG` | Só no ciclo fixo, sem preempção (`NAK,CFG,MODO`). Verde abaixo do mínimo recebe `NAK,CFG,VERDE_MIN` |
+| `ST?` | Responde só com a linha `ST`, sem `ACK` |
+| `TESTMODE` repetido | Idempotente: `ACK` sem efeito. `TESTMODE,1` durante preempção ou `SAFE` recebe `NAK,TESTMODE,MODO` |
+| Saída do modo de teste | Pelo **all-red**, por `TESTMODE,0` ou pelo watchdog. O modo de teste garante I1, não I2 a I4 |
+| Linha malformada | Com nome de comando reconhecível: `NAK,<cmd>,FORMATO`. Sem nome reconhecível: ignorada. **Nenhuma das duas alimenta o watchdog** |
+| Abrir a porta | **Reinicia a placa** (DTR do USB serial), como no UNO real |
+
+**Nenhum número produzido com o dublê é dado experimental.** A latência é uma constante arbitrária (5 ms); H3 se mede na bancada.
