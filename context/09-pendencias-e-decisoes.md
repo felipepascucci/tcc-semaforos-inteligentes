@@ -1062,6 +1062,122 @@ Matriz: `multiplas_emergencias`, braço `PREEMPCAO`, seeds 101..110, 3.600 s cad
 > encontro em CRUZ_08 em 4 dos 6 pares. Este número de 60 vale para a rota
 > antiga, e a 10.1 precisa ser **remedida** antes da 10.2, nas mesmas seeds
 > 101..110. `analysis/data/bloco10_conflitos/` fica como o registro da rota antiga.
+> **Remedida em 2026-10-05: 105 disputas, 85 decidíveis** — ver a remedição logo
+> abaixo.
+
+#### Remedição da 10.1 com a rota nova, 2026-10-05 · ✅ **MEDIDA** — a 10.2 continua obrigatória
+
+**O número: 105 disputas em 10 execuções, 85 delas decidíveis.** Continua
+**abaixo do piso de 100** decidíveis, então a 10.2 segue obrigatória, pela mesma
+regra que a tornou obrigatória em 2026-09-10.
+
+Mesma matriz da medição original (`multiplas_emergencias`, `PREEMPCAO`, seeds
+101..110, 3.600 s), código de `4e195aa` (main com o Bloco 7). 3m05s de parede com
+`--paralelo 6`. Dez válidas, zero descartadas. Zero colisão, teleporte ou violação.
+Dados em `analysis/data/bloco10_conflitos_rota_nova/`.
+
+| Grandeza | Rota antiga (2026-09-10) | Rota nova |
+| --- | ---: | ---: |
+| Disputas | 60 | **105** |
+| Decidíveis | 56 | **85** |
+| Fração decidível | 93,3% | 81,0% |
+| Disputas por execução | 6 em todas | 7 a 12, mediana 11 |
+| Decidíveis por execução | 5 a 6 | 6 a 10, mediana 8,5 |
+| Em CRUZ_02 (decidíveis) | 60 (56) | 60 (56) |
+| Em CRUZ_08 (decidíveis) | — | 45 (29) |
+| Duração mediana da disputa | 26,3 s | 24,3 s |
+| Mesmo nível de criticidade | 60 (não registrado) | 105 |
+
+**O que o número diz:**
+
+1. **O CRUZ_02 não mudou.** As 60 disputas e as 56 decidíveis de lá são as mesmas
+   da rota antiga, o que bate com a decisão do Bloco 7: o encontro em CRUZ_02 e o
+   `atraso_secundario_s` não mudaram. Tudo o que a rota nova acrescentou vem do
+   segundo encontro, em CRUZ_08.
+2. **O segundo encontro depende da seed.** Em CRUZ_08 foram de 1 a 6 disputas por
+   execução (seed 102: uma só). Na rota antiga as disputas não variavam entre
+   seeds porque as partidas de VE não dependem dela; agora o tráfego de fundo
+   decide se os dois VEs ainda se encontram adiante.
+3. **Um terço das disputas de CRUZ_08 não é decidível** (16 de 45), contra 4 de 60
+   em CRUZ_02. Nessas 16 a disputa abriu com uma preempção já em curso, e a guarda
+   de oscilação manteve a escolha suspensa o episódio inteiro
+   (`decidivel_em_algum_passo = 0` em todas). É o que derruba a fração decidível
+   de 93% para 81%.
+4. **Ainda não há par misto**, porque o cenário não mudou a rotação de tipos:
+   105 disputas de mesmo nível (38 de nível 1, 34 de nível 2, 33 de nível 3). A
+   10.2 continua precisando desacoplar criticidade e tipo para exercitar a regra.
+
+**Reprodutibilidade verificada.** A matriz rodou duas vezes com o mesmo código
+(uma no scratchpad e outra no destino). `ve_por_execucao.csv`,
+`transversal_por_execucao.csv` e `conflitos_por_execucao.csv` saíram idênticos
+byte a byte, e `execucoes.csv` idêntico fora das quatro colunas de latência, que
+são relógio de parede (decisão de 2026-08-26).
+
+**Travessia e paradas não se comparam com a rota antiga.** A travessia média do VE
+foi de 224,6 s para 249,7 s, e as paradas por VE de 0,21 para 0,65, mas o segundo
+VE agora percorre mais três cruzamentos, um deles com conversão à esquerda
+permissiva (ver a decisão de 2026-10-05 na tabela do fim). Os números do cenário
+com a rota antiga ficam como histórico.
+
+**Como reproduzir:**
+
+```bash
+python -m sim.controlador.lote --cenarios multiplas_emergencias --modos PREEMPCAO \
+    --seeds 101..110 --paralelo 6 --sem-banco --saida analysis/data/bloco10_conflitos_rota_nova
+python -m analysis.resumo_conflitos --dados analysis/data/bloco10_conflitos_rota_nova
+```
+
+#### Entrega 10.2, 2026-10-05 · ✅ **IMPLEMENTADA E MEDIDA** — o volume passa do piso
+
+Desenho na tabela de decisões do fim (cenário `treino_multiplas`, seeds 201..240
+de treino e 241..250 de validação). Rendimento medido no braço `PREEMPCAO`, 50
+execuções de 3.600 s, 11m39s de parede com `--paralelo 6`. Cinquenta válidas,
+zero descartadas, zero colisão, teleporte ou violação. Dados em
+`analysis/data/bloco10_treino_volume/`. Rodada duas vezes, como na remedição da
+10.1: VEs, transversal e conflitos idênticos byte a byte, e `execucoes.csv`
+idêntico fora das colunas de latência.
+
+| Grandeza | Treino (201..240) | Validação (241..250) |
+| --- | ---: | ---: |
+| Disputas | 835 | 205 |
+| Decidíveis | 657 | 168 |
+| **Decidíveis e de mesmo nível** — o que a 10.4 rotula | **529** | **139** |
+| De nível misto (a regra decide) | 153 | 37 |
+
+**As duas divisões passam do piso de 100** de P19. Por execução, as decidíveis de
+mesmo nível vão de 9 a 18 (mediana 13), contra 6 a 10 decidíveis no cenário de
+avaliação. O ganho vem do dobro de pares e do segundo encontro: 550 disputas em
+CRUZ_02, uma por par, e 490 em CRUZ_08, contra 45 em 60 pares na avaliação.
+
+**O que o dado mostra além do volume:**
+
+1. **A fração decidível é a mesma da avaliação** (79% contra 81%). O intervalo
+   menor entre pares não fez as disputas nascerem mais sob preempção alheia.
+2. **Todas as disputas são entre dois VEs**, como na avaliação. Os pares a cada
+   300 s não se sobrepõem.
+3. **Os níveis de mesmo nível não saem equilibrados:** 2+2 em 375, 3+3 em 282 e
+   1+1 em 193 do total. É consequência do rodízio `[1, 2, 3, 2]`, que tem o nível
+   2 duas vezes. Os pares mistos saem só como 1+2 e 2+3: com 11 pares por
+   execução, os pares mistos são os de índice 4 e 9, e o rodízio põe neles os
+   níveis 1 e 2. **O 3+1 não aparece.** Não afeta o modelo, que só decide dentro
+   do mesmo nível; a regra que decide os mistos é a mesma para qualquer
+   combinação, e está coberta pelos testes do núcleo.
+4. **Todo par tem tipos diferentes** (ambulância-bombeiro, bombeiro-polícia,
+   polícia-ambulância), pela defasagem. Os três tipos têm a mesma dinâmica, então
+   isso não muda o tráfego.
+
+> **O texto de `analysis.resumo_conflitos` não se aplica a este dado.** O
+> resumo foi escrito para a 10.1 e, ao ver 668 decidíveis, conclui que "a
+> entrega 10.2 não é obrigatória por volume". Aqui o dado **é** o da 10.2. O
+> número está certo; a frase é que foi pensada para o cenário de avaliação.
+
+**Como reproduzir:**
+
+```bash
+python -m sim.controlador.lote --cenarios treino_multiplas --modos PREEMPCAO \
+    --seeds 201..250 --paralelo 6 --sem-banco --saida analysis/data/bloco10_treino_volume
+python -m analysis.resumo_conflitos --dados analysis/data/bloco10_treino_volume
+```
 
 Toda disputa é entre **dois** VEs, sempre no cruzamento **CRUZ_02**, que é onde a
 rota do corredor cruza a transversal. A ausência de dispersão entre seeds é
@@ -1284,8 +1400,10 @@ Todas as decisões de **modelagem** foram tomadas (seção acima). O que dependi
 entrega **10.1** agora tem número, e as três consequências são estas:
 
 1. **Densidade de VEs — a 10.2 é obrigatória.** O cenário
-   `multiplas_emergencias` rende **6 disputas por execução**, 60 em dez seeds, e
-   apenas 56 decidíveis. Rodar mais seeds não resolve barato: são ~12 s de
+   `multiplas_emergencias` rendia **6 disputas por execução**, 60 em dez seeds, e
+   apenas 56 decidíveis. Com a rota nova (remedição de 2026-10-05) são **105 e
+   85**, ainda abaixo do piso. **Desenho da 10.2 decidido em 2026-10-05**
+   (cenário `treino_multiplas`, ver a tabela de decisões no fim). Rodar mais seeds não resolve barato: são ~12 s de
    máquina por disputa, e chegar a algumas centenas exigiria dezenas de execuções
    só para treinar. O cenário de treino precisa de mais VEs por hora — novos
    arquivos de demanda, mesma malha. **O cenário declarado continua sendo o de
@@ -1303,7 +1421,8 @@ entrega **10.1** agora tem número, e as três consequências são estas:
      de simulação, e dão variedade de `fila_no_acesso` e
      `cruzamentos_restantes`, que hoje é estreita.
 2. **Divisão treino/teste por seed**, com o treino **fora** do intervalo 1..50 do
-   Bloco 8 (guarda de P16). Com 6 disputas por seed e sem dispersão entre seeds,
+   Bloco 8 (guarda de P16). **Fixada em 2026-10-05:** treino 201..240, validação
+   241..250. Com 6 disputas por seed e sem dispersão entre seeds,
    *quantas* seeds importa mais do que *quais*.
 3. **Regularização e número de atributos.** Com poucas dezenas de eventos por
    conjunto, ~~cinco~~ quatro atributos (P20) ainda são muitos. A decisão fica para depois da 10.2, com
@@ -1594,6 +1713,8 @@ diferenças) foram verificados.
 
 | Data | Item | Decisão | Justificativa |
 | --- | --- | --- | --- |
+| 2026-10-05 | **Entrega 10.2: cenário de treino `treino_multiplas`** (P19) | Seção nova `cenarios_treino` em `sim/config/cenarios.yaml`, fora de `cenarios`. Mesmas rotas e mesmo fundo (700 veíc./h) de `multiplas_emergencias`, com três diferenças: **um par a cada 300 s** (contra 600); **atraso da segunda partida sorteado por par**, uniforme em [0, 20] s, por um gerador próprio derivado da seed (`Random("emergencias:<seed>")`); e **tipo e criticidade desacoplados** — criticidade em rodízio próprio `[1, 2, 3, 2]`, igual nos dois VEs do par exceto um par a cada cinco, em que o segundo vai ao nível seguinte (80% de mesmo nível), e tipo do segundo VE uma posição adiante no rodízio. Implementado em `partidas_de_treino` (`sim/demanda/gerar_rotas.py`). | Escolhida pela equipe contra "rotas novas com outros pontos de encontro" e "as duas coisas": a geometria da avaliação faz o modelo treinar no mesmo tipo de encontro em que vai ser testado. O atraso fixo deixava a diferença de ETA quase constante, e o peso de `eta_s` não teria o que aprender. Rodízio determinístico escolhido contra "sorteio pela seed": proporção fixa e explicável em uma frase. **Exceção declarada** à regra de `04` §7 (partida do VE independente da seed): vale só no treino, onde não há comparação a parear entre seeds; os braços de uma mesma seed leem o mesmo arquivo. Fora de `cenarios`, o cenário não entra na tabela da metodologia, no lote padrão nem na API. Os arquivos de rota dos cenários do experimento saem idênticos aos da main (verificado em `multiplas_emergencias`, seeds 101..110). |
+| 2026-10-05 | **Divisão por seed do treino de P19** | Treino **201..240**, validação **241..250**, em `execucao.seeds_treino_ml`; 201..250 entram em `seeds_reservadas`. H4 continua testada no Bloco 8 (seeds 1..50, cenário de avaliação). | Escolhida pela equipe contra 201..220 / 221..230. Fora de 1..50 (guarda de P16), de 101..105 (calibração) e de 101..110 (10.1). Fixada antes de qualquer rótulo ou treino. |
 | 2026-10-05 | **Rota secundária de `multiplas_emergencias` estendida** (pedido do Felipe ao testar o dashboard) | A `ROTA_VE_TRANSVERSAL` passa de `T2_S0 T2_S1 T2_S2` (CRUZ_02, CRUZ_06, sai pelo sul) para `T2_S0 T2_S1 A2_L2 A2_L3 A2_L4`: desce a transversal 2, **vira à esquerda** em CRUZ_06 e segue pela arterial 2 por CRUZ_07 e CRUZ_08. O encontro em CRUZ_02 e o `atraso_secundario_s` não mudam. Mudança no cenário do **experimento**, e não só da demonstração. | Escolhida pela equipe contra "só num cenário de demonstração" e "decidir no Bloco 10". Passado o conflito, o segundo VE só tinha mais um cruzamento pela frente, e a H4 avalia justamente a consequência adiante da escolha de E8. **Medido na seed 900, sem gravar:** disputas 6 → 10, com um segundo encontro em CRUZ_08 (fases 2×1) em 4 dos 6 pares; zero colisão, teleporte ou violação; paradas de VE 2 → 9. Das 9, **3 vêm da conversão à esquerda, que é permissiva** (`state="o"`): o VE cede ao tráfego oposto. As demais são o custo das disputas. Mantida, porque os braços pareados passam pela mesma rota, e declarada como limitação. **Custos:** os números do piloto e da remedição de P16 nesse cenário viram histórico não comparável; a contagem da 10.1 vale para a rota antiga e precisa ser remedida (seeds 101..110) antes da 10.2. O Bloco 8 ainda não rodou, então nenhum número oficial se perde. |
 | 2026-10-05 | **Bloco 7: velocidade da simulação escolhida no pedido** (revisão do dashboard pelo Felipe) | `pedido_simulacao.velocidade` (migration `e5a17c3d8b42`): 1, 2, 5 ou 10 vezes o tempo real, padrão 1 na API; nula é o máximo. O executor ganhou `--velocidade`, e o laço dorme no fim de cada passo até o relógio alcançar `t / velocidade` (`sim/controlador/ritmo.py`). Se a máquina não acompanhar, ele só não dorme. O atendente só aplica o ritmo quando transmite. | Sem ritmo, o atendente rodava a ~50x o tempo real: 3600 s em ~70 s, e cada VE cruzava o mapa em ~20 s, rápido demais para acompanhar. Escolhida pela equipe contra "sempre 1x" e "fixo em 5x". A espera fica fora do SUMO e do trecho cronometrado do RNF01, então a mesma seed dá a mesma execução em qualquer velocidade, e o lote do Bloco 8 não muda. |
 | 2026-10-05 | **Bloco 7: o mapa mostra o tráfego de fundo** (revisão do dashboard) | A transmissão ganhou `trafego` (lat/lon dos demais veículos, seis casas), e o WebSocket uma mensagem `trafego` com a fotografia inteira. O executor lê `getIDList`/`getPosition` só quando o transmissor pede, a 5 Hz de relógio, depois do trecho cronometrado. | Escolhida pela equipe contra "só os VEs". É o que mostra o corredor verde: a fila se formando no vermelho e se desfazendo à frente do VE. Ler posição não altera a simulação, e o lote não transmite. Uma mensagem por fotografia, e não por veículo, para o throttle não segurar centenas de chaves e para um veículo que saiu da malha não ficar no mapa. |

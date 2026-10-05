@@ -267,6 +267,130 @@ def test_cenario_curto_declara_a_criticidade_do_seu_ve() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Cenário de treino — entrega 10.2 (P19)
+# ---------------------------------------------------------------------------
+
+TREINO = "treino_multiplas"
+
+
+def _ves_de_treino(seed: int) -> list[gerar_rotas.Partida]:
+    return list(partidas_de_emergencia(calibracao.carregar_configuracao(), TREINO, seed))
+
+
+def _pares(seed: int) -> list[tuple[gerar_rotas.Partida, gerar_rotas.Partida]]:
+    """Os pares (corredor, secundária) de uma execução de treino, pelo índice."""
+    ves = _ves_de_treino(seed)
+    corredor = {v.id_veiculo[-2:]: v for v in ves if v.rota == "ROTA_VE_CORREDOR"}
+    secundaria = {v.id_veiculo[-2:]: v for v in ves if v.rota == "ROTA_VE_TRANSVERSAL"}
+    return [(corredor[i], secundaria[i]) for i in sorted(secundaria)]
+
+
+def test_cenario_de_treino_fica_fora_do_experimento() -> None:
+    """Fora de `cenarios`, ele não entra na tabela da metodologia nem na API."""
+    configuracao = calibracao.carregar_configuracao()
+
+    assert TREINO in configuracao["cenarios_treino"]
+    assert TREINO not in configuracao["cenarios"]
+    assert ARQUIVO_DE_FLUXO[TREINO] == ARQUIVO_DE_FLUXO["multiplas_emergencias"]
+
+
+def test_treino_gera_um_par_a_cada_300_s_pelas_rotas_da_avaliacao() -> None:
+    pares = _pares(201)
+
+    assert len(pares) == 11  # partidas em 300, 600, ..., 3300 s
+    assert [corredor.instante_s for corredor, _ in pares] == [300.0 * (i + 1) for i in range(11)]
+    rotas_da_avaliacao = {
+        rota
+        for rota, _ in rotas_de_emergencia(
+            calibracao.carregar_configuracao(), "multiplas_emergencias"
+        )
+    }
+    assert {v.rota for par in pares for v in par} == rotas_da_avaliacao
+
+
+def test_atraso_do_segundo_ve_e_sorteado_na_faixa_e_varia_entre_pares() -> None:
+    atrasos = [secundario.instante_s - corredor.instante_s for corredor, secundario in _pares(201)]
+
+    assert all(0.0 <= atraso <= 20.0 for atraso in atrasos)
+    assert len({round(atraso, 2) for atraso in atrasos}) == len(atrasos)
+
+
+def test_treino_e_deterministico_por_seed_e_varia_entre_seeds(tmp_path: Path) -> None:
+    """Mesma seed, mesmo arquivo (os braços pareiam); seed diferente, atrasos diferentes."""
+    primeiro = gerar(TREINO, 201, destino=tmp_path / "a.rou.xml")
+    segundo = gerar(TREINO, 201, destino=tmp_path / "b.rou.xml")
+    assert primeiro.read_bytes() == segundo.read_bytes()
+
+    assert [s.instante_s for _, s in _pares(201)] != [s.instante_s for _, s in _pares(202)]
+
+
+def test_sorteio_do_atraso_nao_mexe_no_trafego_de_fundo(tmp_path: Path) -> None:
+    """O gerador do VE é outro: o fundo do treino é o mesmo do cenário de avaliação."""
+
+    def fundo(cenario: str) -> list[tuple[str | None, str | None]]:
+        arquivo = gerar(cenario, 203, destino=tmp_path / f"{cenario}.rou.xml")
+        return [
+            (v.get("id"), v.get("depart"))
+            for v in ET.parse(arquivo).getroot().findall("vehicle")
+            if not str(v.get("id")).startswith("VE_")
+        ]
+
+    assert fundo(TREINO) == fundo("multiplas_emergencias")
+
+
+def test_cenario_de_treino_sem_seed_e_recusado() -> None:
+    with pytest.raises(ValueError, match="seed"):
+        list(partidas_de_emergencia(calibracao.carregar_configuracao(), TREINO))
+
+
+def test_criticidade_desacoplada_do_tipo_no_treino() -> None:
+    """Rodízios de período 3 e 4: as nove combinações de tipo e nível aparecem."""
+    combinacoes = {(v.tipo, v.criticidade) for seed in (201, 202) for v in _ves_de_treino(seed)}
+
+    assert len(combinacoes) == 9  # 3 tipos x 3 níveis, todas presentes
+    assert [int(c.criticidade or 0) for c, _ in _pares(201)][:4] == [1, 2, 3, 2]
+
+
+def test_um_par_a_cada_cinco_tem_nivel_misto() -> None:
+    for indice, (corredor, secundario) in enumerate(_pares(201)):
+        assert corredor.criticidade is not None
+        assert secundario.criticidade is not None
+        if (indice + 1) % 5 == 0:
+            assert int(secundario.criticidade) == int(corredor.criticidade) % 3 + 1
+        else:
+            assert secundario.criticidade == corredor.criticidade
+
+
+def test_tipo_do_segundo_ve_vem_uma_posicao_adiante() -> None:
+    tipos = ["ambulancia", "bombeiro", "policia"]
+    for corredor, secundario in _pares(201):
+        assert tipos.index(secundario.tipo) == (tipos.index(corredor.tipo) + 1) % 3
+
+
+def test_faixa_de_atraso_invertida_e_recusada() -> None:
+    configuracao = copy.deepcopy(calibracao.carregar_configuracao())
+    configuracao["cenarios_treino"][TREINO]["atraso_secundario_faixa_s"] = [20, 0]
+
+    with pytest.raises(ValueError, match="atraso"):
+        list(partidas_de_emergencia(configuracao, TREINO, 201))
+
+
+def test_seeds_do_treino_nao_tocam_as_do_experimento() -> None:
+    """Guarda de P16: treino fora de 1..50 (Bloco 8) e de 101..110 (calibração e 10.1)."""
+    configuracao = calibracao.carregar_configuracao()
+    divisao = configuracao["execucao"]["seeds_treino_ml"]
+    treino = set(range(divisao["treino"][0], divisao["treino"][1] + 1))
+    validacao = set(range(divisao["validacao"][0], divisao["validacao"][1] + 1))
+
+    assert treino
+    assert validacao
+    assert not treino & validacao
+    assert not (treino | validacao) & (set(range(1, 51)) | set(range(101, 111)))
+    reservadas = configuracao["execucao"]["seeds_reservadas"]
+    assert all(any(a <= s <= b for a, b in reservadas) for s in treino | validacao)
+
+
+# ---------------------------------------------------------------------------
 # Arquivos de fluxo versionados
 # ---------------------------------------------------------------------------
 

@@ -45,11 +45,13 @@ SAIDA = RAIZ / "sim" / "saida" / "rotas"
 
 #: Cenário -> arquivo de fluxo. `multiplas_emergencias` compartilha a demanda de
 #: fundo de `moderado` (context/04 §5): o que muda é a emergência, não o tráfego.
+#: O cenário de treino da 10.2 também, pela mesma razão.
 ARQUIVO_DE_FLUXO = {
     "leve": "fluxo_leve.rou.xml",
     "moderado": "fluxo_moderado.rou.xml",
     "intenso": "fluxo_intenso.rou.xml",
     "multiplas_emergencias": "fluxo_moderado.rou.xml",
+    "treino_multiplas": "fluxo_moderado.rou.xml",
 }
 
 
@@ -128,7 +130,9 @@ def partidas_de_fundo(
             instante += gerador.expovariate(taxa)
 
 
-def partidas_de_emergencia(configuracao: Mapping[str, Any], nome_cenario: str) -> Iterator[Partida]:
+def partidas_de_emergencia(
+    configuracao: Mapping[str, Any], nome_cenario: str, seed: int | None = None
+) -> Iterator[Partida]:
     """Gera as partidas dos VEs — determinísticas, sem sorteio.
 
     Os instantes **não** dependem da seed, e isso é deliberado: o VE é o objeto
@@ -142,10 +146,21 @@ def partidas_de_emergencia(configuracao: Mapping[str, Any], nome_cenario: str) -
     entrada de `criticidades` acompanha a i-ésima de `tipos`. Nos cenários do
     experimento isso atribui a cada VE a ocorrência típica do seu tipo.
 
+    Os cenários de `cenarios_treino` seguem outra regra, a de
+    `partidas_de_treino`, e só eles usam a seed.
+
     Raises:
         ValueError: se `criticidades` e `tipos` tiverem tamanhos diferentes — o
-            rodízio sairia de fase em silêncio — ou se houver nível fora da escala.
+            rodízio sairia de fase em silêncio —, se houver nível fora da escala,
+            ou se um cenário de treino vier sem seed.
     """
+    treino = configuracao.get("cenarios_treino", {})
+    if nome_cenario in treino:
+        if seed is None:
+            raise ValueError(f"o cenário de treino {nome_cenario!r} sorteia o atraso: exige seed")
+        yield from partidas_de_treino(configuracao, treino[nome_cenario], seed)
+        return
+
     emergencias = configuracao["emergencias"]
     execucao = configuracao["execucao"]
     intervalo = float(emergencias["intervalo_s"])
@@ -175,6 +190,87 @@ def partidas_de_emergencia(configuracao: Mapping[str, Any], nome_cenario: str) -
             )
             indice += 1
             instante += intervalo
+
+
+def partidas_de_treino(
+    configuracao: Mapping[str, Any], definicao: Mapping[str, Any], seed: int
+) -> Iterator[Partida]:
+    """Partidas dos VEs de um cenário de treino da entrega 10.2 (P19).
+
+    Um par a cada `intervalo_s`: o VE do corredor parte no início do intervalo, e
+    o da rota secundária, depois de um atraso sorteado em
+    `atraso_secundario_faixa_s`. O sorteio usa um gerador próprio, derivado da
+    seed, e não toca o do tráfego de fundo: a mesma seed dá o mesmo fundo em
+    qualquer cenário que o compartilhe.
+
+    **Exceção declarada à regra de `partidas_de_emergencia`.** Aqui a partida do
+    VE depende da seed, porque o modelo precisa ver diferenças de ETA variadas, e
+    um atraso fixo as deixaria quase constantes. Não há comparação entre braços a
+    parear entre seeds; os braços de uma mesma seed continuam lendo o mesmo
+    arquivo.
+
+    Tipo e criticidade giram em rodízios separados. O tipo do VE do par `i` é
+    `tipos[i]` no corredor e `tipos[i + defasagem_tipo_secundaria]` na rota
+    secundária; a criticidade é `criticidades[i]` nos dois, exceto quando
+    `(i + 1)` é múltiplo de `par_misto_a_cada`, em que o segundo VE vai para o
+    nível seguinte (1→2, 2→3, 3→1).
+
+    Raises:
+        ValueError: faixa de atraso negativa ou invertida, intervalo ou
+            `par_misto_a_cada` não positivos, ou nível fora da escala.
+    """
+    emergencias = configuracao["emergencias"]
+    execucao = configuracao["execucao"]
+    tipos = [str(tipo).lower() for tipo in emergencias["tipos"]]
+    criticidades = [Criticidade(int(nivel)) for nivel in definicao["criticidades"]]
+    intervalo = float(definicao["intervalo_s"])
+    atraso_min, atraso_max = (float(valor) for valor in definicao["atraso_secundario_faixa_s"])
+    misto_a_cada = int(definicao["par_misto_a_cada"])
+    defasagem = int(definicao["defasagem_tipo_secundaria"])
+    if not 0.0 <= atraso_min <= atraso_max:
+        raise ValueError(f"faixa de atraso inválida: [{atraso_min}, {atraso_max}]")
+    if intervalo <= 0 or misto_a_cada <= 0:
+        raise ValueError("intervalo_s e par_misto_a_cada precisam ser positivos")
+
+    rota_corredor = str(emergencias["rota"])
+    rota_secundaria = str(definicao["rota_secundaria"])
+    aquecimento = float(execucao["aquecimento_s"])
+    duracao = float(execucao["duracao_s"])
+    # Semente em texto: o `random` a converte por SHA-512, então o resultado não
+    # depende de PYTHONHASHSEED nem colide com o gerador do fundo, `Random(seed)`.
+    gerador = random.Random(f"emergencias:{seed}")
+
+    indice = 0
+    instante = aquecimento
+    while instante < duracao:
+        nivel = criticidades[indice % len(criticidades)]
+        nivel_secundario = (
+            Criticidade(int(nivel) % len(Criticidade) + 1)
+            if (indice + 1) % misto_a_cada == 0
+            else nivel
+        )
+        # Sorteado sempre, mesmo se o VE cair depois do fim: assim o atraso do
+        # par i não depende da duração da execução.
+        atraso = gerador.uniform(atraso_min, atraso_max)
+        yield Partida(
+            id_veiculo=f"VE_{rota_corredor}_{indice:02d}",
+            tipo=tipos[indice % len(tipos)],
+            rota=rota_corredor,
+            instante_s=instante,
+            emergencia=True,
+            criticidade=nivel,
+        )
+        if instante + atraso < duracao:
+            yield Partida(
+                id_veiculo=f"VE_{rota_secundaria}_{indice:02d}",
+                tipo=tipos[(indice + defasagem) % len(tipos)],
+                rota=rota_secundaria,
+                instante_s=instante + atraso,
+                emergencia=True,
+                criticidade=nivel_secundario,
+            )
+        indice += 1
+        instante += intervalo
 
 
 def _cabecalho(nome_cenario: str, seed: int, quantos: int, quantos_ves: int) -> str:
@@ -234,7 +330,7 @@ def conteudo(nome_cenario: str, seed: int) -> str:
 
     gerador = random.Random(seed)
     fundo = list(partidas_de_fundo(fluxos, gerador))
-    emergencia = list(partidas_de_emergencia(configuracao, nome_cenario))
+    emergencia = list(partidas_de_emergencia(configuracao, nome_cenario, seed))
 
     # O SUMO exige o arquivo ordenado por instante de partida.
     partidas = sorted([*fundo, *emergencia], key=lambda p: (p.instante_s, p.id_veiculo))
