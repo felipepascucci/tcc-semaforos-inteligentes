@@ -2,7 +2,7 @@
 
 O pyserial é bloqueante. Cada leitura e escrita roda numa thread
 (`asyncio.to_thread`) com timeout curto, para que o laço da ponte nunca fique
-preso esperando o UNO, e o PING de 1 s continue saindo mesmo com a placa calada.
+preso esperando o UNO, e fechar a porta não demore.
 
 Aceita qualquer URL do pyserial: `COM3` e `/dev/ttyUSB0` na bancada, e
 `loop://` nos testes, que devolve o que se escreve — é como o cliente é testado
@@ -33,7 +33,7 @@ class TransporteSerial:
 
     Args:
         url: Porta ou URL do pyserial (`COM3`, `/dev/ttyUSB0`, `loop://`).
-        baud: Velocidade; o protocolo fixa 115200.
+        baud: Velocidade; a bancada usa 9600, a do NodeMCU receptor.
     """
 
     def __init__(self, url: str, baud: int = BAUD) -> None:

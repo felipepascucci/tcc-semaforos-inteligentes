@@ -324,17 +324,29 @@ a menos que `--repetir MOTIVO` autorize.
 
 | # | Entrega |
 |---|---|
-| 5.1 | `bridge/protocolo.py` — 100% testável sem hardware, ambos os sentidos · ✅ **2026-10-04**, tradução comando → linha em `context/05` §4 |
-| 5.2 | `adapters/hardware/simulado.py` — dublê com latência artificial, permite o trio trabalhar sem a bancada · ✅ **2026-10-04**, comportamento de referência do firmware em `context/05` §8 |
-| 5.3 | Firmware UNO reescrito: máquina de estados `millis()`, **zero `delay()`**, **zero `String`**, watchdog 3 s (I6), timeout de preempção 30 s, telemetria 2 Hz |
-| 5.4 | **P8** — testar boot do NodeMCU com RC522 ligado; se falhar, RST → D0 (GPIO 16) e atualizar `context/05` §1 |
-| 5.5 | **P9** — decidir LCD em 3,3 V ou conversor de nível; documentar a escolha |
-| 5.6 | Firmware NodeMCU: dedup por UID com cooldown 3 s, `sequencia` monotônica, HTTP com timeout, reconexão Wi-Fi com backoff, `secrets.h` gerado por `firmware/gerar_secrets.py` |
-| 5.7 | `bridge/main.py` — asyncio, PING 1 s, reconexão serial, `t_atuacao` carimbado **na chegada do ACK** · ✅ **2026-10-04**, API da ponte (`/health`, `/estado`, `/comandos`) em `context/05` §6 |
-| 5.8 | Ler os UIDs reais das tags e atualizar os seeds |
-| 5.9 | **P20** — LCD `SEM OCORRENCIA` / `SEM PRIORIDADE` (vem pronto em `mensagem_lcd`, sem lógica no firmware) e passo 1b do roteiro de demonstração (`context/05` §7): tag sem ocorrência negada, ocorrência aberta no painel, tag passa a preemptar |
+> **Replanejado em 2026-10-05.** A equipe adotou a arquitetura já montada na
+> bancada (`context/05`, `context/09`): ESP-NOW do veículo ao cruzamento, decisão
+> no UNO, notebook só escutando. 5.1, 5.2 e 5.7 foram entregues em 2026-10-04
+> contra o protocolo de comandos anterior e precisam ser **refeitas**, não
+> descartadas: ficam a estrutura, o transporte, a API e o relógio.
 
-**Pronto quando:** tag aproxima → semáforo físico preempta em < 3 s (RF02); cabo USB desconectado durante preempção → ciclo fixo retomado em < 3 s (I6); tag reconhecida sem ocorrência aberta **não** preempta (P20).
+| # | Entrega |
+|---|---|
+| 5.1 | `bridge/protocolo.py` — ✅ **refeito em 2026-10-05**: `ST` e `EV` de `context/05` §4.2, a linha `<RUA>,<VEICULO>` do receptor e da injeção, a linha `Tag … lida` do emissor. Saiu a tradução `Comando` → linha |
+| 5.2 | `adapters/hardware/simulado.py` — ✅ **refeito em 2026-10-05** com a regra de `context/05` §3: 2 fases, verde exclusivo, fila por tipo, transição segura, teto de 30 s. 44 testes, Hypothesis para I1–I5, verificação por mutação (4 sabotagens, todas pegas) |
+| 5.3 | Firmware UNO reescrito em `firmware/uno/`, conforme `context/05` §3 e §4: decisão local preservada, transição segura, **zero `delay()`** no `loop()`, **zero `String`**, `ST` a 2 Hz e a cada mudança de estado, eventos antes do LCD |
+| 5.4 | ~~**P8**~~ ✅ **2026-10-05** — boot normal com o RC522 no D3 (questionário, 3.3) |
+| 5.5 | ~~**P9**~~ ✅ **2026-10-05** — não se aplica: o LCD está no UNO, de 5 V |
+| 5.6 | Sketches dos NodeMCUs (emissor e receptor) versionados **como estão** em `firmware/nodemcu/`, com cabeçalho documentando o MAC do receptor, o tipo do veículo e o mapa UID → rua |
+| 5.7 | `bridge/` — ✅ **em parte, 2026-10-05**: só escuta a 9600, `/estado` com histórico, `/health`, `POST /injecao` e `/injecao/bruta`, `bridge.verificar` reescrito (**16 de 16 contra o dublê**), `.env.example` sem Wi-Fi, `parametros.hardware.yaml` com 2 fases. **Falta**, para a medição de H3: carimbo no primeiro byte, `--porta-veiculo` e `analysis/data/latencia_bancada.csv` |
+| 5.8 | ✅ UIDs lidos (identificam ruas, `context/05` §1). **Falta:** seeds com as 2 fases de `PROTO_CRUZ_01` e os dispositivos `EMISSOR_VE_01`, `RECEPTOR_CRUZ_01` e `CTRL_PROTO_01` (`context/03` §5) |
+| 5.9 | ~~**P20** na bancada~~ — **não se aplica desde 2026-10-05**: o UNO decide sem consultar ocorrência. P20 segue no motor, na API e na simulação |
+
+**Pronto quando:**
+- o carrinho passa pela tag → o UNO inicia a preempção em < 3 s (RF02) e chega ao verde exclusivo pelo amarelo e pelo all-red;
+- `bridge.verificar` passa contra o dublê e contra a placa;
+- H3 medida em 5 repetições com o emissor no USB do notebook;
+- com a ponte encerrada, o cruzamento continua funcionando.
 
 ---
 
@@ -456,7 +468,7 @@ desempate determinístico.
 |---|---|
 | Fim do Bloco 2 | O núcleo do TCC existe e é seguro — invariantes verificados por property-based testing |
 | Fim do Bloco 4 | ✅ **2026-08-26.** H1 se sustenta em `moderado` (31,7%) e **não** em `intenso` (18,1%); H2 tem custo medido mas **sem** mitigação (P16 e P17). Zero gridlock, RNF01 com folga de três ordens de grandeza. O marco cumpriu seu papel: os problemas apareceram com margem — e **P16 foi corrigida em 2026-08-31** (`intenso` 31,2%), com quase três meses de folga, que é exatamente o que antecipar o piloto comprou |
-| Fim do Bloco 5 | O protótipo físico funciona fim-a-fim, incluindo o fail-safe |
+| Fim do Bloco 5 | O protótipo físico funciona fim-a-fim, com transição segura, fim da emergência por duração e teto, e H3 medida |
 | **Entrega 10.1** | Sabe-se **quantos eventos de conflito entre VEs existem por execução** — é o que define se há dado suficiente para treinar, e nenhuma decisão de modelagem é tomada antes disso |
 | Fim do Bloco 10 | Existe uma política aprendida, exportada como dado e comparada estatisticamente contra o desempate determinístico. Veredito favorável **ou** nulo, ambos reportáveis |
 | Fim do Bloco 8 | Os dados do capítulo 5 existem e são reprodutíveis |
@@ -517,4 +529,4 @@ desempate determinístico.
   capítulo de metodologia, listado em `context/09` P11.
 - **P4, P12** — ações de redação no texto do TCC. O código já implementa a versão correta; falta a equipe atualizar o documento.
 - ~~**P14** — ponto final de medição do RF02.~~ ✅ **Decidida em 2026-08-25:** mede da detecção até o **início da atuação**. O perfil de tempos da bancada e o ciclo de 24 s de P13 ficam inalterados, e o firmware do Bloco 5 já tem contra o que ser escrito.
-- **P8, P9** — resolvidas por teste de bancada no Bloco 5.
+- ~~**P8, P9**~~ — ✅ fechadas em 2026-10-05 pelo questionário de hardware (P8: boot normal; P9: não se aplica, LCD no UNO).

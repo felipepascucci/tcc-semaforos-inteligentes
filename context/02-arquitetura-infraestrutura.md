@@ -6,12 +6,18 @@ O pré-projeto define uma arquitetura híbrida **Edge + Nuvem**. Mapeamento conc
 
 | Camada conceitual | O que é na prática | Onde roda |
 | --- | --- | --- |
-| **Dispositivo / Veículo** | NodeMCU ESP8266 + RC522 + LCD 16x2 | Bancada |
-| **Borda (Edge)** | Processo `bridge` + instância local do backend | Notebook junto ao protótipo |
+| **Dispositivo / Veículo** | NodeMCU emissor + RC522 (lê a tag da rua, envia por ESP-NOW) | Bancada, no carrinho |
+| **Borda (Edge)** | NodeMCU receptor + Arduino UNO, que **decide** e atua; LCD 16x2 | Bancada, no cruzamento |
+| **Observação local** | Processo `bridge` (só escuta o UNO) + instância local do backend | Notebook junto ao protótipo |
 | **Nuvem** | PostgreSQL, API, dashboard, análise histórica | Docker local; AWS como arquitetura-alvo documentada |
 | **Simulação** | SUMO + controlador TraCI | Mesma máquina do backend |
 
-A justificativa acadêmica da separação: decisões críticas de preempção acontecem na borda (latência < 100 ms, funciona mesmo sem internet); persistência, análise histórica e relatórios acontecem na nuvem (tolera latência, precisa de durabilidade).
+A justificativa acadêmica da separação: decisões críticas de preempção acontecem na borda (latência < 200 ms, funciona sem rede nem notebook); persistência, análise histórica e relatórios acontecem na nuvem (tolera latência, precisa de durabilidade).
+
+> **Camadas revistas em 2026-10-05**, com a adoção da arquitetura montada na
+> bancada (`05` §2). Antes, a borda era o notebook (`bridge` + backend), e o UNO
+> só executava comandos. Agora a borda é o próprio controlador do cruzamento, e
+> o notebook observa.
 
 ## 2. Stack fixa
 
@@ -109,31 +115,36 @@ CORS_ORIGINS=http://localhost:5173
 PERFIL_PARAMETROS=simulacao          # ou "hardware"
 SUMO_HOME=/usr/share/sumo
 SUMO_BINARY=sumo                     # ou sumo-gui
-SERIAL_PORT=COM3
-SERIAL_BAUDRATE=115200
-WIFI_SSID=...                        # usado só para gerar secrets.h do firmware
-WIFI_PASSWORD=...
-BACKEND_URL_DISPOSITIVO=http://192.168.0.10:8000
+SERIAL_PORT=COM3                     # UNO
+SERIAL_BAUDRATE=9600                 # a do NodeMCU receptor; o UNO tem uma UART só
+SERIAL_PORT_VEICULO=COM4             # NodeMCU emissor, só na medição de H3
 LOG_LEVEL=INFO
 ```
 
-> `secrets.h` do firmware é **gerado** por um script a partir do `.env` (`firmware/gerar_secrets.py`) e está no `.gitignore`. Credencial de Wi-Fi hardcoded em sketch commitado é o erro mais comum em TCC de IoT.
+> **Sem Wi-Fi desde 2026-10-05.** `WIFI_SSID`, `WIFI_PASSWORD`,
+> `BACKEND_URL_DISPOSITIVO` e o `secrets.h` gerado saíram: os NodeMCUs se falam
+> por ESP-NOW e não acessam rede nem backend (`05` §5). O `.env.example` é
+> ajustado na entrega 5.7.
 
 ## 5. Rede do protótipo
 
-Todos os dispositivos na mesma rede local (roteador dedicado ou hotspot do notebook — mais confiável do que a rede da faculdade, que costuma bloquear tráfego entre clientes).
+**Não há rede** (decisão de 2026-10-05). Os dois NodeMCUs se falam por
+**ESP-NOW**: rádio de 2,4 GHz direto, MAC a MAC, sem roteador nem ponto de
+acesso. O notebook se liga ao UNO só por USB.
 
 ```
-[NodeMCU ESP8266] --Wi-Fi 2.4GHz--> [Roteador] <--Ethernet/Wi-Fi--> [Notebook]
-                                                                      ├── backend :8000
-                                                                      ├── postgres :5432
-                                                                      ├── frontend :5173
-                                                                      └── bridge --USB--> [Arduino UNO R3]
+[NodeMCU emissor] --ESP-NOW--> [NodeMCU receptor] --serial 9600--> [Arduino UNO R3] --USB--> [Notebook]
+   (veículo)                       (cruzamento)                                                ├── bridge (só escuta)
+                                                                                               ├── backend :8000
+                                                                                               ├── postgres :5432
+                                                                                               └── frontend :5173
 ```
 
-O ESP8266 é **2.4 GHz apenas**. Não funciona em rede 5 GHz. Se a rede for dual-band com mesmo SSID, criar SSID separado. Isso já custou horas a muita gente.
+O MAC do receptor está fixo no sketch do emissor (`40:91:51:58:A8:E1`). Trocar
+a placa receptora exige regravar o emissor.
 
-O IP do backend precisa ser fixo do ponto de vista do ESP: reserva de DHCP por MAC no roteador, ou IP estático no sketch.
+Rede da faculdade, SSID 2,4 GHz e IP fixo do backend deixaram de ser
+preocupação: nada na bancada usa Wi-Fi.
 
 ## 6. Segurança (RNF04)
 
@@ -147,7 +158,15 @@ Escopo realista para TCC, com honestidade sobre o que é demonstração:
 | Anti-replay | Campo `sequencia` monotônico + janela de deduplicação de 2 s por UID |
 | Autorização de tag | UID precisa existir em `tag_rfid` com `ativo = true`. UID desconhecido → HTTP 403 e log de tentativa |
 | Banco | Usuário da aplicação sem privilégio de DDL; migrations com usuário separado. **Em desenvolvimento ainda não vale:** o serviço `migracoes` e o `backend` compartilham o usuário `tcc` (ver nota do §3) |
-| Segredos | `.env` + `secrets.h` gerado, ambos fora do Git |
+| Segredos | `.env` fora do Git. *(O `secrets.h` dos NodeMCUs saiu em 2026-10-05: não há credencial de Wi-Fi)* |
+
+> **Na bancada (desde 2026-10-05), as linhas de dispositivo → API, anti-replay
+> e autorização de tag não se aplicam:** nenhum dispositivo chama a API. O que
+> existe em troca, e precisa ser declarado como limitação: o **ESP-NOW está sem
+> criptografia** nos sketches. Qualquer ESP8266 que conheça o MAC do receptor
+> pode mandar `RUA3,AMBULANCIA` e preemptar o cruzamento. O ESP-NOW suporta
+> chave por par (CCMP), e ativá-la é o primeiro item de trabalho futuro de
+> segurança, ao lado dos certificados abaixo.
 
 **Ser explícito no texto do TCC:** UID de tag Mifare S50 é clonável; num sistema real seria necessário criptografia assimétrica com certificados por veículo (padrão IEEE 1609.2). Reconhecer essa limitação vale mais na banca do que fingir que não existe. Anotar como trabalho futuro.
 
@@ -156,7 +175,7 @@ Escopo realista para TCC, com honestidade sobre o que é demonstração:
 - **Logs estruturados** (JSON) com `structlog`, campos obrigatórios: `timestamp`, `nivel`, `evento`, `id_correlacao`, `id_semaforo`, `id_veiculo`.
 - **`id_correlacao`** — gerado na detecção e propagado por todo o fluxo até a atuação. É o que permite reconstruir uma priorização completa nos relatórios de validação. Sem ele, o item 6 do escopo (relatórios de validação) fica inviável.
 - **Métricas de latência** gravadas em `metrica_latencia` a cada priorização, com os três carimbos: `t_deteccao`, `t_decisao`, `t_atuacao`.
-- **Health check** em `/health` retornando estado de banco, adaptadores e watchdog serial.
+- **Health check** em `/health` retornando estado de banco, adaptadores e da porta serial da bancada.
 
 ## 8. Arquitetura-alvo em AWS (documental)
 

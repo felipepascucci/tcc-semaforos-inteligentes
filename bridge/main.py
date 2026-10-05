@@ -6,8 +6,9 @@ Roda no host, fora do compose, porque precisa da porta USB (`context/02` §3)::
     python -m bridge.main --porta COM5
     python -m bridge.main --simulado      # sem bancada: dublê do UNO em memória
 
-A API da ponte fica em `http://127.0.0.1:8001` (`/health`, `/estado`,
-`/comandos`, documentação em `/docs`).
+A ponte só escuta o UNO (`context/05` §6). A API fica em
+`http://127.0.0.1:8001` (`/health`, `/estado`, `/injecao`, documentação em
+`/docs`). A injeção só chega ao UNO com o fio do NodeMCU solto do RX.
 """
 
 from __future__ import annotations

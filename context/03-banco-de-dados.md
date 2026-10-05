@@ -265,22 +265,34 @@ Consequência para o coletor: ele mantém a fase corrente de cada TLS em memóri
 `db/seeds/` com dados mínimos para o sistema subir funcional:
 
 - 8 semáforos correspondentes ao TLS da rede SUMO + **1 semáforo do protótipo físico** (`PROTO_CRUZ_01`).
-- **4 fases** para `PROTO_CRUZ_01`, uma por aproximação (decisão P13 — *split phasing*, um verde por vez):
+- **2 fases** para `PROTO_CRUZ_01`, as do ciclo da bancada (decisão de 2026-10-05, que revê P13):
 
-  | `indice_fase` | `descricao` | Módulo físico |
+  | `indice_fase` | `descricao` | Módulos físicos |
   | --- | --- | --- |
-  | 1 | Principal — Sentido A | S1 |
-  | 2 | Principal — Sentido B | S2 |
-  | 3 | Transversal — Sentido A | S3 |
-  | 4 | Transversal — Sentido B | S4 |
+  | 1 | Eixo principal | S1 + S2 |
+  | 2 | Eixo transversal | S3 + S4 |
 
-  > **Correção de P13.** A versão anterior desta seção pedia *"4 semáforos do protótipo (`PROTO_S1..S4`)"*, o que modelava cada módulo como um cruzamento independente. Está errado: o protótipo é **um** cruzamento com quatro aproximações, então é **uma** linha em `semaforo` e **quatro** em `fase_semaforo`. Os identificadores `S1..S4` continuam existindo, mas como nomes de aproximação no firmware e no protocolo serial — não como chaves de `semaforo`.
+  A emergência abre o verde de **uma** aproximação (S1..S4), que não é fase do
+  ciclo. Como registrá-la em `log_prioridade` (aproximação em `fase_aplicada` ou
+  em `motivo`) decide-se no Bloco 6. Aplicado nos seeds na entrega 5.8.
+
+  > **Correção de P13 (histórico).** Até 2026-10-05 esta seção pedia 4 fases em
+  > *split phasing*, uma por aproximação. O firmware que a equipe de hardware
+  > escreveu roda 2 fases, e a equipe decidiu adaptar o sistema a ele.
+  >
+  > **Correção anterior, ainda válida.** A versão anterior desta seção pedia *"4 semáforos do protótipo (`PROTO_S1..S4`)"*, o que modelava cada módulo como um cruzamento independente. Está errado: o protótipo é **um** cruzamento com quatro aproximações, então é **uma** linha em `semaforo` e **quatro** em `fase_semaforo`. Os identificadores `S1..S4` continuam existindo, mas como nomes de aproximação no firmware e no protocolo serial — não como chaves de `semaforo`.
 - 3 veículos de emergência (uma ambulância, um bombeiro, uma viatura) com placas fictícias no padrão Mercosul.
-- 2 tags RFID vinculadas (UIDs reais lidos na bancada — preencher após o primeiro teste do RC522).
-- 2 dispositivos IoT: `LEITOR_CRUZ_01` e `CTRL_PROTO_01`.
-- **Nenhuma ocorrência** — de propósito (P20). O sistema sobe sem VE em serviço,
-  e a demonstração começa pela negação: a tag da ambulância é reconhecida e não
-  preempta até o operador abrir a ocorrência no painel "Central".
+- 2 tags RFID vinculadas a veículos, **com UIDs fictícios**. As tags reais da
+  bancada identificam **ruas**, não veículos (`05` §1), e não entram em
+  `tag_rfid`: o mapa UID → rua vive no sketch do emissor, e o backend recebe a
+  rua já resolvida. `tag_rfid` continua servindo à API e à autorização de P20.
+- Dispositivos IoT: `EMISSOR_VE_01` (NodeMCU + RC522, no veículo),
+  `RECEPTOR_CRUZ_01` (NodeMCU do cruzamento) e `CTRL_PROTO_01` (UNO).
+  Substituem o `LEITOR_CRUZ_01` na entrega 5.8. Nenhum deles chama a API, então
+  `token_hash` não é exercitado pela bancada.
+- **Nenhuma ocorrência** — de propósito (P20). O sistema sobe sem VE em
+  serviço. *(A demonstração na bancada não passa mais por aqui: desde
+  2026-10-05 o UNO decide sem consultar ocorrência, `05` §7.)*
 
 ## 6. DER para o TCC
 

@@ -19,7 +19,7 @@ class ConexaoPerdidaError(ConnectionError):
     """A porta sumiu: cabo puxado, dispositivo desconectado, porta fechada.
 
     É condição de operação, não bug. A ponte reage reabrindo a porta; o UNO,
-    do outro lado, reage sozinho pelo watchdog (I6).
+    do outro lado, não depende dela para nada (`context/05` §2).
     """
 
 

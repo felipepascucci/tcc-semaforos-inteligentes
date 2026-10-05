@@ -42,7 +42,7 @@ def test_perfil_de_simulacao_carrega_e_valida() -> None:
 
 
 def test_perfil_de_hardware_sobrepoe_apenas_o_que_muda() -> None:
-    """A bancada herda o resto do perfil de simulação (decisão P13).
+    """A bancada herda o resto do perfil de simulação.
 
     Manter os dois arquivos completos convidaria à divergência silenciosa:
     alguém mudaria `raio_deteccao_m` num e esqueceria o outro.
@@ -70,13 +70,13 @@ def test_carregar_hardware_nao_altera_o_perfil_de_simulacao() -> None:
     assert depois.verde_min_s == 7.0  # e não 3.0, da bancada
 
 
-def test_ciclo_da_bancada_bate_com_a_decisao_p13() -> None:
-    """4 fases x (3 + 2 + 1) = 24 s, calculado a partir do que foi carregado."""
+def test_ciclo_da_bancada_bate_com_a_decisao_de_2026_10_05() -> None:
+    """2 fases x (3 + 2 + 1) = 12 s, calculado a partir do que foi carregado."""
     hardware = configuracao.carregar("hardware")
     dados = configuracao.carregar_dicionario("hardware")
 
     por_fase = dados["verde_s"] + hardware.amarelo_s + hardware.all_red_s
-    assert dados["n_fases_prototipo"] * por_fase == 24.0
+    assert dados["n_fases_prototipo"] * por_fase == 12.0
 
 
 def test_bancada_nunca_trunca_verde() -> None:

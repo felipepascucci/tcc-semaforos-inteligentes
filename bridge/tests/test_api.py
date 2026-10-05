@@ -1,10 +1,10 @@
-"""HTTP da ponte — `/health`, `/estado`, `/comandos`."""
+"""HTTP da ponte — `/health`, `/estado`, `/injecao`."""
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from uuid import uuid4
 
 import httpx
 import pytest
@@ -12,7 +12,7 @@ from fastapi import FastAPI
 
 from bridge.api import criar_app
 from bridge.ponte import Ponte
-from bridge.tests.conftest import PortaAusente, PortaRoteirizada, ate, transporte_rapido
+from bridge.tests.conftest import PortaAusente, ate, transporte_rapido
 from bridge.transporte import Transporte
 
 
@@ -20,7 +20,7 @@ from bridge.transporte import Transporte
 async def _cliente(
     transporte: Transporte, **opcoes: float
 ) -> AsyncIterator[tuple[httpx.AsyncClient, Ponte]]:
-    ponte = Ponte(transporte, periodo_ping_s=0.1, **opcoes)
+    ponte = Ponte(transporte, **opcoes)
     app: FastAPI = criar_app(ponte, "simulada")
     async with (
         app.router.lifespan_context(app),
@@ -38,18 +38,6 @@ async def cliente() -> AsyncIterator[httpx.AsyncClient]:
         yield http
 
 
-def _pre(**extra: object) -> dict[str, object]:
-    return {
-        "tipo": "IR_PARA_FASE",
-        "id_semaforo": "PROTO_CRUZ_01",
-        "fase_alvo": 3,
-        "duracao_s": 20.0,
-        "id_veiculo": "VE_1",
-        "motivo": "teste",
-        **extra,
-    }
-
-
 async def test_health_com_o_uno_respondendo(cliente: httpx.AsyncClient) -> None:
     resposta = await cliente.get("/health")
 
@@ -58,70 +46,76 @@ async def test_health_com_o_uno_respondendo(cliente: httpx.AsyncClient) -> None:
     assert corpo["estado"] == "ok"
     assert corpo["porta"] == "simulada"
     assert corpo["conectada"] is True
-    assert corpo["telemetrias_com_dois_verdes"] == 0
+    assert corpo["telemetrias_violando_i1"] == 0
 
 
-async def test_preempcao_devolve_t_atuacao_e_correlacao(cliente: httpx.AsyncClient) -> None:
-    correlacao = str(uuid4())
-    resposta = await cliente.post("/comandos", json=_pre(id_correlacao=correlacao))
+async def test_injecao_devolve_a_decisao(cliente: httpx.AsyncClient) -> None:
+    resposta = await cliente.post("/injecao", json={"rua": 3, "veiculo": "AMBULANCIA"})
 
     assert resposta.status_code == 200
     corpo = resposta.json()
-    assert corpo["linha"] == "PRE,3,20"
-    assert corpo["aceito"] is True
-    assert corpo["resposta"] == "ACK,PRE"
-    assert corpo["t_atuacao"] is not None
-    assert corpo["latencia_serial_ms"] > 0
-    assert corpo["id_correlacao"] == correlacao
+    assert corpo["linha"] == "RUA3,AMBULANCIA"
+    assert corpo["decisao"] == "PREEMP_INI"
+    assert isinstance(corpo["decisao_t_dispositivo_ms"], int)
+    assert corpo["t_decisao"] is not None
+    assert corpo["latencia_ms"] > 0
 
 
-async def test_estado_mostra_telemetria_e_eventos(cliente: httpx.AsyncClient) -> None:
-    await cliente.post("/comandos", json=_pre())
+async def test_estado_mostra_telemetrias_e_eventos(cliente: httpx.AsyncClient) -> None:
+    await cliente.post("/injecao", json={"rua": 3, "veiculo": "AMBULANCIA"})
     corpo = (await cliente.get("/estado")).json()
 
+    assert corpo["telemetria"] == corpo["telemetrias"][-1]
     assert len(corpo["telemetria"]["cores"]) == 4
-    assert "PREEMP_INI" in [ev["tipo"] for ev in corpo["eventos"]]
-
-
-async def test_recusa_do_uno_vem_com_o_motivo(cliente: httpx.AsyncClient) -> None:
-    pedido = {"tipo": "LIBERAR", "id_semaforo": "PROTO_CRUZ_01", "motivo": "teste"}
-    corpo = (await cliente.post("/comandos", json=pedido)).json()
-
-    assert corpo["aceito"] is False
-    assert corpo["motivo_recusa"] == "MODO"
-    assert corpo["t_atuacao"] is None
-
-
-async def test_compensacao_nao_e_enviada(cliente: httpx.AsyncClient) -> None:
-    pedido = _pre(tipo="ESTENDER_VERDE", fase_alvo=2, duracao_s=2.0, id_veiculo=None)
-    resposta = await cliente.post("/comandos", json=pedido)
-
-    assert resposta.status_code == 200
-    assert resposta.json()["linha"] is None
+    eventos = [(ev["tipo"], ev["rua"], ev["veiculo"]) for ev in corpo["eventos"]]
+    assert ("BOOT", None, None) in eventos
+    assert ("PREEMP_INI", 3, "AMBULANCIA") in eventos
 
 
 @pytest.mark.parametrize(
     "pedido",
-    [_pre(fase_alvo=None), _pre(motivo=""), _pre(tipo="DECOLAR")],
-    ids=["sem_fase", "sem_motivo", "tipo_desconhecido"],
+    [{"rua": 0, "veiculo": "AMBULANCIA"}, {"rua": 3, "veiculo": "HELICOPTERO"}, {"rua": 3}],
+    ids=["rua_zero", "tipo_desconhecido", "sem_veiculo"],
 )
 async def test_pedido_invalido_e_422(cliente: httpx.AsyncClient, pedido: dict[str, object]) -> None:
-    assert (await cliente.post("/comandos", json=pedido)).status_code == 422
+    assert (await cliente.post("/injecao", json=pedido)).status_code == 422
 
 
-async def test_sem_porta_health_e_comandos_dao_503() -> None:
+async def test_injecao_bruta_aparece_como_recusa_no_estado(cliente: httpx.AsyncClient) -> None:
+    resposta = await cliente.post("/injecao/bruta", json={"linha": "RUA3,HELICOPTERO"})
+    assert resposta.status_code == 202
+
+    async def recusado() -> bool:
+        corpo = (await cliente.get("/estado")).json()
+        return "RECUSADO" in [ev["tipo"] for ev in corpo["eventos"]]
+
+    for _ in range(100):
+        if await recusado():
+            break
+        await asyncio.sleep(0.01)
+    assert await recusado()
+
+
+async def test_injecao_bruta_so_aceita_ascii_imprimivel(cliente: httpx.AsyncClient) -> None:
+    resposta = await cliente.post("/injecao/bruta", json={"linha": "RUA3\nAMBULANCIA"})
+    assert resposta.status_code == 422
+
+
+async def test_sem_porta_health_e_injecao_dao_503() -> None:
     async with _cliente(PortaAusente(), espera_reconexao_s=0.01) as (cliente, _):
         health = await cliente.get("/health")
         assert health.status_code == 503
         assert health.json()["conectada"] is False
 
-        assert (await cliente.post("/comandos", json=_pre())).status_code == 503
+        pedido = {"rua": 3, "veiculo": "AMBULANCIA"}
+        assert (await cliente.post("/injecao", json=pedido)).status_code == 503
 
 
-async def test_uno_mudo_da_504() -> None:
-    async with _cliente(PortaRoteirizada(), timeout_resposta_s=0.1) as (cliente, ponte):
-        await ate(lambda: ponte.conectada)
-        resposta = await cliente.post("/comandos", json=_pre())
+async def test_fio_do_nodemcu_no_rx_da_504() -> None:
+    transporte = transporte_rapido(fio_do_nodemcu_no_rx=True)
+    async with _cliente(transporte, timeout_decisao_s=0.2) as (cliente, ponte):
+        await ate(ponte.uno_respondendo)
+        resposta = await cliente.post("/injecao", json={"rua": 3, "veiculo": "AMBULANCIA"})
 
         assert resposta.status_code == 504
-        assert resposta.json()["resposta"] is None
+        assert resposta.json()["decisao"] is None

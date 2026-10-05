@@ -20,6 +20,11 @@ O **motor de decisão é único e agnóstico ao mundo**. Ele recebe um estado no
                     └───────────────────┴───────────────┘
 ```
 
+> **Desde 2026-10-05 o lado hardware não recebe comandos do motor.** O protótipo
+> decide localmente no Arduino UNO (§4), e `adapters/hardware/` passou a só
+> **observar** a bancada. O princípio deste parágrafo continua valendo para o
+> motor e para a simulação, que é onde ele é avaliado (`00` §3).
+
 **Consequência prática obrigatória:** nada dentro de `backend/core/priorizacao/` pode importar `traci`, `pyserial`, `sqlalchemy` ou `fastapi`. Se precisar, o desenho está errado. O núcleo é testável com `pytest` puro, sem SUMO instalado e sem hardware ligado.
 
 ## 2. Componentes
@@ -29,9 +34,9 @@ O **motor de decisão é único e agnóstico ao mundo**. Ele recebe um estado no
 | C1 | **Motor de decisão** | Python puro | Detectar, decidir preempção, planejar corredor, compensar |
 | C2 | **API / Orquestrador** | FastAPI + Uvicorn | REST + WebSocket, persistência, coordenação dos adaptadores |
 | C3 | **Adaptador SUMO** | Python + TraCI | Loop de simulação, leitura de estado, aplicação de fases |
-| C4 | **Adaptador Hardware** | Python + pyserial | Traduz comandos para o protocolo serial do Arduino |
-| C5 | **Firmware controlador** | C++ / Arduino UNO R3 | Máquina de estados dos 4 semáforos, executa comandos |
-| C6 | **Firmware V2I** | C++ / NodeMCU ESP8266 | Lê tag RFID, publica detecção via Wi-Fi, atualiza LCD |
+| C4 | **Ponte / Adaptador Hardware** | Python + pyserial | **Só escuta** a telemetria e os eventos do UNO, carimba no relógio do notebook, mede H3 e injeta VEs em teste (`05` §6) |
+| C5 | **Firmware controlador** | C++ / Arduino UNO R3 | Decide a preempção (regra local, `05` §3), máquina de estados dos 4 semáforos com transição segura, LCD |
+| C6 | **Firmware V2I** | C++ / 2 × NodeMCU ESP8266 | Emissor no veículo: lê a tag da rua e envia por ESP-NOW. Receptor no cruzamento: repassa ao UNO pela serial |
 | C7 | **Banco de dados** | PostgreSQL 16 | Persistência de cadastros, logs e métricas |
 | C8 | **Dashboard** | React + Vite + TS | Monitoramento em tempo real e relatórios |
 | C9 | **Pipeline de análise** | Python (pandas, scipy) | Estatística, tabelas e figuras do TCC |
@@ -62,36 +67,44 @@ O loop roda com `--step-length 0.1` (100 ms de tempo simulado por passo). O moto
 
 ## 4. Fluxo end-to-end — modo HARDWARE
 
+Arquitetura **da bancada como está montada** (decisão de 2026-10-05). Detalhes,
+pinagem e protocolo em `05`.
+
 ```
-Tag RFID aproxima do leitor RC522
+Veículo passa sobre a tag da rua (RUA1..RUA4)
   ▼
-NodeMCU lê UID -> POST /api/v1/deteccoes  (Wi-Fi)   [t_deteccao]
+NodeMCU emissor lê o UID, resolve a rua e envia { rua, veiculo } por ESP-NOW
+  │  imprime "Tag <UID> lida -> Enviando RUAn" na própria serial   [t_deteccao, só na medição de H3]
   ▼
-API resolve UID -> veiculo_emergencia (tabela tag_rfid)
+NodeMCU receptor repassa "RUA3,AMBULANCIA" ao RX do UNO (9600)
   ▼
-API consulta ocorrência ativa do veículo (tabela ocorrencia) -> core.autorizacao.autorizar()
-  │  sem ocorrência: resposta "SEM_OCORRENCIA", deteccao.autorizado = false, SEM preempção
-  ▼  com ocorrência: o VE entra no EstadoMalha com a criticidade da ocorrência (P20)
-MotorDecisao.avaliar(...) -> Comando(PREEMPTAR, tls=CRUZ_01, fase=EIXO_A)  [t_decisao]
+Arduino UNO DECIDE (prioridade por tipo, fila de 1) e emite "EV,…,PREEMP_INI,3,AMBULANCIA"  [t_atuacao]
   ▼
-AdaptadorHardware -> serial USB -> "PRE,1,20\n"
+UNO executa a transição segura até o verde exclusivo da Rua 3 e atualiza o LCD
   ▼
-Arduino UNO executa transição segura e responde "ACK,PRE"  [t_atuacao]
-  ▼
-API grava log_prioridade + envia texto ao LCD do NodeMCU
+bridge/ (só escuta, pelo USB) -> backend: log_prioridade, metrica_latencia   (Bloco 6)
   ▼
 Broadcast WebSocket -> Dashboard
 ```
 
-### 4.1 Por que a ponte serial existe
+### 4.1 Por que o NodeMCU fala direto com o UNO
 
-O Arduino UNO R3 **não tem rede**. O NodeMCU tem Wi-Fi mas está do lado do "veículo". Ligar os dois diretamente (serial cruzado, ou ESP como ponte) foi descartado porque:
+A versão anterior deste parágrafo descartava ligar o ESP direto ao Arduino. Era
+o desenho de um protótipo que ainda não existia. A bancada foi montada assim, e
+a equipe decidiu adaptar o sistema a ela em vez de remontá-la. Os três motivos
+da recusa original, revistos:
 
-- perderíamos o ponto de instrumentação de latência no backend;
-- o motor de decisão precisa rodar em um único lugar (§1);
-- o dashboard precisa ver os dois lados.
+- **Ponto de instrumentação de latência.** Resolvido sem backend: o notebook
+  ouve as duas pontas (a serial do emissor e a do UNO) e carimba as duas no
+  mesmo relógio (`05` §4.3). Perde-se o `t_decisao` separado, que não é
+  observável dentro do UNO; RNF01 continua medido na simulação.
+- **Motor num lugar só.** Não se aplica mais: o protótipo não roda o motor
+  (`00` §3). O texto precisa dizer isso explicitamente.
+- **Dashboard vendo os dois lados.** Atendido pela ponte, que ouve o UNO.
 
-Então: **NodeMCU → Wi-Fi → Backend → USB serial → Arduino UNO**. O notebook que roda o backend faz o papel do "controlador de borda" (Edge). Isso é coerente com a narrativa de Edge Computing do pré-projeto e deve ser dito assim no texto: o nó de borda é o processo `bridge`, colocado fisicamente junto ao cruzamento.
+O ganho para o texto é que **a borda é o próprio controlador do cruzamento**: a
+decisão crítica acontece no cruzamento, sem rede e sem notebook. Se a ponte
+cair, o cruzamento continua preemptando.
 
 ## 5. O algoritmo de priorização
 
@@ -371,7 +384,7 @@ prioridade_tipo: [AMBULANCIA, BOMBEIRO, POLICIA]
 > all_red_s:   1.0
 > ```
 >
-> Com 4 fases, o ciclo completo passa a levar `4 × (3 + 2 + 1)` = **24 s**.
+> Com as 2 fases do ciclo da bancada (decisão de 2026-10-05, que revê P13), o ciclo completo leva `2 × (3 + 2 + 1)` = **12 s**. Esses tempos são aplicados pelo **firmware do UNO**, que decide sozinho na bancada (`05` §3); o arquivo é a referência dos valores para o dublê e para a ponte.
 >
 > **Consequência de `verde_s == verde_min_s`:** na bancada a preempção **nunca trunca** um verde — ela sempre aguarda o verde corrente terminar, o que leva no máximo 3 s. Isso simplifica o firmware e é mais fácil de explicar na banca do que um truncamento parcial. O caso de truncamento continua exercitado e testado no perfil de simulação, onde `verde_min_s = 7.0` é menor que a duração base das fases.
 >
@@ -381,14 +394,14 @@ prioridade_tipo: [AMBULANCIA, BOMBEIRO, POLICIA]
 
 Implementar como asserções verificadas a cada passo, em `backend/core/seguranca.py`. Se violada, a ação é **abortar a preempção e retornar ao ciclo fixo** (fail-safe), registrando o incidente.
 
-1. **I1** — Dois grupos de movimentos conflitantes nunca recebem verde simultâneo. A matriz de conflito é **aplicada duas vezes, de forma independente** (decisão P13): o motor não emite comando conflitante, e o firmware recusa com `NAK,<cmd>,CONFLITO` caso receba um. Defesa em profundidade — a segurança não pode depender da serial estar íntegra nem de o backend estar correto. No protótipo, sob *split phasing*, I1 se reduz a `contar_verdes() <= 1`.
+1. **I1** — Dois grupos de movimentos conflitantes nunca recebem verde simultâneo. Na simulação, quem garante é o motor (com verificação a cada passo). **No protótipo** (decisão de 2026-10-05), a matriz de conflito é a dos dois eixos: o principal (S1, S2) conflita com o transversal (S3, S4). Em emergência a regra é mais estrita, e só a aproximação do VE fica verde. Quem garante é o firmware: uma guarda independente da máquina de estados, verificada antes de acender qualquer verde (`05` §3.5).
 2. **I2** — Nenhuma transição verde → vermelho sem amarelo intermediário de `AMARELO_S`.
 3. **I3** — Todo troca de fase é precedida de `ALL_RED_S` com todos os acessos em vermelho.
 4. **I4** — Nenhum verde é truncado antes de `VERDE_MIN`.
 5. **I5** — Nenhum acesso permanece em vermelho por mais de `VERMELHO_MAX_S = 120 s` (starvation).
-6. **I6** — Falha de comunicação com o atuador por mais de `WATCHDOG_S = 3 s` → o firmware retoma o ciclo fixo autonomamente.
+6. **I6** — **Nenhum verde de emergência depende de comunicação para terminar.** Toda emergência acaba sozinha, pela duração do tipo do VE, e o regime de emergência contínuo tem teto de `PREEMP_MAX_MS = 30 s`, depois do qual o firmware volta ao ciclo.
 
-I6 é responsabilidade do firmware, não do backend. Se o cabo USB cair, o Arduino não pode congelar com um verde aceso.
+I6 é responsabilidade do firmware. **Redefinido em 2026-10-05.** A versão anterior era um watchdog (sem comando do notebook por 3 s → ciclo fixo), que fazia sentido quando o notebook comandava o UNO. Na arquitetura da bancada o UNO não recebe comando do notebook, então não há comunicação cuja queda vigiar. A garantia que o watchdog dava — nenhum verde travado — passa a vir do fim por duração e do teto.
 
 ## 7. Contratos de API
 
@@ -461,6 +474,15 @@ desconhecida ou inativa.
 
 A decisão entre os dois casos é de `core/autorizacao.autorizar()`, pura, e a
 tentativa negada é gravada em `deteccao` com `autorizado = false`.
+
+> **A rever no Bloco 6 (decisão de 2026-10-05).** Na bancada nenhum dispositivo
+> chama a API: os NodeMCUs não têm rede, e o UNO decide sozinho. O que chega ao
+> backend são os eventos do UNO pela ponte (`05` §6), com rua e tipo do VE e
+> **sem UID** (o UID é da rua e fica no emissor). O payload abaixo, o
+> `X-Device-Token` e a resposta com `mensagem_lcd` foram desenhados para o NodeMCU
+> chamar a API. O Bloco 6 decide se `POST /deteccoes` vira a rota da ponte ou dá
+> lugar a outra. A autorização de P20 (`core/autorizacao`) continua valendo para
+> a API e para a simulação.
 
 `timestamp_dispositivo` é `millis()` do ESP8266 — sem sincronia com o relógio do servidor. Serve apenas para detectar reordenação e para calcular *deltas* dentro do dispositivo. **A latência oficial é medida com o relógio do servidor.** `sequencia` é um contador monotônico para descartar duplicatas (o RC522 lê a mesma tag várias vezes por segundo).
 

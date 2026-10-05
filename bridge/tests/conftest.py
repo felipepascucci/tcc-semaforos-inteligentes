@@ -4,28 +4,31 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Callable
-from dataclasses import replace
 
-from adapters.configuracao import carregar_dicionario
-from adapters.hardware.simulado import TransporteSimulado, UnoSimulado
+from adapters.hardware.simulado import (
+    LATENCIA_PADRAO_S,
+    TransporteSimulado,
+    UnoSimulado,
+    config_da_bancada,
+)
 from bridge.transporte import ConexaoPerdidaError
-from core.parametros import Parametros
 
-_DADOS = carregar_dicionario("hardware")
-PARAMETROS_BANCADA = Parametros.de_dicionario(_DADOS)
-VERDE_S = float(_DADOS["verde_s"])
-
-#: Watchdog encurtado para os testes não esperarem 3 s de relógio de verdade.
-WATCHDOG_TESTE_S = 0.3
+CONFIG_BANCADA = config_da_bancada()
 
 
-def fabrica_de_uno(watchdog_s: float = WATCHDOG_TESTE_S) -> Callable[[float], UnoSimulado]:
-    parametros = replace(PARAMETROS_BANCADA, watchdog_s=watchdog_s)
-    return lambda t_s: UnoSimulado(parametros, VERDE_S, t_s)
+def fabrica_de_uno() -> Callable[[float], UnoSimulado]:
+    return lambda t_s: UnoSimulado(CONFIG_BANCADA, t_s)
 
 
-def transporte_rapido(**opcoes: float) -> TransporteSimulado:
-    return TransporteSimulado(fabrica_de_uno(), passo_s=0.01, **opcoes)
+def transporte_rapido(
+    *, latencia_s: float = LATENCIA_PADRAO_S, fio_do_nodemcu_no_rx: bool = False
+) -> TransporteSimulado:
+    return TransporteSimulado(
+        fabrica_de_uno(),
+        passo_s=0.01,
+        latencia_s=latencia_s,
+        fio_do_nodemcu_no_rx=fio_do_nodemcu_no_rx,
+    )
 
 
 async def ate(condicao: Callable[[], bool], limite_s: float = 2.0) -> None:
