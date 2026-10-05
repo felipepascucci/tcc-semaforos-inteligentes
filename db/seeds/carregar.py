@@ -85,7 +85,7 @@ def _hash_token(codigo: str, token_dev: str) -> str:
     apresentação (`context/02` §6) — por isso o aviso em stderr.
     """
     # `or None` trata variável definida como string vazia igual a ausente. Sem
-    # isso, um `TOKEN_LEITOR_CRUZ_01=` esquecido no .env viraria o hash da string
+    # isso, um `TOKEN_CTRL_PROTO_01=` esquecido no .env viraria o hash da string
     # vazia — um token válido que qualquer um adivinha.
     token = os.getenv(f"TOKEN_{codigo}") or None
     if token is None:
@@ -133,7 +133,7 @@ def aplicar(sessao: Session, dados: dict[str, Any]) -> dict[str, int]:
         criados["semaforo"] += novo
     # As fases destes 8 vêm do .net.xml no Bloco 3, não daqui.
 
-    # --- cruzamento do protótipo + suas 4 fases (P13) -----------------------
+    # --- cruzamento do protótipo + as 2 fases do ciclo da bancada -----------
     proto = dados["prototipo"]
     cfg_semaforo = proto["semaforo"]
     semaforo_proto, novo = _obter_ou_criar(
@@ -153,7 +153,7 @@ def aplicar(sessao: Session, dados: dict[str, Any]) -> dict[str, int]:
             sessao,
             FaseSemaforo,
             {"fk_semaforo": semaforo_proto.id_semaforo, "indice_fase": fase["indice_fase"]},
-            descricao=f"{fase['descricao']} ({fase['modulo']})",
+            descricao=f"{fase['descricao']} ({fase['modulos']})",
             movimentos=list(fase["movimentos"]),
             duracao_base=int(padrao["duracao_base_s"]),
             verde_min=int(padrao["verde_min_s"]),
@@ -174,7 +174,7 @@ def aplicar(sessao: Session, dados: dict[str, Any]) -> dict[str, int]:
         por_placa[veiculo["placa"]] = instancia
         criados["veiculo"] += novo
 
-    # --- tags RFID (placeholder e INATIVAS até o Bloco 5) -------------------
+    # --- tags RFID (placeholder e INATIVAS; as da bancada são de rua) -------
     for tag in dados["tags"]:
         _, novo = _obter_ou_criar(
             sessao,
@@ -187,12 +187,19 @@ def aplicar(sessao: Session, dados: dict[str, Any]) -> dict[str, int]:
 
     # --- dispositivos de borda ---------------------------------------------
     for dispositivo in dados["dispositivos"]:
+        # O emissor vai no veículo e não tem cruzamento.
+        codigo_semaforo = dispositivo.get("semaforo")
+        fk_semaforo = (
+            None
+            if codigo_semaforo is None
+            else sessao.query(Semaforo).filter_by(codigo_externo=codigo_semaforo).one().id_semaforo
+        )
         _, novo = _obter_ou_criar(
             sessao,
             DispositivoIot,
             {"codigo": dispositivo["codigo"]},
             tipo=dispositivo["tipo"],
-            fk_semaforo=semaforo_proto.id_semaforo,
+            fk_semaforo=fk_semaforo,
             token_hash=_hash_token(dispositivo["codigo"], dispositivo["token_dev"]),
         )
         criados["dispositivo"] += novo
@@ -231,7 +238,7 @@ def main() -> int:
     for tabela, quantidade in criados.items():
         print(f"  {tabela:<16} {quantidade}")
     print("\nlembretes:")
-    print("  - tags estão como PLACEHOLDER e INATIVAS até a leitura real (entrega 5.8)")
+    print("  - tags estão como PLACEHOLDER e INATIVAS; as da bancada são de rua e não entram")
     print("  - fases dos 8 TLS da malha vêm do .net.xml no Bloco 3")
     return 0
 

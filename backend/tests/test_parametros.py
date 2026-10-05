@@ -72,14 +72,19 @@ def test_perfil_hardware_e_sobreposicao_enxuta(
     hardware: dict[str, Any], simulacao: dict[str, Any]
 ) -> None:
     """O perfil de bancada só redefine o que muda; o resto é herdado."""
-    assert set(hardware) < set(simulacao) | {"verde_s", "n_fases_prototipo"}
+    assert set(hardware) < set(simulacao) | {"verde_s", "n_fases_prototipo", "verde_por_tipo_s"}
     assert "raio_deteccao_m" not in hardware
 
 
-def test_ciclo_da_bancada_leva_24_segundos(hardware: dict[str, Any]) -> None:
-    """4 fases x (verde + amarelo + all-red) = 24 s — decisão P13, contrato §7."""
+def test_ciclo_da_bancada_leva_12_segundos(hardware: dict[str, Any]) -> None:
+    """2 fases x (verde + amarelo + all-red) = 12 s — decisão de 2026-10-05, context/05 §3."""
     por_fase = hardware["verde_s"] + hardware["amarelo_s"] + hardware["all_red_s"]
-    assert hardware["n_fases_prototipo"] * por_fase == 24.0
+    assert hardware["n_fases_prototipo"] * por_fase == 12.0
+
+
+def test_verde_do_ve_por_tipo_e_o_do_sketch(hardware: dict[str, Any]) -> None:
+    """As durações que a equipe de hardware já usava (context/05 §3.2)."""
+    assert hardware["verde_por_tipo_s"] == {"AMBULANCIA": 9.0, "BOMBEIRO": 8.0, "POLICIA": 7.0}
 
 
 def test_bancada_nunca_trunca_verde(hardware: dict[str, Any]) -> None:

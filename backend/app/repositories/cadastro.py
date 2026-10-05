@@ -88,6 +88,6 @@ def buscar_veiculo_por_uid(sessao: Session, uid_bruto: str) -> VeiculoEmergencia
 
 
 def buscar_dispositivo_por_codigo(sessao: Session, codigo: str) -> DispositivoIot | None:
-    """Localiza um dispositivo de borda pelo código (ex.: ``LEITOR_CRUZ_01``)."""
+    """Localiza um dispositivo de borda pelo código (ex.: ``CTRL_PROTO_01``)."""
     consulta = select(DispositivoIot).where(DispositivoIot.codigo == codigo)
     return sessao.scalars(consulta).one_or_none()

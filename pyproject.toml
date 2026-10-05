@@ -33,6 +33,9 @@ dev = [
     "testcontainers[postgres]>=4.7",
     "hypothesis>=6.100",
     "types-PyYAML",
+    # Compilador C++ empacotado: roda o núcleo do firmware do UNO no PC, contra o
+    # dublê (tests/firmware/test_firmware_uno.py). Só teste (context/09, 2026-10-05).
+    "ziglang>=0.13",
 ]
 analysis = ["pandas>=2.2", "numpy>=1.26", "scipy>=1.13", "matplotlib>=3.8"]
 hardware = ["pyserial==3.5"]

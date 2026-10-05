@@ -238,20 +238,39 @@ SUMO e de GUI para gravar a demonstração; `bridge/` precisa de acesso a `COM3`
 Ambos usam a `DATABASE_URL` do `.env` e falam com o backend em
 `http://localhost:8000`.
 
-A ponte roda a partir da raiz do repositório e expõe a própria API em
-`http://127.0.0.1:8001` (`/health`, `/estado`, `/comandos`, documentação em
-`/docs`):
+A ponte roda a partir da raiz do repositório, só **escuta** o UNO e expõe a
+própria API em `http://127.0.0.1:8001` (`/health`, `/estado`, `/injecao`,
+documentação em `/docs`):
 
 ```powershell
 .venv\Scripts\python.exe -m bridge.main             # porta do .env (SERIAL_PORT)
 .venv\Scripts\python.exe -m bridge.main --porta COM5
 .venv\Scripts\python.exe -m bridge.main --simulado  # sem bancada: dublê do UNO
+# Medição de H3: o NodeMCU do veículo no USB do notebook (context/05 §4.3)
+.venv\Scripts\python.exe -m bridge.main --porta COM3 --porta-veiculo COM4
 ```
 
-Precisa do extra `hardware` (`pip install -e ".[dev,hardware]"`).
+Precisa do extra `hardware` (`pip install -e ".[dev,hardware]"`). A bancada fala
+a **9600 baud**: confira `SERIAL_BAUDRATE` no `.env`.
 
-Para conferir a ponte de ponta a ponta (~2 min), noutro terminal, logo depois de
-subi-la: `.venv\Scripts\python.exe -m bridge.verificar`.
+Para conferir a ponte de ponta a ponta (~3 min), noutro terminal, logo depois de
+subi-la: `.venv\Scripts\python.exe -m bridge.verificar`. Na placa, com o fio do
+NodeMCU solto do RX do UNO.
+
+## Firmware
+
+`firmware/uno/semaforo/` é o UNO; `firmware/nodemcu/` são os dois NodeMCUs, como
+a equipe de hardware os escreveu (context/05). Para compilar o UNO sem a IDE:
+
+```powershell
+arduino-cli core install arduino:avr
+arduino-cli lib install "LiquidCrystal I2C"
+arduino-cli compile --fqbn arduino:avr:uno firmware/uno/semaforo
+```
+
+Para gravar, solte o fio do NodeMCU do RX (pino 0) do UNO. Os testes de
+`tests/firmware/` compilam o núcleo do firmware para o PC (pacote `ziglang`, do
+extra `dev`) e o comparam com o dublê.
 
 ## Estrutura
 

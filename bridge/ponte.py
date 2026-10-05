@@ -1,17 +1,26 @@
-"""O laço da ponte — entrega 5.7, `context/05` §6.
+"""O laço da ponte — entrega 5.7, refeita para a arquitetura de 2026-10-05.
 
-A ponte é o nó de borda (`context/01` §4.1): mantém a porta serial aberta,
-alimenta o watchdog do UNO, traduz o que o motor decide e devolve, para cada
-comando, o instante em que o semáforo começou a mudar.
+A ponte **só escuta** o UNO (`context/05` §6). Na bancada o RX do UNO é do
+NodeMCU receptor, e o notebook não está no caminho da decisão: ele ouve a
+telemetria e os eventos que o UNO escreve no USB, carimba cada linha no relógio
+do notebook e os entrega ao backend e ao dashboard. Se a ponte cair, o
+cruzamento continua funcionando.
 
-**`t_atuacao` é a chegada do `ACK`** (P14, contrato §10), carimbada pela tarefa
-que lê a porta no momento em que a linha chega, antes de interpretá-la. Medir o
-envio mediria só a velocidade do próprio código.
+A única escrita é a **injeção de teste**: com o fio do NodeMCU solto do RX, a
+ponte escreve a mesma linha que o receptor escreveria (`RUA3,AMBULANCIA`) e
+espera o evento de decisão que o UNO publica para ela. Com o fio ligado, a linha
+se perde, e a injeção volta sem decisão.
 
-O relógio é o do notebook, que é o oficial para a latência. Ele é lido com a
-resolução do `perf_counter` (100 ns) e ancorado no relógio de parede uma vez:
-no Windows o relógio de parede declara resolução de 15,6 ms, grosseira demais
-para um intervalo que se quer abaixo de 200 ms (H3).
+O relógio é o do notebook, lido com a resolução do `perf_counter` (100 ns) e
+ancorado no relógio de parede uma vez: no Windows o relógio de parede declara
+resolução de 15,6 ms, grosseira demais para um intervalo que se quer abaixo de
+200 ms (H3). Cada linha é carimbada na chegada do **primeiro byte**, pelo
+transporte (`LinhaRecebida`).
+
+**Medição de H3** (`context/05` §4.3). Com `transporte_veiculo`, a ponte ouve
+também a serial do NodeMCU emissor, casa cada `Tag … lida -> Enviando RUAn` com
+a decisão do UNO para ela (`bridge/latencia.py`) e entrega as amostras ao
+gravador do CSV.
 """
 
 from __future__ import annotations
@@ -19,37 +28,40 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import time
-from collections import defaultdict, deque
+from collections import deque
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Final
 
 import structlog
 
+from bridge.latencia import (
+    AmostraH3,
+    CasadorH3,
+    DecisaoCarimbada,
+    Desfecho,
+    GravadorCsv,
+    LeituraCarimbada,
+)
 from bridge.protocolo import (
-    Ack,
-    ComandoSerial,
+    EVENTOS_DE_DECISAO,
+    TERMINADOR,
+    Deteccao,
     Evento,
     LinhaInvalidaError,
-    Nak,
-    NomeComando,
     Resposta,
     Telemetria,
     interpretar,
-    ping,
-    traduzir,
+    interpretar_leitura_veiculo,
 )
-from bridge.transporte import ConexaoPerdidaError, Transporte
-from core.comandos import Comando
+from bridge.transporte import ConexaoPerdidaError, LinhaRecebida, Transporte
 
 log = structlog.get_logger(__name__)
 
-#: Contrato §6: PING a cada 1 s, contra um watchdog de 3 s no UNO.
-PERIODO_PING_S: Final = 1.0
-
-#: Quanto esperar o ACK/NAK de um comando. O UNO responde ao ler a linha; um
-#: segundo inteiro sem resposta é porta muda, não UNO lento.
-TIMEOUT_RESPOSTA_S: Final = 1.0
+#: Quanto esperar o evento de decisão de uma injeção. O UNO decide na mesma
+#: iteração em que lê a linha; um segundo inteiro sem resposta é RX tomado pelo
+#: NodeMCU ou UNO calado, não UNO lento.
+TIMEOUT_DECISAO_S: Final = 1.0
 
 #: Intervalo entre tentativas de reabrir a porta.
 ESPERA_RECONEXAO_S: Final = 1.0
@@ -57,7 +69,9 @@ ESPERA_RECONEXAO_S: Final = 1.0
 #: Sem telemetria por este tempo (4 períodos de 2 Hz), o UNO não está respondendo.
 SILENCIO_MAXIMO_S: Final = 2.0
 
-_EVENTOS_GUARDADOS: Final = 50
+#: Quantas telemetrias e eventos a ponte guarda para quem a consulta.
+TELEMETRIAS_GUARDADAS: Final = 200
+EVENTOS_GUARDADOS: Final = 100
 
 
 class Relogio:
@@ -68,53 +82,51 @@ class Relogio:
         self._perf = time.perf_counter()
 
     def agora(self) -> datetime:
-        return self._parede + timedelta(seconds=time.perf_counter() - self._perf)
+        return self.em(time.perf_counter())
+
+    def em(self, perf: float) -> datetime:
+        """O instante de parede de uma leitura de `time.perf_counter()`."""
+        return self._parede + timedelta(seconds=perf - self._perf)
 
 
 @dataclass(frozen=True)
-class ResultadoEnvio:
-    """O que aconteceu com um comando enviado ao UNO.
+class ResultadoInjecao:
+    """O que o UNO fez com uma detecção injetada.
 
     Attributes:
-        linha: A linha enviada, sem terminador; `None` quando o comando do motor
-            não tem tradução no protocolo (ver `protocolo.traduzir`).
-        resposta: `ACK`, `NAK`, ou a telemetria de um `ST?`; `None` se nada
-            chegou no prazo.
+        deteccao: O que foi injetado.
         t_envio: Quando a linha foi entregue à porta.
-        t_resposta: Quando a resposta chegou.
-        id_correlacao: Propagado da detecção até a métrica (`context/03` §4).
+        decisao: O evento de decisão do UNO (`PREEMP_INI`, `RENOVADO`, `FILA`
+            ou `DESCARTADO`); `None` se nada chegou no prazo.
+        t_decisao: Quando o evento chegou.
     """
 
-    linha: str | None
-    resposta: Resposta | None
-    t_envio: datetime | None
-    t_resposta: datetime | None
-    id_correlacao: str | None = None
+    deteccao: Deteccao
+    t_envio: datetime
+    decisao: Evento | None
+    t_decisao: datetime | None
 
     @property
-    def aceito(self) -> bool:
-        return isinstance(self.resposta, Ack)
+    def linha(self) -> str:
+        return self.deteccao.codificar().decode("ascii").rstrip("\n")
 
     @property
-    def t_atuacao(self) -> datetime | None:
-        """A chegada do `ACK` — só existe se o UNO aceitou (P14)."""
-        return self.t_resposta if self.aceito else None
-
-    @property
-    def latencia_serial_ms(self) -> float | None:
-        """Do envio à resposta. É a parcela serial de H3, não H3 inteira."""
-        if self.t_envio is None or self.t_resposta is None:
+    def latencia_ms(self) -> float | None:
+        """Do envio ao evento. Conferência da ponte, não H3 (`context/05` §4.3)."""
+        if self.t_decisao is None:
             return None
-        return (self.t_resposta - self.t_envio).total_seconds() * 1000
+        return (self.t_decisao - self.t_envio).total_seconds() * 1000
 
 
 class Ponte:
-    """Mantém a ligação com o UNO e atende os comandos do backend.
+    """Mantém a escuta do UNO e guarda o que ele disse.
 
     Args:
         transporte: A porta — `TransporteSerial` na bancada, `TransporteSimulado`
             sem ela.
         relogio: Fonte dos carimbos; injetável nos testes.
+        transporte_veiculo: A serial do NodeMCU emissor, só na medição de H3.
+        gravador: Onde as amostras de H3 vão parar; só com `transporte_veiculo`.
     """
 
     def __init__(
@@ -122,43 +134,77 @@ class Ponte:
         transporte: Transporte,
         *,
         relogio: Relogio | None = None,
-        periodo_ping_s: float = PERIODO_PING_S,
-        timeout_resposta_s: float = TIMEOUT_RESPOSTA_S,
+        timeout_decisao_s: float = TIMEOUT_DECISAO_S,
         espera_reconexao_s: float = ESPERA_RECONEXAO_S,
+        transporte_veiculo: Transporte | None = None,
+        gravador: GravadorCsv | None = None,
     ) -> None:
+        if gravador is not None and transporte_veiculo is None:
+            raise ValueError("o gravador de H3 exige a porta do emissor")
         self.transporte = transporte
+        self.transporte_veiculo = transporte_veiculo
+        self.gravador = gravador
         self.relogio = relogio or Relogio()
-        self._periodo_ping_s = periodo_ping_s
-        self._timeout_resposta_s = timeout_resposta_s
+        self._timeout_decisao_s = timeout_decisao_s
         self._espera_reconexao_s = espera_reconexao_s
 
         self.conectada = False
         self.reconexoes = 0
         self.linhas_invalidas = 0
-        self.telemetrias_com_dois_verdes = 0
-        self.ultima_telemetria: Telemetria | None = None
-        self.t_ultima_telemetria: datetime | None = None
-        self.eventos: deque[tuple[datetime, Evento]] = deque(maxlen=_EVENTOS_GUARDADOS)
+        self.telemetrias_violando_i1 = 0
+        self.telemetrias: deque[tuple[datetime, Telemetria]] = deque(maxlen=TELEMETRIAS_GUARDADAS)
+        self.eventos: deque[tuple[datetime, Evento]] = deque(maxlen=EVENTOS_GUARDADOS)
 
-        self._pendentes: defaultdict[
-            NomeComando, deque[asyncio.Future[tuple[Resposta, datetime]]]
-        ] = defaultdict(deque)
+        # Medição de H3: só existe com a porta do emissor.
+        self.emissor_conectado = False
+        self.amostras_h3: list[AmostraH3] = []
+        self.deteccoes_sem_amostra: dict[str, int] = {}
+        self._casador = None if transporte_veiculo is None else CasadorH3()
+
+        self._pendentes: deque[tuple[Deteccao, asyncio.Future[tuple[Evento, datetime]]]] = deque()
         self._trava_escrita = asyncio.Lock()
         self._parar = asyncio.Event()
 
     # -- estado ----------------------------------------------------------------
 
+    @property
+    def ultima_telemetria(self) -> Telemetria | None:
+        return self.telemetrias[-1][1] if self.telemetrias else None
+
+    @property
+    def t_ultima_telemetria(self) -> datetime | None:
+        return self.telemetrias[-1][0] if self.telemetrias else None
+
     def uno_respondendo(self) -> bool:
-        if not self.conectada or self.t_ultima_telemetria is None:
+        ultima = self.t_ultima_telemetria
+        if not self.conectada or ultima is None:
             return False
-        silencio_s = (self.relogio.agora() - self.t_ultima_telemetria).total_seconds()
-        return silencio_s <= SILENCIO_MAXIMO_S
+        return (self.relogio.agora() - ultima).total_seconds() <= SILENCIO_MAXIMO_S
 
     # -- ciclo de vida ---------------------------------------------------------
 
     async def rodar(self) -> None:
-        """Abre a porta e a mantém aberta até `parar()`, reabrindo quando cai."""
+        """Abre a porta e a mantém aberta até `parar()`, reabrindo quando cai.
+
+        Abrir a porta reinicia o UNO (DTR), que volta pelo all-red; fechar não.
+        A porta do emissor, se houver, é mantida à parte: cair uma não derruba
+        a outra.
+        """
         self._parar.clear()
+        emissor = (
+            None
+            if self.transporte_veiculo is None
+            else asyncio.create_task(self._escutar_emissor(self.transporte_veiculo), name="emissor")
+        )
+        try:
+            await self._manter_uno()
+        finally:
+            if emissor is not None:
+                emissor.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await emissor
+
+    async def _manter_uno(self) -> None:
         while not self._parar.is_set():
             try:
                 await self.transporte.abrir()
@@ -183,10 +229,9 @@ class Ponte:
         self._parar.set()
 
     async def _sessao(self) -> None:
-        """Lê e pinga até a porta cair ou alguém pedir para parar."""
+        """Lê até a porta cair ou alguém pedir para parar."""
         tarefas = {
             asyncio.create_task(self._ler(), name="ler"),
-            asyncio.create_task(self._pingar(), name="pingar"),
             asyncio.create_task(self._parar.wait(), name="parar"),
         }
         feitas, pendentes = await asyncio.wait(tarefas, return_when=asyncio.FIRST_COMPLETED)
@@ -209,105 +254,159 @@ class Ponte:
     async def _ler(self) -> None:
         while True:
             linha = await self.transporte.ler_linha()
-            chegada = self.relogio.agora()  # antes de interpretar: é o t_atuacao
+            chegada = self.relogio.em(linha.t_chegada)
             try:
-                resposta = interpretar(linha)
+                resposta = interpretar(linha.dados)
             except LinhaInvalidaError as erro:
                 # Ruído é esperado: o UNO imprime lixo a cada reset.
                 self.linhas_invalidas += 1
-                log.debug("linha_invalida", linha=linha, erro=str(erro))
+                log.debug("linha_invalida", linha=linha.dados, erro=str(erro))
                 continue
             self._despachar(resposta, chegada)
+            if self._casador is not None:
+                if isinstance(resposta, Evento):
+                    decisao = DecisaoCarimbada(chegada, resposta, linha.bytes_em_espera)
+                    self._concluir(self._casador.evento(decisao))
+                # As linhas do UNO chegam em ordem, e a `ST` sai a 2 Hz: cada uma
+                # é a deixa para fechar o que passou da janela.
+                self._concluir(self._casador.expirar(chegada))
 
     def _despachar(self, resposta: Resposta, chegada: datetime) -> None:
-        if isinstance(resposta, Ack | Nak):
-            self._resolver(resposta.comando, resposta, chegada)
-            if isinstance(resposta, Nak):
-                log.warning("nak", comando=resposta.comando, motivo=resposta.motivo)
-        elif isinstance(resposta, Telemetria):
-            self.ultima_telemetria = resposta
-            self.t_ultima_telemetria = chegada
+        if isinstance(resposta, Telemetria):
+            self.telemetrias.append((chegada, resposta))
             if resposta.viola_i1:
-                # Nunca deve acontecer: o firmware recusa dois verdes. Contar é o
+                # Nunca deve acontecer: o firmware tem guarda própria. Contar é o
                 # que permite ao relatório de validação afirmar que deu zero.
-                self.telemetrias_com_dois_verdes += 1
-                log.error("telemetria_com_dois_verdes", telemetria=resposta)
-            self._resolver(NomeComando.CONSULTA, resposta, chegada)
-        else:
-            self.eventos.append((chegada, resposta))
-            log.info("evento_uno", tipo=resposta.tipo, t_dispositivo_ms=resposta.t_dispositivo_ms)
+                self.telemetrias_violando_i1 += 1
+                log.error("telemetria_viola_i1", telemetria=resposta)
+            return
+        self.eventos.append((chegada, resposta))
+        log.info(
+            "evento_uno",
+            tipo=resposta.tipo,
+            rua=resposta.rua,
+            veiculo=resposta.veiculo,
+            t_dispositivo_ms=resposta.t_dispositivo_ms,
+        )
+        if resposta.tipo in EVENTOS_DE_DECISAO:
+            self._resolver(resposta, chegada)
 
-    def _resolver(self, nome: NomeComando, resposta: Resposta, chegada: datetime) -> None:
-        fila = self._pendentes[nome]
-        while fila:
-            futuro = fila.popleft()
-            if not futuro.done():
-                futuro.set_result((resposta, chegada))
+    def _resolver(self, evento: Evento, chegada: datetime) -> None:
+        for indice, (deteccao, futuro) in enumerate(self._pendentes):
+            if (deteccao.rua, deteccao.veiculo) == (evento.rua, evento.veiculo):
+                del self._pendentes[indice]
+                if not futuro.done():
+                    futuro.set_result((evento, chegada))
                 return
 
+    # -- medição de H3 ---------------------------------------------------------
+
+    async def _escutar_emissor(self, transporte: Transporte) -> None:
+        """Ouve o NodeMCU emissor e reabre a porta dele quando cai."""
+        while not self._parar.is_set():
+            try:
+                await transporte.abrir()
+            except ConexaoPerdidaError as erro:
+                log.warning("porta_emissor_indisponivel", erro=str(erro))
+                await self._dormir(self._espera_reconexao_s)
+                continue
+            self.emissor_conectado = True
+            log.info("porta_emissor_aberta")
+            try:
+                while True:
+                    self._ouvir_emissor(await transporte.ler_linha())
+            except ConexaoPerdidaError as erro:
+                log.warning("porta_emissor_perdida", erro=str(erro))
+            finally:
+                self.emissor_conectado = False
+                await transporte.fechar()
+            await self._dormir(self._espera_reconexao_s)
+
+    def _ouvir_emissor(self, linha: LinhaRecebida) -> None:
+        assert self._casador is not None
+        try:
+            leitura = interpretar_leitura_veiculo(linha.dados)
+        except LinhaInvalidaError:
+            # O emissor imprime outras coisas, e lixo a 74880 baud no boot.
+            log.debug("linha_do_emissor_ignorada", linha=linha.dados)
+            return
+        t_deteccao = self.relogio.em(linha.t_chegada)
+        deteccao = LeituraCarimbada(t_deteccao, leitura, linha.bytes_em_espera)
+        log.info("deteccao_do_emissor", uid=leitura.uid, rua=leitura.rua)
+        self._concluir(self._casador.deteccao(deteccao))
+
+    def _concluir(self, desfechos: list[Desfecho]) -> None:
+        for desfecho in desfechos:
+            amostra = desfecho.amostra
+            if amostra is None:
+                # FILA, RENOVADO e DESCARTADO não têm atuação para medir;
+                # SEM_DECISAO é detecção que não chegou ao UNO.
+                tipo = desfecho.tipo
+                self.deteccoes_sem_amostra[tipo] = self.deteccoes_sem_amostra.get(tipo, 0) + 1
+                log.warning("deteccao_sem_amostra_h3", decisao=tipo, rua=desfecho.deteccao.rua)
+                continue
+            self.amostras_h3.append(amostra)
+            log.info(
+                "amostra_h3",
+                latencia_total_ms=round(amostra.latencia_total_ms, 3),
+                rua=amostra.deteccao.rua,
+                n=len(self.amostras_h3),
+            )
+            if self.gravador is not None:
+                try:
+                    self.gravador.gravar(amostra)
+                except OSError as erro:
+                    # A amostra continua em memória; perder o arquivo não pode
+                    # derrubar a escuta.
+                    log.error("csv_h3_nao_gravado", erro=str(erro))
+
     def _falhar_pendentes(self) -> None:
-        for fila in self._pendentes.values():
-            while fila:
-                futuro = fila.popleft()
-                if not futuro.done():
-                    futuro.set_exception(ConexaoPerdidaError("a porta caiu antes da resposta"))
+        while self._pendentes:
+            _, futuro = self._pendentes.popleft()
+            if not futuro.done():
+                futuro.set_exception(ConexaoPerdidaError("a porta caiu antes da decisão"))
 
-    # -- escrita ---------------------------------------------------------------
+    # -- injeção de teste ------------------------------------------------------
 
-    async def _escrever(self, linha: bytes) -> None:
+    async def _escrever(self, linha: bytes) -> datetime:
+        if not self.conectada:
+            raise ConexaoPerdidaError("porta serial não está aberta")
         async with self._trava_escrita:
+            t_envio = self.relogio.agora()
             await self.transporte.escrever(linha)
+        return t_envio
 
-    async def _pingar(self) -> None:
-        # O ACK do PING não é esperado por ninguém: o PING existe para o UNO,
-        # não para a ponte, que sabe que ele está vivo pela telemetria.
-        while True:
-            await self._escrever(ping().codificar())
-            await asyncio.sleep(self._periodo_ping_s)
+    async def injetar(self, deteccao: Deteccao) -> ResultadoInjecao:
+        """Escreve a detecção no RX do UNO e espera a decisão dele.
 
-    async def enviar(self, comando: Comando, id_correlacao: str | None = None) -> ResultadoEnvio:
-        """Traduz o comando do motor e o envia.
+        Só funciona com o fio do NodeMCU solto do RX (`context/05` §1).
 
         Raises:
-            ConexaoPerdidaError: a porta não está aberta, ou caiu antes da
-                resposta.
-            ComandoInvalidoError: o comando não forma linha válida.
-        """
-        serial = traduzir(comando)
-        if serial is None:
-            return ResultadoEnvio(None, None, None, None, id_correlacao)
-        return await self.enviar_serial(serial, id_correlacao)
-
-    async def enviar_serial(
-        self, comando: ComandoSerial, id_correlacao: str | None = None
-    ) -> ResultadoEnvio:
-        """Envia uma linha do protocolo e espera a resposta correspondente.
-
-        Raises:
-            ConexaoPerdidaError: a porta não está aberta, ou caiu antes da
-                resposta.
+            ConexaoPerdidaError: a porta não está aberta, ou caiu antes da decisão.
         """
         if not self.conectada:
             raise ConexaoPerdidaError("porta serial não está aberta")
-        linha = comando.codificar()
-        futuro: asyncio.Future[tuple[Resposta, datetime]] = (
-            asyncio.get_running_loop().create_future()
-        )
-        # Registrado ANTES de escrever: um ACK rápido não pode chegar antes de
-        # haver quem o espere.
-        self._pendentes[comando.nome].append(futuro)
-        t_envio = self.relogio.agora()
+        futuro: asyncio.Future[tuple[Evento, datetime]] = asyncio.get_running_loop().create_future()
+        # Registrado ANTES de escrever: a decisão pode chegar antes de haver
+        # quem a espere.
+        pendente = (deteccao, futuro)
+        self._pendentes.append(pendente)
         try:
-            await self._escrever(linha)
-            resposta, t_resposta = await asyncio.wait_for(futuro, self._timeout_resposta_s)
+            t_envio = await self._escrever(deteccao.codificar())
+            evento, t_decisao = await asyncio.wait_for(futuro, self._timeout_decisao_s)
         except TimeoutError:
-            log.warning("sem_resposta", linha=linha)
-            return ResultadoEnvio(_texto(linha), None, t_envio, None, id_correlacao)
+            log.warning("sem_decisao", deteccao=deteccao)
+            return ResultadoInjecao(deteccao, t_envio, None, None)
         finally:
             with contextlib.suppress(ValueError):
-                self._pendentes[comando.nome].remove(futuro)
-        return ResultadoEnvio(_texto(linha), resposta, t_envio, t_resposta, id_correlacao)
+                self._pendentes.remove(pendente)
+        return ResultadoInjecao(deteccao, t_envio, evento, t_decisao)
 
+    async def injetar_bruta(self, texto: str) -> datetime:
+        """Escreve uma linha qualquer no RX — para conferir o `EV,RECUSADO`.
 
-def _texto(linha: bytes) -> str:
-    return linha.decode("ascii").rstrip("\n")
+        Raises:
+            ConexaoPerdidaError: a porta não está aberta.
+            UnicodeEncodeError: o texto não é ASCII.
+        """
+        return await self._escrever(texto.encode("ascii") + TERMINADOR)

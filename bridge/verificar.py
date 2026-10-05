@@ -1,23 +1,25 @@
-"""Verificação da ponte de ponta a ponta, pelo HTTP — com o dublê ou com a bancada.
+"""Roteiro de aceitação da bancada, pelo HTTP da ponte — com o dublê ou com a placa.
 
-Dirige a ponte como o backend vai dirigir (`POST /comandos`), acompanha o UNO
-por `GET /estado` e confere o comportamento de referência de `context/05` §6 e
-§8. O mesmo roteiro serve aos dois lados do cabo::
+Injeta VEs pela ponte (`POST /injecao`), acompanha o UNO por `GET /estado` e
+confere o comportamento de `context/05` §3 e §4. O mesmo roteiro serve aos dois
+lados do cabo::
 
     python -m bridge.main --simulado        # ou --porta COM3, com a placa
     python -m bridge.verificar              # noutro terminal, logo em seguida
 
-Leva cerca de dois minutos, quase todos esperando o relógio do semáforo: o ciclo
-fixo é de 24 s e o timeout da preempção, de 30 s.
+**Na bancada, solte o fio do NodeMCU do RX (pino 0) do UNO antes**: com ele
+ligado, o que a ponte escreve não chega ao UNO (`context/05` §1), e toda
+injeção volta sem decisão.
 
-**Isto não mede H3.** As latências que aparecem aqui são uma conferência de que
-o `t_atuacao` existe e vem depois do envio. Com o dublê, a latência é uma
-constante digitada. Na bancada, a medição de H3 segue o checklist (`context/06`).
+Leva cerca de três minutos, quase todos esperando o relógio do semáforo: o ciclo
+é de 12 s, o verde de um VE dura até 9 s e o teto da emergência é de 30 s.
 
-O que o HTTP não alcança fica de fora, e é dito no fim: watchdog, reconexão,
-`SAFE` e modo de teste não têm `Comando` do motor que os acione. Eles são
-cobertos por `backend/tests/adapters/test_hardware_simulado.py` e
-`bridge/tests/test_ponte.py` e, na bancada, pelo checklist (puxar o cabo).
+As durações são conferidas no `millis()` do UNO, que vem em cada linha: é exato
+dentro da placa, e não depende de quando a ponte foi consultada.
+
+**Isto não mede H3.** A latência que aparece aqui vai do envio pela ponte à
+decisão do UNO, e com o dublê é uma constante digitada. H3 vai da leitura da tag
+no veículo à decisão, e segue o procedimento de `context/05` §4.3.
 """
 
 from __future__ import annotations
@@ -31,20 +33,20 @@ import urllib.error
 import urllib.request
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
-from datetime import datetime
 from typing import Any
 
-CRUZ = "PROTO_CRUZ_01"
-N_FASES = 4
+# Perfil da bancada (parametros.hardware.yaml) — o que o roteiro espera ver.
+VERDE_MS, VERDE_MIN_MS, AMARELO_MS, ALL_RED_MS = 3000, 3000, 2000, 1000
+CICLO_MS = 2 * (VERDE_MS + AMARELO_MS + ALL_RED_MS)
+PIOR_CASO_MS = VERDE_MIN_MS + AMARELO_MS + ALL_RED_MS
+TETO_MS = 30_000
+VERDE_DO_TIPO_MS = {"AMBULANCIA": 9000, "BOMBEIRO": 8000, "POLICIA": 7000}
 
-# Perfil de bancada (parametros.hardware.yaml) — o que o roteiro espera ver.
-VERDE_S, AMARELO_S, ALL_RED_S = 3.0, 2.0, 1.0
-CICLO_S = N_FASES * (VERDE_S + AMARELO_S + ALL_RED_S)
-PIOR_CASO_S = VERDE_S + AMARELO_S + ALL_RED_S
-TIMEOUT_PREEMPCAO_S = 30.0
+#: Folga nas durações medidas no `millis()` do UNO: uma volta do `loop()`.
+FOLGA_MS = 60
 
-#: A telemetria chega a 2 Hz: um instante observado pode estar até 0,5 s atrasado.
-FOLGA_S = 0.6
+PRINCIPAL, TRANSVERSAL = "GGRR", "RRGG"
+_EIXO = (0, 0, 1, 1)
 
 
 # ---------------------------------------------------------------------------
@@ -52,38 +54,73 @@ FOLGA_S = 0.6
 # ---------------------------------------------------------------------------
 
 
-def violacoes(sequencia: Sequence[str]) -> list[str]:
-    """I1, I2 e I3 sobre uma sequência de estados `S1S2S3S4`, como na linha `ST`.
+def transicoes(sequencia: Sequence[tuple[int, str]]) -> list[tuple[int, str]]:
+    """Só as mudanças de luz, cada uma com o `millis()` em que aconteceu."""
+    saida: list[tuple[int, str]] = []
+    for ms, estado in sequencia:
+        if not saida or saida[-1][1] != estado:
+            saida.append((ms, estado))
+    return saida
 
-    Pressupõe amostragem mais fina que o amarelo e o all-red — a 2 Hz, com 2 s e
-    1 s, cada um aparece em pelo menos duas amostras. Estados de modo de teste
-    não devem entrar: o teste garante I1, não I2 e I3.
+
+def violacoes(
+    sequencia: Sequence[tuple[int, str]],
+    *,
+    verde_min_ms: int = VERDE_MIN_MS,
+    amarelo_ms: int = AMARELO_MS,
+    all_red_ms: int = ALL_RED_MS,
+    folga_ms: int = 0,
+) -> list[str]:
+    """I1 a I4 sobre uma sequência de `(ms, S1S2S3S4)`, como nas linhas `ST`.
+
+    Pressupõe que a sequência traz toda mudança de luz, que é o que a `ST` a
+    cada mudança de estado garante (`context/05` §4.2).
 
     Returns:
         Uma descrição por violação; vazia quando nada foi violado.
     """
     achados: list[str] = []
-    for i, estado in enumerate(sequencia):
-        if estado.count("G") > 1:
-            achados.append(f"I1: dois verdes na amostra {i}: {estado}")
-        if i == 0:
+    passos = transicoes(sequencia)
+    desde: dict[int, int] = {}  # aproximação -> ms em que a cor atual acendeu
+    vermelho_geral_desde: int | None = None
+    for indice, (ms, estado) in enumerate(passos):
+        eixos = {_EIXO[i] for i, cor in enumerate(estado) if cor == "G"}
+        if len(eixos) > 1:
+            achados.append(f"I1: verde nos dois eixos em {ms} ms: {estado}")
+        if indice == 0:
+            if estado == "RRRR":
+                vermelho_geral_desde = ms
             continue
-        antes = sequencia[i - 1]
-        for modulo, (a, d) in enumerate(zip(antes, estado, strict=True)):
+        antes = passos[indice - 1][1]
+        for i, (a, d) in enumerate(zip(antes, estado, strict=True)):
+            if a == d:
+                continue
+            duracao = None if i not in desde else ms - desde[i]
             if a == "G" and d == "R":
-                achados.append(f"I2: S{modulo + 1} verde -> vermelho na amostra {i}")
-            if d == "G" and a != "G" and antes != "RRRR":
-                achados.append(f"I3: S{modulo + 1} abriu sem all-red na amostra {i}: {antes}")
+                achados.append(f"I2: S{i + 1} verde -> vermelho em {ms} ms")
+            if a == "Y" and d == "G":
+                achados.append(f"amarelo -> verde: S{i + 1} em {ms} ms")
+            if a == "G" and d == "Y" and duracao is not None and duracao < verde_min_ms - folga_ms:
+                achados.append(f"I4: verde de S{i + 1} durou {duracao} ms")
+            if a == "Y" and d == "R" and duracao is not None and duracao < amarelo_ms - folga_ms:
+                achados.append(f"I2: amarelo de S{i + 1} durou {duracao} ms")
+            if d == "G":
+                limpo = (
+                    antes == "RRRR"
+                    and vermelho_geral_desde is not None
+                    and ms - vermelho_geral_desde >= all_red_ms - folga_ms
+                )
+                if not limpo:
+                    achados.append(f"I3: S{i + 1} abriu sem all-red em {ms} ms (antes {antes})")
+            desde[i] = ms
+        if estado == "RRRR" and antes != "RRRR":
+            vermelho_geral_desde = ms
     return achados
 
 
 # ---------------------------------------------------------------------------
 # Acesso à ponte
 # ---------------------------------------------------------------------------
-
-
-def _instante(texto: str) -> float:
-    return datetime.fromisoformat(texto).timestamp()
 
 
 class Ponte:
@@ -112,29 +149,42 @@ class Ponte:
     def estado(self) -> Any:
         return self._pedir("GET", "/estado")[1]
 
-    def comando(self, tipo: str, **campos: Any) -> tuple[int, Any]:
-        corpo = {"tipo": tipo, "id_semaforo": CRUZ, "motivo": "verificar.py", **campos}
-        return self._pedir("POST", "/comandos", corpo)
+    def injetar(self, rua: int, veiculo: str) -> tuple[int, Any]:
+        return self._pedir("POST", "/injecao", {"rua": rua, "veiculo": veiculo})
+
+    def injetar_bruta(self, linha: str) -> tuple[int, Any]:
+        return self._pedir("POST", "/injecao/bruta", {"linha": linha})
 
 
-@dataclass
+@dataclass(frozen=True)
 class Amostra:
-    recebida_em: float
-    t_dispositivo_ms: int
-    fase: int
+    ms: int
     cores: str
-    em_preempcao: bool
-    em_teste: bool
+    regime: str
+    rua_ativa: int | None
+    rua_fila: int | None
+
+
+@dataclass(frozen=True)
+class Ev:
+    ms: int
+    tipo: str
+    rua: int | None
+    veiculo: str | None
 
 
 @dataclass
 class Observador:
-    """Lê `/estado` a 10 Hz numa thread e guarda cada telemetria e evento novo."""
+    """Lê `/estado` a 5 Hz numa thread e guarda cada telemetria e evento novo.
+
+    A ponte guarda as últimas telemetrias, e a `ST` sai a cada mudança de estado;
+    lendo o histórico, nenhuma transição se perde entre duas consultas.
+    """
 
     ponte: Ponte
     amostras: list[Amostra] = field(default_factory=list)
-    eventos: list[tuple[float, str]] = field(default_factory=list)
-    _vistos: set[tuple[str, int, str]] = field(default_factory=set)
+    eventos: list[Ev] = field(default_factory=list)
+    _vistos: set[tuple[Any, ...]] = field(default_factory=set)
     _trava: threading.Lock = field(default_factory=threading.Lock)
     _parar: threading.Event = field(default_factory=threading.Event)
 
@@ -145,71 +195,93 @@ class Observador:
         self._parar.set()
 
     def _laco(self) -> None:
-        ultima_ms: int | None = None
         while not self._parar.is_set():
             try:
                 estado = self.ponte.estado()
             except OSError:
-                time.sleep(0.1)
+                time.sleep(0.2)
                 continue
-            telemetria = estado.get("telemetria")
             with self._trava:
-                if telemetria and telemetria["t_dispositivo_ms"] != ultima_ms:
-                    ultima_ms = telemetria["t_dispositivo_ms"]
-                    self.amostras.append(Amostra(_instante(estado["recebida_em"]), **telemetria))
-                for evento in estado["eventos"]:
-                    chave = (evento["recebido_em"], evento["t_dispositivo_ms"], evento["tipo"])
+                for st in estado["telemetrias"]:
+                    chave = ("ST", st["recebida_em"], st["t_dispositivo_ms"])
                     if chave not in self._vistos:
                         self._vistos.add(chave)
-                        self.eventos.append((_instante(evento["recebido_em"]), evento["tipo"]))
-            time.sleep(0.1)
+                        self.amostras.append(
+                            Amostra(
+                                st["t_dispositivo_ms"],
+                                st["cores"],
+                                st["regime"],
+                                st["rua_ativa"],
+                                st["rua_fila"],
+                            )
+                        )
+                for ev in estado["eventos"]:
+                    chave = ("EV", ev["recebido_em"], ev["t_dispositivo_ms"], ev["tipo"], ev["rua"])
+                    if chave not in self._vistos:
+                        self._vistos.add(chave)
+                        self.eventos.append(
+                            Ev(ev["t_dispositivo_ms"], ev["tipo"], ev["rua"], ev["veiculo"])
+                        )
+            time.sleep(0.2)
 
-    def ultima(self) -> Amostra | None:
+    def copia(self) -> tuple[list[Amostra], list[Ev]]:
         with self._trava:
-            return self.amostras[-1] if self.amostras else None
+            return list(self.amostras), list(self.eventos)
 
-    def desde(self, t: float) -> list[Amostra]:
-        with self._trava:
-            return [a for a in self.amostras if a.recebida_em >= t]
+    def agora_ms(self) -> int:
+        amostras, _ = self.copia()
+        return amostras[-1].ms if amostras else 0
 
-    def eventos_desde(self, t: float, tipo: str) -> list[float]:
-        with self._trava:
-            return [quando for quando, nome in self.eventos if quando >= t and nome == tipo]
-
-    def esperar(self, condicao: Callable[[Amostra], bool], limite_s: float) -> Amostra | None:
+    def esperar(self, condicao: Callable[[], Any], limite_s: float) -> Any:
         fim = time.monotonic() + limite_s
-        visto = len(self.amostras)
         while time.monotonic() < fim:
-            with self._trava:
-                novas = self.amostras[visto:]
-                visto = len(self.amostras)
-            for amostra in novas:
-                if condicao(amostra):
-                    return amostra
+            resultado = condicao()
+            if resultado:
+                return resultado
             time.sleep(0.05)
         return None
 
-    def esperar_evento(self, desde: float, tipo: str, limite_s: float) -> float | None:
-        fim = time.monotonic() + limite_s
-        while time.monotonic() < fim:
-            encontrados = self.eventos_desde(desde, tipo)
-            if encontrados:
-                return encontrados[0]
-            time.sleep(0.05)
+    def evento(self, tipo: str, desde_ms: int, rua: int | None = None) -> Ev | None:
+        _, eventos = self.copia()
+        for ev in eventos:
+            if ev.tipo == tipo and ev.ms >= desde_ms and (rua is None or ev.rua == rua):
+                return ev
         return None
 
+    def esperar_evento(
+        self, tipo: str, desde_ms: int, limite_s: float, rua: int | None = None
+    ) -> Ev | None:
+        resultado: Ev | None = self.esperar(lambda: self.evento(tipo, desde_ms, rua), limite_s)
+        return resultado
 
-def _seg(valor: float | None) -> str:
-    return "nunca" if valor is None else f"{valor:.1f} s"
+    def primeira(self, condicao: Callable[[Amostra], bool], desde_ms: int) -> Amostra | None:
+        amostras, _ = self.copia()
+        return next((a for a in amostras if a.ms >= desde_ms and condicao(a)), None)
+
+    def esperar_amostra(
+        self, condicao: Callable[[Amostra], bool], desde_ms: int, limite_s: float
+    ) -> Amostra | None:
+        resultado: Amostra | None = self.esperar(
+            lambda: self.primeira(condicao, desde_ms), limite_s
+        )
+        return resultado
+
+    def entre(self, inicio_ms: int, fim_ms: int) -> list[Amostra]:
+        amostras, _ = self.copia()
+        return [a for a in amostras if inicio_ms <= a.ms <= fim_ms]
 
 
-def _verde(fase: int) -> Callable[[Amostra], bool]:
-    return lambda a: a.cores[fase - 1] == "G"
+def _exclusivo(rua: int) -> Callable[[Amostra], bool]:
+    alvo = "".join("G" if i == rua - 1 else "R" for i in range(4))
+    return lambda a: a.cores == alvo
 
 
-def _duas_a_frente(fase: int) -> int:
-    """Uma fase que **não** é a próxima do ciclo — senão o ciclo chegaria lá sozinho."""
-    return (fase + 1) % N_FASES + 1
+def _proximo(duracao: int | None, esperado: int) -> bool:
+    return duracao is not None and abs(duracao - esperado) <= FOLGA_MS
+
+
+def _ms(valor: int | None) -> str:
+    return "nunca" if valor is None else f"{valor} ms"
 
 
 # ---------------------------------------------------------------------------
@@ -235,29 +307,37 @@ class Roteiro:
         marca = {True: "ok  ", False: "FALHA", None: "n/o "}[ok]
         print(f"[{marca}] {nome} — {detalhe}", flush=True)
 
-    def _inicio_de_verde(self, limite_s: float = CICLO_S + 2) -> Amostra:
-        """Espera um verde que acabou de abrir (a amostra anterior era all-red)."""
-        anterior = self.obs.ultima()
-        fim = time.monotonic() + limite_s
-        while time.monotonic() < fim:
-            atual = self.obs.ultima()
-            if (
-                atual is not None
-                and anterior is not None
-                and atual is not anterior
-                and "G" in atual.cores
-                and anterior.cores == "RRRR"
-                and not atual.em_preempcao
-            ):
-                return atual
-            anterior = atual
-            time.sleep(0.05)
-        raise RuntimeError("nenhum verde abriu no tempo de um ciclo")
+    def _injetar(self, rua: int, veiculo: str) -> Ev:
+        """Injeta e devolve o evento de decisão do UNO, com o `millis()` dele."""
+        status, corpo = self.ponte.injetar(rua, veiculo)
+        if status != 200:
+            raise RuntimeError(
+                f"injeção RUA{rua},{veiculo} sem decisão (HTTP {status}). "
+                "O fio do NodeMCU está solto do RX do UNO?"
+            )
+        return Ev(corpo["decisao_t_dispositivo_ms"], corpo["decisao"], rua, veiculo)
+
+    def _abertura(self, estado: str, limite_s: float = CICLO_MS / 1000 + 3) -> Amostra:
+        """Espera o eixo `estado` abrir no ciclo e devolve a amostra da abertura."""
+        inicio = self.obs.agora_ms()
+        amostra = self.obs.esperar_amostra(
+            lambda a: a.cores == estado and a.regime == "C", inicio + 1, limite_s
+        )
+        if amostra is None:
+            raise RuntimeError(f"{estado} não abriu em {limite_s:.0f} s")
+        # Só vale a abertura propriamente dita: a amostra anterior era all-red.
+        anteriores = self.obs.entre(inicio, amostra.ms - 1)
+        if anteriores and anteriores[-1].cores != "RRRR":
+            return self._abertura(estado, limite_s)
+        return amostra
 
     def _ciclo_ocioso(self) -> None:
-        """Garante que nenhuma preempção ficou de um passo anterior."""
-        if not self.obs.esperar(lambda a: not a.em_preempcao, limite_s=TIMEOUT_PREEMPCAO_S + 5):
-            raise RuntimeError("a preempção anterior não terminou")
+        def em_ciclo() -> bool:
+            amostras, _ = self.obs.copia()
+            return bool(amostras) and amostras[-1].regime == "C"
+
+        if not self.obs.esperar(em_ciclo, limite_s=TETO_MS / 1000 + 10):
+            raise RuntimeError("a emergência anterior não terminou")
 
     # -- passos ----------------------------------------------------------------
 
@@ -270,207 +350,213 @@ class Roteiro:
         )
 
     def boot_em_all_red(self) -> None:
-        primeiras = [a for a in self.obs.amostras if a.t_dispositivo_ms < 1000]
-        if not primeiras:
+        amostras, eventos = self.obs.copia()
+        primeiras = [a for a in amostras if a.ms < ALL_RED_MS]
+        if not primeiras or not any(ev.tipo == "BOOT" for ev in eventos):
             self.registrar(
                 "liga em all-red",
                 None,
                 "a ponte já estava no ar; rode o verificador logo depois de subir a ponte",
             )
             return
+        abertura = next((a for a in amostras if "G" in a.cores), None)
         self.registrar(
-            "liga em all-red",
-            all(a.cores == "RRRR" for a in primeiras),
-            "primeiros 1000 ms da placa: " + " ".join(a.cores for a in primeiras),
+            "liga em all-red e só então abre o eixo principal",
+            all(a.cores == "RRRR" for a in primeiras)
+            and abertura is not None
+            and abertura.cores == PRINCIPAL
+            and _proximo(abertura.ms, ALL_RED_MS),
+            "primeiro verde: "
+            + ("-" if abertura is None else f"{abertura.cores} em {abertura.ms} ms"),
         )
 
-    def ciclo_fixo(self) -> None:
-        aberturas: list[tuple[int, float]] = []
-        primeiro = self._inicio_de_verde()
-        aberturas.append((primeiro.cores.index("G") + 1, primeiro.recebida_em))
-        while len(aberturas) <= N_FASES:
-            atual = self._inicio_de_verde(limite_s=PIOR_CASO_S + 2)
-            aberturas.append((atual.cores.index("G") + 1, atual.recebida_em))
-        ordem = [fase for fase, _ in aberturas]
-        esperado = [(ordem[0] + i - 1) % N_FASES + 1 for i in range(N_FASES + 1)]
-        duracao = aberturas[-1][1] - aberturas[0][1]
+    def ciclo(self) -> None:
+        primeira = self._abertura(PRINCIPAL)
+        transversal = self._abertura(TRANSVERSAL)
+        segunda = self._abertura(PRINCIPAL)
+        meio = transversal.ms - primeira.ms
+        volta = segunda.ms - primeira.ms
         self.registrar(
-            "ciclo fixo, uma fase por vez",
-            ordem == esperado and abs(duracao - CICLO_S) <= FOLGA_S * 2,
-            f"ordem {ordem}, ciclo de {duracao:.1f} s (esperado {CICLO_S:.0f} s)",
+            "ciclo de 2 fases, eixos alternando",
+            _proximo(meio, CICLO_MS // 2) and _proximo(volta, CICLO_MS),
+            f"principal -> transversal {meio} ms, ciclo {volta} ms (esperado {CICLO_MS} ms)",
         )
 
-    def recusas(self) -> None:
-        status, corpo = self.ponte.comando("LIBERAR")
-        self.registrar(
-            "CLR sem preempção é recusado",
-            corpo.get("motivo_recusa") == "MODO" and corpo["t_atuacao"] is None,
-            f"HTTP {status}, resposta {corpo.get('resposta')}",
-        )
-        status, corpo = self.ponte.comando(
-            "IR_PARA_FASE", fase_alvo=5, duracao_s=20, id_veiculo="VE_VERIFICA"
-        )
-        self.registrar(
-            "fase fora da bancada é recusada pelo UNO",
-            corpo.get("motivo_recusa") == "FASE_INVALIDA",
-            f"HTTP {status}, linha {corpo.get('linha')}, resposta {corpo.get('resposta')}",
-        )
-        status, corpo = self.ponte.comando("ESTENDER_VERDE", fase_alvo=2, duracao_s=2)
-        self.registrar(
-            "extensão de compensação não sai pela serial",
-            status == 200 and corpo["linha"] is None,
-            f"HTTP {status}, linha {corpo['linha']}",
-        )
-
-    def pre_em_verde_e_fim_por_dur_s(self) -> None:
+    def ve_em_outro_eixo(self) -> None:
+        """Contexto/05 §4.2, o exemplo: VE na Rua 3 com o eixo principal verde."""
         self._ciclo_ocioso()
-        verde = self._inicio_de_verde()
-        corrente = verde.cores.index("G") + 1
-        alvo = _duas_a_frente(corrente)
-        proxima = corrente % N_FASES + 1
-        _, corpo = self.ponte.comando(
-            "IR_PARA_FASE", fase_alvo=alvo, duracao_s=12, id_veiculo="VE_VERIFICA"
-        )
-        t_atuacao = _instante(corpo["t_atuacao"]) if corpo["t_atuacao"] else None
-        self.registrar(
-            "PRE aceito, com t_atuacao",
-            corpo["aceito"] and t_atuacao is not None,
-            f"{corpo['linha']} -> {corpo['resposta']}, "
-            f"envio->ACK {corpo['latencia_serial_ms']:.1f} ms (conferência, não H3)",
-        )
-        if t_atuacao is None:
+        abertura = self._abertura(PRINCIPAL)
+        decisao = self._injetar(3, "AMBULANCIA")
+        if decisao is None or decisao.tipo != "PREEMP_INI":
+            self.registrar("VE em outro eixo é atendido", False, f"decisão: {decisao}")
             return
-
-        aberto = self.obs.esperar(_verde(alvo), limite_s=PIOR_CASO_S + 3)
-        espera = None if aberto is None else aberto.recebida_em - t_atuacao
-        no_meio = [a.cores for a in self.obs.desde(t_atuacao) if a.cores[proxima - 1] == "G"]
+        verde = self.obs.esperar_amostra(_exclusivo(3), decisao.ms, PIOR_CASO_MS / 1000 + 2)
+        espera = None if verde is None else verde.ms - decisao.ms
+        pelo_meio = [a.cores for a in self.obs.entre(decisao.ms, verde.ms if verde else decisao.ms)]
         self.registrar(
-            "PRE em verde: alvo abre em até 6 s, sem passar pela fase seguinte",
-            espera is not None and espera <= PIOR_CASO_S + FOLGA_S and not no_meio,
-            f"fase {corrente} -> {alvo} em {_seg(espera)}"
-            f"{', fase ' + str(proxima) + ' abriu no meio' if no_meio else ''}",
+            "VE em outro eixo: verde exclusivo em até 6 s, sem abrir o eixo transversal",
+            espera is not None
+            and espera <= PIOR_CASO_MS + FOLGA_MS
+            and not any(c[3] == "G" for c in pelo_meio),
+            f"eixo principal verde desde {abertura.ms} ms; Rua 3 exclusiva {_ms(espera)} "
+            "depois da decisão",
         )
-        self.registrar(
-            "telemetria marca preempção no verde alvo",
-            aberto is not None and aberto.em_preempcao,
-            f"ST: {aberto.cores if aberto else '-'}, "
-            f"preemp={aberto.em_preempcao if aberto else '-'}",
-        )
-
-        fim = self.obs.esperar_evento(t_atuacao, "PREEMP_FIM", limite_s=20)
-        duracao = None if fim is None else fim - t_atuacao
-        depois = self.obs.esperar(_verde(alvo % N_FASES + 1), limite_s=PIOR_CASO_S + 3)
-        self.registrar(
-            "preempção termina sozinha quando dur_s esgota",
-            duracao is not None and abs(duracao - 12) <= FOLGA_S and depois is not None,
-            f"PREEMP_FIM {_seg(duracao)} após o ACK "
-            f"(pedido: 12 s); depois abriu a fase {alvo % N_FASES + 1}",
-        )
-
-    def pre_em_amarelo_e_clr(self) -> None:
-        self._ciclo_ocioso()
-        amarela = self.obs.esperar(lambda a: "Y" in a.cores, limite_s=CICLO_S)
-        if amarela is None:
-            self.registrar("PRE em amarelo", False, "nenhum amarelo observado")
+        if verde is None:
             return
-        corrente = amarela.cores.index("Y") + 1
-        alvo = _duas_a_frente(corrente)
-        proxima = corrente % N_FASES + 1
-        _, corpo = self.ponte.comando(
-            "IR_PARA_FASE", fase_alvo=alvo, duracao_s=20, id_veiculo="VE_VERIFICA"
-        )
-        t_atuacao = _instante(corpo["t_atuacao"])
-        aberto = self.obs.esperar(_verde(alvo), limite_s=AMARELO_S + ALL_RED_S + 3)
-        espera = None if aberto is None else aberto.recebida_em - t_atuacao
-        no_meio = [a.cores for a in self.obs.desde(t_atuacao) if a.cores[proxima - 1] == "G"]
+        fim = self.obs.esperar_evento("PREEMP_FIM", verde.ms, 12, rua=3)
+        duracao = None if fim is None else fim.ms - verde.ms
         self.registrar(
-            "PRE em amarelo é aceito e muda só o destino",
-            corpo["aceito"]
-            and espera is not None
-            and espera <= AMARELO_S + ALL_RED_S + FOLGA_S
-            and not no_meio,
-            f"S{corrente} em amarelo -> fase {alvo} em "
-            f"{_seg(espera)} (máx. {AMARELO_S + ALL_RED_S:.0f} s)",
+            "verde da ambulância dura 9 s, contados do verde exclusivo",
+            _proximo(duracao, VERDE_DO_TIPO_MS["AMBULANCIA"]),
+            f"PREEMP_FIM {_ms(duracao)} depois do verde exclusivo",
+        )
+        if fim is None:
+            return
+        depois = self.obs.esperar_amostra(lambda a: "G" in a.cores, fim.ms + 1, 6)
+        self.registrar(
+            "fim da emergência volta pelo eixo oposto",
+            depois is not None and depois.cores == PRINCIPAL and depois.regime == "C",
+            f"primeiro verde depois: {depois.cores if depois else '-'}",
         )
 
-        _, liberacao = self.ponte.comando("LIBERAR")
-        t_clr = _instante(liberacao["t_atuacao"]) if liberacao["t_atuacao"] else time.time()
-        fim = self.obs.esperar_evento(t_clr - 0.01, "PREEMP_FIM", limite_s=2)
-        saida = self.obs.esperar(lambda a: a.cores[alvo - 1] == "Y", limite_s=VERDE_S + 2)
-        self.registrar(
-            "CLR encerra a preempção pelo amarelo",
-            liberacao["resposta"] == "ACK,CLR" and fim is not None and saida is not None,
-            f"{liberacao['linha']} -> {liberacao['resposta']}; S{alvo} saiu pelo amarelo: "
-            f"{saida is not None}",
-        )
-
-    def extensao_e_fail_safe(self) -> None:
+    def ve_no_eixo_verde(self) -> None:
         self._ciclo_ocioso()
-        verde = self._inicio_de_verde()
-        fase = verde.cores.index("G") + 1
-        _, corpo = self.ponte.comando(
-            "ESTENDER_VERDE", fase_alvo=fase, duracao_s=10, id_veiculo="VE_VERIFICA"
-        )
-        t_atuacao = _instante(corpo["t_atuacao"])
-        time.sleep(6.0)  # o dobro do verde base: sem a extensão, a fase já teria fechado
-        ainda = self.obs.ultima()
-        abertas = [a for a in self.obs.desde(t_atuacao) if a.cores[fase - 1] != "G"]
+        self._abertura(PRINCIPAL)
+        decisao = self._injetar(1, "POLICIA")
+        if decisao is None or decisao.tipo != "PREEMP_INI":
+            self.registrar("VE no eixo verde é atendido", False, f"decisão: {decisao}")
+            return
+        exclusivo = self.obs.esperar_amostra(_exclusivo(1), decisao.ms, PIOR_CASO_MS / 1000 + 2)
+        fim = self.obs.esperar_evento("PREEMP_FIM", decisao.ms, 15, rua=1)
+        apagou = [
+            a.cores
+            for a in self.obs.entre(decisao.ms, fim.ms - 1 if fim else decisao.ms)
+            if a.cores[0] != "G"
+        ]
+        duracao = None if fim is None or exclusivo is None else fim.ms - exclusivo.ms
         self.registrar(
-            "PRE para a fase já verde estende, sem refazer a transição",
-            corpo["linha"] == f"PRE,{fase},10"
-            and ainda is not None
-            and ainda.cores[fase - 1] == "G"
-            and not abertas,
-            f"{corpo['linha']}; 6 s depois: {ainda.cores if ainda else '-'}",
+            "VE no eixo verde: o verde dele não apaga, só o S2 sai pelo amarelo",
+            exclusivo is not None and not apagou,
+            f"S1 exclusivo {_ms(None if exclusivo is None else exclusivo.ms - decisao.ms)} "
+            f"depois da decisão; S1 apagou no meio: {bool(apagou)}",
+        )
+        self.registrar(
+            "verde da polícia dura 7 s",
+            _proximo(duracao, VERDE_DO_TIPO_MS["POLICIA"]),
+            f"PREEMP_FIM {_ms(duracao)} depois do verde exclusivo",
         )
 
-        _, falha = self.ponte.comando("FALLBACK_SEGURO")
-        t_falha = _instante(falha["t_atuacao"]) if falha["t_atuacao"] else time.time()
-        fim = self.obs.esperar_evento(t_falha - 0.01, "PREEMP_FIM", limite_s=2)
-        self.registrar(
-            "fail-safe vira CLR e volta ao ciclo fixo",
-            falha["linha"] == "CLR" and falha["resposta"] == "ACK,CLR" and fim is not None,
-            f"{falha['linha']} -> {falha['resposta']}",
-        )
-
-    def timeout_de_30_s(self) -> None:
+    def prioridade_e_fila(self) -> None:
         self._ciclo_ocioso()
-        corrente = (self.obs.ultima() or verde_padrao()).fase
-        alvo = _duas_a_frente(corrente)
-        _, corpo = self.ponte.comando(
-            "IR_PARA_FASE", fase_alvo=alvo, duracao_s=60, id_veiculo="VE_VERIFICA"
-        )
-        t_atuacao = _instante(corpo["t_atuacao"])
-        print("      (esperando o timeout de 30 s da preempção...)", flush=True)
-        timeout = self.obs.esperar_evento(t_atuacao, "TIMEOUT", limite_s=TIMEOUT_PREEMPCAO_S + 5)
-        duracao = None if timeout is None else timeout - t_atuacao
+        bombeiro = self._injetar(1, "BOMBEIRO")
+        if bombeiro is None:
+            self.registrar("prioridade e fila", False, "bombeiro sem decisão")
+            return
+        self.obs.esperar_amostra(_exclusivo(1), bombeiro.ms, PIOR_CASO_MS / 1000 + 2)
+        ambulancia = self._injetar(3, "AMBULANCIA")
+        fila = self.obs.esperar_evento("FILA", bombeiro.ms + 1, 2, rua=1)
+        policia = self._injetar(2, "POLICIA")
         self.registrar(
-            "preempção nunca passa de 30 s, mesmo com dur_s maior",
-            duracao is not None and abs(duracao - TIMEOUT_PREEMPCAO_S) <= FOLGA_S,
-            f"PRE,{alvo},60 -> EV TIMEOUT {_seg(duracao)} depois",
+            "ambulância interrompe o bombeiro, que vai para a fila",
+            ambulancia is not None
+            and ambulancia.tipo == "PREEMP_INI"
+            and fila is not None
+            and fila.veiculo == "BOMBEIRO",
+            f"ambulância: {ambulancia.tipo if ambulancia else '-'}; "
+            f"bombeiro: {fila.tipo if fila else 'sem FILA'}",
+        )
+        self.registrar(
+            "polícia com a fila ocupada por bombeiro é descartada",
+            policia is not None and policia.tipo == "DESCARTADO",
+            f"polícia: {policia.tipo if policia else '-'}",
+        )
+        if ambulancia is None:
+            return
+        fim = self.obs.esperar_evento("PREEMP_FIM", ambulancia.ms, 20, rua=3)
+        retomada = None if fim is None else self.obs.esperar_evento("PREEMP_INI", fim.ms, 2, rua=1)
+        verde = (
+            None
+            if retomada is None
+            else self.obs.esperar_amostra(_exclusivo(1), retomada.ms, PIOR_CASO_MS / 1000 + 2)
+        )
+        fim_bombeiro = (
+            None if verde is None else self.obs.esperar_evento("PREEMP_FIM", verde.ms, 12, rua=1)
+        )
+        duracao = None if fim_bombeiro is None or verde is None else fim_bombeiro.ms - verde.ms
+        self.registrar(
+            "o bombeiro da fila é atendido depois, com o verde inteiro",
+            retomada is not None and _proximo(duracao, VERDE_DO_TIPO_MS["BOMBEIRO"]),
+            f"retomado: {retomada is not None}; verde do bombeiro {_ms(duracao)}",
+        )
+
+    def renovacao_e_teto(self) -> None:
+        self._ciclo_ocioso()
+        inicio = self._injetar(4, "AMBULANCIA")
+        if inicio is None or inicio.tipo != "PREEMP_INI":
+            self.registrar("renovação e teto", False, f"decisão: {inicio}")
+            return
+        print("      (renovando a cada 4 s até o teto de 30 s...)", flush=True)
+        renovacoes = []
+        while True:
+            time.sleep(4.0)
+            # Para antes do teto: uma releitura depois do TIMEOUT abriria uma
+            # emergência nova, e o roteiro confundiria as duas.
+            if self.obs.agora_ms() - inicio.ms > TETO_MS - 3000:
+                break
+            renovacoes.append(self._injetar(4, "AMBULANCIA"))
+        timeout = self.obs.esperar_evento("TIMEOUT", inicio.ms, 8)
+        duracao = None if timeout is None else timeout.ms - inicio.ms
+        renovados = [r for r in renovacoes if r.tipo == "RENOVADO"]
+        self.registrar(
+            "o mesmo VE relendo a mesma rua renova o verde",
+            bool(renovacoes) and len(renovados) == len(renovacoes),
+            f"{len(renovados)} de {len(renovacoes)} releituras renovaram",
+        )
+        fim = None if timeout is None else self.obs.esperar_evento("PREEMP_FIM", timeout.ms, 2)
+        depois = (
+            None
+            if fim is None
+            else self.obs.esperar_amostra(lambda a: "G" in a.cores, fim.ms + 1, 6)
+        )
+        self.registrar(
+            "emergência contínua para no teto de 30 s e volta pelo eixo oposto",
+            _proximo(duracao, TETO_MS)
+            and fim is not None
+            and depois is not None
+            and depois.cores == PRINCIPAL,
+            f"TIMEOUT {_ms(duracao)} depois do PREEMP_INI; depois abriu "
+            f"{depois.cores if depois else '-'}",
+        )
+
+    def recusa(self) -> None:
+        self._ciclo_ocioso()
+        antes = self.obs.agora_ms()
+        status, _ = self.ponte.injetar_bruta("RUA3,HELICOPTERO")
+        recusado = self.obs.esperar_evento("RECUSADO", antes, 2)
+        atendido = self.obs.evento("PREEMP_INI", antes)
+        self.registrar(
+            "tipo desconhecido é recusado e não mexe no semáforo",
+            status == 202 and recusado is not None and atendido is None,
+            f"RECUSADO: {recusado is not None}; preemptou: {atendido is not None}",
         )
 
     def invariantes(self) -> None:
-        sequencia = [a.cores for a in self.obs.amostras if not a.em_teste]
-        achados = violacoes(sequencia)
+        amostras, _ = self.obs.copia()
+        sequencia = [(a.ms, a.cores) for a in amostras]
+        achados = violacoes(sequencia, folga_ms=FOLGA_MS)
         self.registrar(
-            "I1, I2 e I3 em toda a telemetria observada",
+            "I1 a I4 em toda a telemetria observada",
             not achados,
-            f"{len(sequencia)} telemetrias; " + ("; ".join(achados[:3]) or "nenhuma violação"),
+            f"{len(transicoes(sequencia))} transições; "
+            + ("; ".join(achados[:3]) or "nenhuma violação"),
         )
         _, corpo = self.ponte.health()
         self.registrar(
             "contadores da ponte",
-            corpo["telemetrias_com_dois_verdes"] == 0
-            and corpo["linhas_invalidas"] == 0
-            and corpo["reconexoes"] == 0,
-            f"dois verdes {corpo['telemetrias_com_dois_verdes']}, linhas inválidas "
-            f"{corpo['linhas_invalidas']}, reconexões {corpo['reconexoes']}",
+            corpo["telemetrias_violando_i1"] == 0 and corpo["reconexoes"] == 0,
+            f"violando I1 {corpo['telemetrias_violando_i1']}, reconexões {corpo['reconexoes']}, "
+            f"linhas inválidas {corpo['linhas_invalidas']}",
         )
-
-
-def verde_padrao() -> Amostra:
-    return Amostra(0.0, 0, 1, "GRRR", False, False)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -484,26 +570,27 @@ def main(argv: Sequence[str] | None = None) -> int:
     roteiro = Roteiro(ponte, observador)
     print(f"Verificando a ponte em {args.url}", flush=True)
     try:
-        if not observador.esperar(lambda _: True, limite_s=10):
+        if not observador.esperar(lambda: observador.amostras, limite_s=10):
             print("A ponte não entregou telemetria em 10 s. Ela está no ar?", file=sys.stderr)
             return 2
         roteiro.health()
         roteiro.boot_em_all_red()
-        roteiro.ciclo_fixo()
-        roteiro.recusas()
-        roteiro.pre_em_verde_e_fim_por_dur_s()
-        roteiro.pre_em_amarelo_e_clr()
-        roteiro.extensao_e_fail_safe()
-        roteiro.timeout_de_30_s()
+        roteiro.ciclo()
+        roteiro.ve_em_outro_eixo()
+        roteiro.ve_no_eixo_verde()
+        roteiro.prioridade_e_fila()
+        roteiro.renovacao_e_teto()
+        roteiro.recusa()
         roteiro.invariantes()
+    except RuntimeError as erro:
+        roteiro.registrar("roteiro interrompido", False, str(erro))
     finally:
         observador.parar()
 
     falhas = [r for r in roteiro.resultados if r.ok is False]
     print(
         f"\n{len(roteiro.resultados) - len(falhas)} de {len(roteiro.resultados)} conferências ok."
-        " Fora do alcance do HTTP: watchdog, reconexão, SAFE e modo de teste"
-        " (testes automatizados e checklist de bancada)."
+        " Fora do alcance da ponte: LCD, leitura da tag e ESP-NOW (checklist de bancada)."
     )
     return 1 if falhas else 0
 

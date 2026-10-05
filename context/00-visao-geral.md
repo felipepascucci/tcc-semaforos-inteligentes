@@ -24,7 +24,18 @@ A validação ocorre em **duas frentes complementares**:
 - **Frente A — Simulação (SUMO + TraCI):** produz os dados quantitativos que sustentam as hipóteses. É a fonte dos resultados estatísticos do TCC.
 - **Frente B — Protótipo físico (Arduino + ESP8266 + RFID):** prova de conceito tangível da camada V2I e do atuador semafórico. É demonstração de viabilidade, **não** fonte de dados estatísticos.
 
-Ambas são controladas pelo **mesmo motor de decisão** (`backend/core/priorizacao/`). Essa é a decisão arquitetural central do projeto: o algoritmo é agnóstico ao atuador. Trocar SUMO por hardware é trocar um adaptador, não reescrever a lógica. Isso é o que torna defensável a afirmação de que "o modelo validado em simulação é o mesmo que roda no protótipo".
+O **motor de decisão** (`backend/core/priorizacao/`) é o objeto do experimento e controla a **simulação**. Ele é agnóstico ao atuador: o SUMO é um adaptador, e o motor não sabe que está numa simulação.
+
+**O protótipo não roda o motor** (decisão de 2026-10-05). O controlador do cruzamento, o Arduino UNO, decide sozinho com uma regra local mais simples: prioridade por tipo de VE, fila de um lugar e verde exclusivo para a aproximação do VE. Ele cumpre os mesmos invariantes de segurança (I1 a I4). O VE é identificado por rádio (ESP-NOW), sem rede nem servidor, e o notebook só observa. Ver `05` §2.
+
+> **O que o texto pode e não pode afirmar.** Pode: o protótipo demonstra a
+> camada V2I por rádio, a atuação segura em hardware real e a latência dessa
+> cadeia (H3). **Não pode** dizer que "o modelo validado em simulação é o mesmo
+> que roda no protótipo" — a versão anterior deste parágrafo afirmava isso, e
+> deixou de ser verdade quando a equipe adotou a arquitetura já montada na
+> bancada em vez de remontá-la. A equipe preferiu adaptar o sistema ao hardware
+> pronto. O motor continua sendo avaliado onde os dados estatísticos sempre
+> estiveram, na Frente A.
 
 ## 4. Objetivos
 
@@ -56,7 +67,7 @@ Ambas são controladas pelo **mesmo motor de decisão** (`backend/core/priorizac
 | --- | --- | --- |
 | H1 | A fusão radar + V2I reduz em **no mínimo 25%** o tempo total de travessia do VE, em cenários de saturação **moderada a intensa**, em relação à temporização estática | Comparação pareada por seed, baseline vs. proposto. O cenário `leve` é medido e discutido, mas **sem meta numérica** |
 | H2 | É possível mitigar em **no mínimo 15%** o impacto negativo nas vias transversais com compensação dinâmica de ciclo pós-evento | Três braços: baseline / preempção sem compensação / preempção com compensação. Mitigação = fração do **acréscimo** de espera transversal causado pela preempção, em `moderado` e `intenso` (P17) |
-| H3 | A infraestrutura em borda sustenta latência operacional **fim-a-fim inferior a 200 ms** | Instrumentação `t_deteccao → t_decisao → t_atuacao`, medida no **protótipo**, com **5 repetições** roteirizadas no checklist |
+| H3 | A infraestrutura em borda sustenta latência operacional **fim-a-fim inferior a 200 ms** | Da **leitura da tag no veículo** até o **UNO decidir atuar** (`PREEMP_INI`), os dois instantes carimbados no relógio do notebook, medida no **protótipo**, com **5 repetições** roteirizadas no checklist (`05` §4.3, decisão de 2026-10-05) |
 | **H4** | Uma política aprendida para escolher entre VEs em conflito **reduz o tempo de travessia do VE mais prejudicado**, em cenários com múltiplos VEs, em relação ao desempate determinístico de E8 | Braço `PREEMPCAO_ML` contra `PREEMPCAO`, pareado por seed, nos cenários com múltiplos VEs. Mesmo rigor de H1: Wilcoxon pareado, Cliff's δ e IC 95% por bootstrap |
 
 > **H4 formulada em 2026-09-10, antes de qualquer treino** (P19). O critério de
@@ -132,12 +143,17 @@ Ambas são controladas pelo **mesmo motor de decisão** (`backend/core/priorizac
 > CTB, art. 29, VII, que só concede prioridade ao VE *"quando em serviço de
 > urgência"*. O RNF05 continua medindo apenas o primeiro fator, a identificação
 > da tag.
+>
+> **Na bancada, só o primeiro fator existe** (decisão de 2026-10-05). O UNO
+> decide sem consultar ocorrência, e o VE do protótipo é tratado como em serviço.
+> P20 vale no motor, na API e na simulação.
 
 > **Decisão P14 (2026-08-25) — onde termina a medição do RF02.** O requisito
 > original não dizia até que ponto contar os 3 s, e as duas leituras possíveis
 > davam resultados opostos. Adotada a leitura **"até o início da atuação"**: o
 > marco é o instante em que o semáforo visivelmente muda — o amarelo —, carimbado
-> como `t_atuacao` na chegada do `ACK` do atuador.
+> como `t_atuacao` na chegada do `ACK` do atuador. *(Na bancada, desde
+> 2026-10-05, o marco equivalente é o `EV,PREEMP_INI` do UNO, `05` §4.3.)*
 >
 > A alternativa, medir até o **verde final** na fase alvo, faria o RF02 absorver
 > o **RF03** (garantir passagem contínua, que é justamente "o VE não para") e

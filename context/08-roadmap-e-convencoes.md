@@ -9,7 +9,7 @@ O pré-projeto define 8 sprints. Abaixo, o que cada uma significa em termos de a
 | 1 | Modelagem da malha urbana | `sim/rede/*.xml` + `malha.net.xml` gerada; detectores; 3 arquivos de demanda | `sumo-gui` roda 60 min sem colisão nem teleporte |
 | 2 | Integração SUMO + Python | `sim/controlador/adaptador_traci.py`, `executor.py`; esqueleto de `core/modelos.py` | `python -m sim.controlador.executor --cenario leve --modo FIXO --seed 1` produz `tripinfo.xml` |
 | 3 | Lógica de priorização | `core/priorizacao/` completo (E1–E8) + `core/seguranca.py` + testes unitários | Testes de I1–I5 passam; corredor verde visível na GUI |
-| 4 | Camada IoT | Firmware UNO reescrito não-bloqueante; firmware NodeMCU; `bridge/` | Tag aproxima → semáforo físico preempta em < 3 s |
+| 4 | Camada IoT | Firmware UNO reescrito com transição segura e decisão local; sketches dos NodeMCUs versionados como estão; `bridge/` que escuta o UNO e mede H3 (`05`, 2026-10-05) | Tag aproxima → semáforo físico preempta em < 3 s |
 | 5 | Banco de dados | Migrations Alembic, models, repositories, seeds | Execução de simulação grava `execucao_simulacao` + `log_prioridade` |
 | 6 | Dashboard | React + mapa + WebSocket + telas de log e métricas | Estado dos semáforos e VEs em tempo real |
 | 7 | Testes integrados | Suite E2E, `sim/controlador/lote.py`, validador de execução | Lote de 600 execuções roda sem intervenção manual |
@@ -111,7 +111,7 @@ Preferir PlantUML a diagrama desenhado à mão: fica versionado, regenerável e 
 | Risco | Impacto | Mitigação |
 | --- | --- | --- |
 | Resultados reais não confirmam H1 (≥30%) | Alto | Rodar experimento piloto **cedo** (Sprint 3), com 5 seeds, para conhecer a ordem de grandeza antes de comprometer o texto |
-| Protótipo trava durante a apresentação | Alto | Teste de 30 min obrigatório; sem `String`; watchdog; ter vídeo gravado de backup |
+| Protótipo trava durante a apresentação | Alto | Teste de 30 min obrigatório; sem `String`; emergência que termina sozinha e teto de 30 s (I6); ter vídeo gravado de backup |
 | 600 execuções não cabem no prazo | Médio | `traci` com 6 processos em paralelo: medido no piloto, as 600 levam ~6 h (P15) |
 | Rede da faculdade bloqueia o ESP8266 | Médio | Roteador próprio ou hotspot; testar no local antes |
 | Divergência entre texto do TCC e sistema | Médio | Regra do §4.7: `context/` atualizado no mesmo commit |

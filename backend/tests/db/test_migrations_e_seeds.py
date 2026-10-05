@@ -149,13 +149,13 @@ def test_seeds_criam_o_cadastro_de_context_03_secao_5(sessao: Session) -> None:
     criados = aplicar(sessao, carregar_dados())
     sessao.commit()
 
-    # 8 TLS da malha + 1 cruzamento do protótipo (P13: UM cruzamento, 4 fases —
-    # não quatro semáforos PROTO_S1..S4).
+    # 8 TLS da malha + 1 cruzamento do protótipo (UM cruzamento — não quatro
+    # semáforos PROTO_S1..S4 — com as 2 fases do ciclo da bancada).
     assert criados["semaforo"] == 9
-    assert criados["fase_semaforo"] == 4
+    assert criados["fase_semaforo"] == 2
     assert criados["veiculo"] == 3
     assert criados["tag"] == 2
-    assert criados["dispositivo"] == 2
+    assert criados["dispositivo"] == 3
 
 
 def test_seeds_sao_idempotentes(sessao: Session) -> None:
@@ -183,22 +183,92 @@ def test_tags_placeholder_nao_autorizam_preempcao(sessao: Session) -> None:
         assert tag.ativo is False
 
 
-def test_prototipo_tem_um_cruzamento_com_quatro_fases(sessao: Session) -> None:
-    """A correção de P13 em context/03 §5, verificada no dado."""
+def _verificar_prototipo_da_bancada(sessao: Session) -> None:
+    """O cadastro de `context/03` §5 desde 2026-10-05."""
+    from app.models import DispositivoIot
     from app.repositories.cadastro import buscar_semaforo_por_codigo, fases_de
-
-    aplicar(sessao, carregar_dados())
-    sessao.commit()
 
     proto = buscar_semaforo_por_codigo(sessao, "PROTO_CRUZ_01")
     assert proto is not None
-    assert proto.tempo_ciclo == 24  # 4 x (3 + 2 + 1)
+    assert proto.tempo_ciclo == 12  # 2 x (3 + 2 + 1)
 
     fases = fases_de(sessao, proto.id_semaforo)
-    assert [f.indice_fase for f in fases] == [1, 2, 3, 4]
-    # Sob split phasing cada fase serve uma única aproximação.
-    assert all(len(f.movimentos) == 1 for f in fases)
+    assert [f.indice_fase for f in fases] == [1, 2]
+    assert [sorted(f.movimentos) for f in fases] == [
+        ["PRINCIPAL_A", "PRINCIPAL_B"],
+        ["TRANSVERSAL_A", "TRANSVERSAL_B"],
+    ]
+    assert [f.descricao for f in fases] == ["Eixo principal (S1+S2)", "Eixo transversal (S3+S4)"]
     # verde_s == verde_min_s: na bancada a preempção nunca trunca verde.
     assert all(f.duracao_base == f.verde_min == 3 for f in fases)
 
     assert buscar_semaforo_por_codigo(sessao, "PROTO_S1") is None
+
+    dispositivos = {d.codigo: d for d in sessao.query(DispositivoIot).all()}
+    assert set(dispositivos) == {"EMISSOR_VE_01", "RECEPTOR_CRUZ_01", "CTRL_PROTO_01"}
+    # O emissor vai no veículo; os outros dois ficam no cruzamento.
+    assert dispositivos["EMISSOR_VE_01"].fk_semaforo is None
+    assert dispositivos["RECEPTOR_CRUZ_01"].fk_semaforo == proto.id_semaforo
+    assert dispositivos["CTRL_PROTO_01"].fk_semaforo == proto.id_semaforo
+
+
+def test_prototipo_tem_um_cruzamento_com_duas_fases_e_tres_placas(sessao: Session) -> None:
+    """A bancada como está montada (decisão de 2026-10-05), verificada no dado."""
+    aplicar(sessao, carregar_dados())
+    sessao.commit()
+    _verificar_prototipo_da_bancada(sessao)
+
+
+def test_tags_da_bancada_nao_entram_em_tag_rfid(sessao: Session) -> None:
+    """As tags reais identificam ruas, não veículos (`context/05` §1)."""
+    from app.models import TagRfid
+
+    aplicar(sessao, carregar_dados())
+    sessao.commit()
+
+    uids = {tag.uid for tag in sessao.query(TagRfid).all()}
+    assert uids.isdisjoint({"F39BD606", "1BD2308E", "B7EF8FA0", "97ABAFA0"})
+
+
+def test_banco_semeado_antes_de_2026_10_05_e_corrigido_pela_migration(
+    sessao: Session, url_banco_efemero: str
+) -> None:
+    """Os seeds não apagam nada; quem leva o banco antigo ao desenho novo é a migration."""
+    configuracao = _configuracao(url_banco_efemero)
+    command.downgrade(configuracao, "3f9c2a71d5e8")
+
+    # O cadastro como era: split phasing de P13 e o leitor no cruzamento.
+    antigos = carregar_dados()
+    antigos["prototipo"]["semaforo"]["tempo_ciclo"] = 24
+    antigos["prototipo"]["fases"] = [
+        {
+            "indice_fase": i,
+            "descricao": f"Aproximação S{i}",
+            "movimentos": [f"M{i}"],
+            "modulos": f"S{i}",
+        }
+        for i in range(1, 5)
+    ]
+    antigos["dispositivos"] = [
+        {
+            "codigo": "LEITOR_CRUZ_01",
+            "tipo": "LEITOR_RFID",
+            "semaforo": "PROTO_CRUZ_01",
+            "token_dev": "x",
+        },
+        {
+            "codigo": "CTRL_PROTO_01",
+            "tipo": "CONTROLADOR_SEMAFORO",
+            "semaforo": "PROTO_CRUZ_01",
+            "token_dev": "y",
+        },
+    ]
+    aplicar(sessao, antigos)
+    sessao.commit()
+    sessao.close()
+
+    command.upgrade(configuracao, "head")
+    aplicar(sessao, carregar_dados())
+    sessao.commit()
+
+    _verificar_prototipo_da_bancada(sessao)

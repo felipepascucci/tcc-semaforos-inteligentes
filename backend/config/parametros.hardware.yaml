@@ -3,30 +3,38 @@
 # Só as chaves que mudam aparecem aqui; as demais são herdadas do perfil de
 # simulação. Ativado por PERFIL_PARAMETROS=hardware.
 #
-# Origem: context/01 §5.3 (nota de rodapé), decisão P13 e o perfil de tempos de
-# 2026-08-24 (context/09), detalhados em docs/contrato-hardware-software.md §7.
+# Origem: arquitetura da bancada adotada em 2026-10-05 (context/05 §3,
+# context/09). Quem aplica estes valores na bancada é o firmware do UNO, que
+# decide sozinho; aqui eles servem de referência ao dublê
+# (adapters/hardware/simulado.py) e ao roteiro de aceitação (bridge/verificar.py).
 #
-# O protótipo é UM cruzamento com 4 aproximações em *split phasing*: 4 fases,
-# um verde por vez. Sob esse regime a matriz de conflito é total e I1 se reduz a
-# `contar_verdes() <= 1`.
+# O ciclo tem 2 fases — eixo principal (S1+S2) e eixo transversal (S3+S4) — e a
+# emergência abre o verde EXCLUSIVO da aproximação do VE.
 
-# --- Tempos do ciclo fixo da bancada --------------------------------------
-verde_s: 3.0        # duração do verde de cada fase no ciclo fixo
+# --- Tempos do ciclo da bancada ---------------------------------------------
+verde_s: 3.0        # duração do verde de cada fase no ciclo
 verde_min_s: 3.0    # piso de I4 — coincide com verde_s na bancada
 amarelo_s: 2.0
 all_red_s: 1.0
 
-# Consequência de verde_s == verde_min_s: na bancada a preempção NUNCA trunca
-# um verde — aguarda o corrente terminar (no máximo 3 s). O caso de truncamento
-# continua exercitado no perfil de simulação, onde verde_min_s = 7.0.
+# Consequência de verde_s == verde_min_s: na bancada a emergência NUNCA trunca
+# um verde — aguarda o corrente completar 3 s.
 #
-#   Ciclo fixo completo (4 fases) : 4 x (3 + 2 + 1) = 24 s
-#   Transição de preempção, pior caso :  3 + 2 + 1  =  6 s
+#   Ciclo completo (2 fases)                 : 2 x (3 + 2 + 1) = 12 s
+#   Da chegada do VE ao verde dele, pior caso :     3 + 2 + 1  =  6 s
 
-# --- Timeouts do firmware — contrato §7, requisitos 4 e 5 -----------------
-preempcao_timeout_s: 30.0   # PREEMP_MAX_MS = 30000, mesmo sem CLR
-watchdog_s: 3.0             # I6 — WATCHDOG_MS = 3000
+# --- Teto da emergência — context/05 §3.4, item 7 ----------------------------
+# Emergência contínua (renovações e fila incluídas) nunca passa disto. Substitui o
+# watchdog na garantia de I6 (redefinido em 2026-10-05) e cumpre I5 na bancada.
+preempcao_timeout_s: 30.0
 
-# --- Fases do protótipo ----------------------------------------------------
-# PRE,<fase>,<dur_s> aceita fase em 1..4 (decisão P13).
-n_fases_prototipo: 4
+# --- Fases do ciclo da bancada ---------------------------------------------
+n_fases_prototipo: 2
+
+# --- Verde do VE, por tipo — a regra do sketch da equipe de hardware ---------
+# A ordem de prioridade entre os tipos é herdada de `prioridade_tipo`
+# (AMBULANCIA > BOMBEIRO > POLICIA), a mesma do sketch.
+verde_por_tipo_s:
+  AMBULANCIA: 9.0
+  BOMBEIRO: 8.0
+  POLICIA: 7.0

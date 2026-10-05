@@ -1,480 +1,499 @@
-"""Dublê do Arduino UNO — entrega 5.2, `context/05` §8.
+"""Dublê do Arduino UNO da bancada — entrega 5.2, `context/05` §3, §4 e §8.
 
-Responde ao protocolo serial em memória, com latência artificial, para que o
-trio desenvolva a ponte e o backend sem a bancada na mesa.
+**É o modelo de referência do firmware (5.3).** O firmware se comporta como este
+módulo, e o roteiro de aceitação (`bridge/verificar.py`) passa igual contra os
+dois. Por isso a regra está escrita aqui por extenso, e não emprestada do motor:
+desde 2026-10-05 o UNO decide sozinho, com a regra que a equipe de hardware já
+tinha (prioridade por tipo, fila de um lugar, verde exclusivo), e essa regra não
+é a de `core/priorizacao/`.
 
 Duas camadas:
 
 * `UnoSimulado` — o firmware, **puro e determinístico**: recebe linhas e o
-  instante atual, devolve as linhas que o UNO enviaria. Sem relógio próprio,
+  instante atual, devolve as linhas que o UNO escreveria. Sem relógio próprio,
   sem asyncio; é o que os testes exercitam.
 * `TransporteSimulado` — a mesma interface de `bridge/transporte.py` que a porta
   serial real implementa, com relógio de verdade e latência artificial.
 
-**O semáforo não é reimplementado aqui.** A sinalização vem da máquina de
-estados de `core/priorizacao/fases.py`, que foi escrita como modelo executável
-do que o firmware precisa fazer e é o alvo dos testes de I1 a I4. Este módulo só
-acrescenta o que é do firmware e não do controlador: ACK/NAK, eventos,
-telemetria a 2 Hz, watchdog (I6), modo de teste e parada segura.
+**Como as luzes andam.** Em vez de enumerar estados, o UNO persegue um
+*destino*: o conjunto de aproximações que deve ficar verde (um eixo no ciclo, a
+aproximação do VE na emergência). Quatro regras, aplicadas a cada instante até
+nada mais mudar, levam qualquer estado ao destino sem violar I1 a I4:
 
-Onde o firmware precisa se afastar daquela máquina, o afastamento está aqui e
-declarado, porque vira requisito do firmware real (5.3):
+1. verde fora do destino cumpre o verde mínimo e vai a amarelo (I4, I2);
+2. amarelo cumpre o tempo dele e vai a vermelho (I2);
+3. o destino só abre com **todas** as aproximações em vermelho há o all-red
+   inteiro (I3) e passando pela guarda de I1;
+4. nunca amarelo -> verde: um destino que muda no meio da troca espera o all-red.
 
-1. **`PRE` é aceito também durante amarelo e all-red.** A máquina do core
-   recusa `IR_PARA_FASE` em transição e conta com o motor reemitindo a cada
-   passo de 0,1 s; na bancada o pedido chega uma vez. Recusar levaria o pior
-   caso a 9 s (amarelo + all-red + verde mínimo da fase seguinte + amarelo +
-   all-red), contra os **6 s** que o contrato §7 promete. A transição em curso
-   não muda: só o destino dela.
-2. **`PRE,<fase>,<dur_s>` termina sozinho.** O verde da fase alvo vale até
-   `dur_s` contados do recebimento (com o verde mínimo como piso) e, quando ele
-   acaba, a preempção acaba junto, com `EV,PREEMP_FIM`. No SUMO o motor manda
-   `LIBERAR` quando vê o VE cruzar; na bancada não há como ver isso.
-3. **O UNO liga em all-red** e só então abre a fase 1. A máquina do core parte
-   da fase 1 em verde, o que na placa seria acender um verde no reset.
+A exceção é o destino já verde: a aproximação do VE que já está em verde fica
+acesa, e só as outras saem (`context/05` §3.4, item 4).
+
+**O tempo é exato.** `avancar()` processa cada mudança no instante em que ela
+vence, não no passo de quem dirige, e o `<ms>` de cada linha é esse instante. A
+sequência de `ST` (que sai a cada mudança de estado) é, portanto, a sequência
+completa de transições, com tempos verificáveis.
 
 **Nenhum número produzido com este dublê é dado experimental.** A latência é
 arbitrária e o tempo é o do relógio do notebook; H3 se mede na bancada
-(`context/00` §5). Usar `TransporteSimulado` numa medição de latência mediria a
-constante que alguém digitou.
+(`context/05` §4.3).
 """
 
 from __future__ import annotations
 
 import asyncio
 import contextlib
-from collections.abc import Callable, Sequence
-from dataclasses import replace
-from enum import StrEnum
-from typing import Final
+import time
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass
+from typing import Any, Final
 
 from bridge.protocolo import (
+    EIXO_DE,
     N_SEMAFOROS,
-    Ack,
-    ComandoSerial,
     Cor,
+    Deteccao,
     Evento,
     LinhaInvalidaError,
-    MotivoNak,
-    Nak,
-    NomeComando,
+    Regime,
     Telemetria,
     TipoEvento,
-    interpretar_comando,
+    interpretar_deteccao,
+    parece_deteccao,
 )
-from bridge.transporte import ConexaoPerdidaError
-from core.comandos import Comando, TipoComando, fallback_seguro
-from core.malha import Cruzamento, Fase
-from core.modelos import Sinal
-from core.parametros import Parametros
-from core.priorizacao.fases import EstadoControlador, avancar, estado_inicial
+from bridge.transporte import ConexaoPerdidaError, LinhaRecebida
+from core.excecoes import ConfiguracaoInvalidaError
+from core.modelos import TipoVeiculo
 
-#: Contrato §7, requisito 6: telemetria a 2 Hz.
+#: `context/05` §4.2: telemetria a 2 Hz, além da que sai a cada mudança.
 PERIODO_TELEMETRIA_S: Final = 0.5
 
-#: O cruzamento único da bancada, como em `db/seeds/dados.yaml`.
-ID_CRUZAMENTO: Final = "PROTO_CRUZ_01"
-
-#: Latência padrão entre receber um comando e responder. **Arbitrária**: existe
-#: para que a ponte não seja testada só contra respostas instantâneas.
+#: Latência padrão entre a linha sair da ponte e o UNO processá-la. **Arbitrária**:
+#: existe para que a ponte não seja testada só contra respostas instantâneas.
 LATENCIA_PADRAO_S: Final = 0.005
 
-#: A máquina do core marca preempção quando há um VE associado. A linha serial
-#: não diz qual VE é — só o backend sabe —, então o dublê usa este marcador.
-_VE_SERIAL: Final = "VE_SERIAL"
+#: Folga de ponto flutuante nas comparações de tempo.
+_EPS: Final = 1e-9
 
-_COR_DO_SINAL: Final = {
-    Sinal.VERDE: Cor.VERDE,
-    Sinal.AMARELO: Cor.AMARELO,
-    Sinal.VERMELHO: Cor.VERMELHO,
-}
-
-_TODOS_VERMELHOS: Final = (Cor.VERMELHO,) * N_SEMAFOROS
+#: As aproximações de cada fase do ciclo: eixo principal e eixo transversal.
+FASES_DO_CICLO: Final = (
+    frozenset(i for i in range(N_SEMAFOROS) if EIXO_DE[i] == 0),
+    frozenset(i for i in range(N_SEMAFOROS) if EIXO_DE[i] == 1),
+)
 
 
-class Regime(StrEnum):
-    """Em que regime o UNO está. Os três nunca coexistem."""
-
-    NORMAL = "NORMAL"  # ciclo fixo, com ou sem preempção
-    TESTE = "TESTE"  # TESTMODE,1: ciclo suspenso, cores pelo comando TEST
-    PARADA = "PARADA"  # SAFE: todos em vermelho, até CLR ou watchdog
+class ViolacaoDeSegurancaError(AssertionError):
+    """A guarda de I1 barrou um verde. No dublê, é defeito do modelo."""
 
 
-def cruzamento_da_bancada(verde_s: float, parametros: Parametros) -> Cruzamento:
-    """As quatro fases de *split phasing* do protótipo (P13).
+@dataclass(frozen=True)
+class ConfigBancada:
+    """Os números da bancada, de `parametros.hardware.yaml` (`context/05` §3).
 
-    A matriz de conflito fica no padrão do `Cruzamento`, que é total — toda fase
-    conflita com todas —, e é exatamente o regime da bancada.
+    Attributes:
+        verde_s: Verde de cada fase no ciclo.
+        verde_min_s: Piso de I4.
+        amarelo_s: Duração do amarelo (I2).
+        all_red_s: Duração do all-red (I3).
+        teto_s: Teto da emergência contínua (I6, redefinido em 2026-10-05).
+        prioridade: Tipos do mais ao menos prioritário.
+        verde_por_tipo_s: Verde do VE, por tipo.
     """
-    return Cruzamento(
-        id=ID_CRUZAMENTO,
-        fases=tuple(
-            Fase(
-                indice=indice,
-                descricao=f"S{indice}",
-                movimentos=frozenset({(f"S{indice}_ENTRADA", f"S{indice}_SAIDA")}),
-                duracao_base_s=verde_s,
-                verde_min_s=parametros.verde_min_s,
-                verde_max_s=parametros.verde_max_s,
+
+    verde_s: float
+    verde_min_s: float
+    amarelo_s: float
+    all_red_s: float
+    teto_s: float
+    prioridade: tuple[TipoVeiculo, ...]
+    verde_por_tipo_s: Mapping[TipoVeiculo, float]
+
+    @classmethod
+    def de_dicionario(cls, dados: Mapping[str, Any]) -> ConfigBancada:
+        """Monta a partir do perfil `hardware` já mesclado.
+
+        Raises:
+            ConfiguracaoInvalidaError: chave ausente ou valor incoerente.
+        """
+        try:
+            config = cls(
+                verde_s=float(dados["verde_s"]),
+                verde_min_s=float(dados["verde_min_s"]),
+                amarelo_s=float(dados["amarelo_s"]),
+                all_red_s=float(dados["all_red_s"]),
+                teto_s=float(dados["preempcao_timeout_s"]),
+                prioridade=tuple(TipoVeiculo(t) for t in dados["prioridade_tipo"]),
+                verde_por_tipo_s={
+                    TipoVeiculo(t): float(s) for t, s in dados["verde_por_tipo_s"].items()
+                },
             )
-            for indice in range(1, N_SEMAFOROS + 1)
-        ),
-    )
+        except KeyError as erro:
+            raise ConfiguracaoInvalidaError(f"perfil da bancada sem {erro}") from erro
+        except ValueError as erro:
+            raise ConfiguracaoInvalidaError(f"perfil da bancada inválido: {erro}") from erro
+        config.validar()
+        return config
+
+    def validar(self) -> None:
+        """Falha cedo com configuração que tornaria um invariante violável.
+
+        Raises:
+            ConfiguracaoInvalidaError: se algum tempo for incoerente.
+        """
+        if min(self.amarelo_s, self.all_red_s, self.verde_min_s) <= 0:
+            raise ConfiguracaoInvalidaError("amarelo, all-red e verde mínimo precisam ser > 0")
+        if self.verde_s < self.verde_min_s:
+            raise ConfiguracaoInvalidaError("verde_s abaixo do verde mínimo violaria I4")
+        if set(self.verde_por_tipo_s) != set(self.prioridade):
+            raise ConfiguracaoInvalidaError("verde_por_tipo_s precisa cobrir todos os tipos")
+        if min(self.verde_por_tipo_s.values()) < self.verde_min_s:
+            raise ConfiguracaoInvalidaError("verde de VE abaixo do verde mínimo violaria I4")
+        transicao = self.verde_min_s + self.amarelo_s + self.all_red_s
+        if self.teto_s <= transicao + max(self.verde_por_tipo_s.values()):
+            raise ConfiguracaoInvalidaError("o teto cortaria o verde de um VE recém-atendido")
+
+    def nivel(self, tipo: TipoVeiculo) -> int:
+        """Prioridade do tipo: 1 é a maior."""
+        return self.prioridade.index(tipo) + 1
+
+
+def config_da_bancada() -> ConfigBancada:
+    """O `ConfigBancada` lido de `backend/config/`."""
+    from adapters.configuracao import carregar_dicionario
+
+    return ConfigBancada.de_dicionario(carregar_dicionario("hardware"))
+
+
+@dataclass(frozen=True)
+class _Ve:
+    rua: int
+    tipo: TipoVeiculo
 
 
 class UnoSimulado:
     """O firmware do UNO, em Python, dirigido por tempo injetado.
 
     Args:
-        parametros: Perfil `hardware` (`parametros.hardware.yaml`).
-        verde_s: Duração do verde de cada fase no ciclo fixo. Não faz parte de
-            `Parametros` porque no perfil de simulação a duração vem da rede.
+        config: Os números da bancada.
         t_s: Instante do boot, em segundos, no relógio de quem dirige.
     """
 
-    def __init__(self, parametros: Parametros, verde_s: float, t_s: float = 0.0) -> None:
-        self._parametros = parametros
-        self._cruzamento = cruzamento_da_bancada(verde_s, parametros)
+    def __init__(self, config: ConfigBancada, t_s: float = 0.0) -> None:
+        self._c = config
         self._t0_s = t_s
         self._t_s = t_s
-        ultima = self._cruzamento.indices_de_fase[-1]
-        # Liga em all-red "depois" da última fase, para que a primeira a abrir
-        # seja a fase 1 — e nenhum verde acenda no reset.
-        self._estado: EstadoControlador = replace(
-            estado_inicial(ID_CRUZAMENTO, self._cruzamento, t_s),
-            fase_corrente=ultima,
-            sinal=Sinal.VERMELHO,
-            t_ultimo_verde={},
-        )
-        self._regime = Regime.NORMAL
-        self._cores_teste: tuple[Cor, Cor, Cor, Cor] = _TODOS_VERMELHOS
-        self._t_ultimo_comando_s = t_s
+
+        # Luzes: cor e instante da última mudança de cada aproximação.
+        self._cores: list[Cor] = [Cor.VERMELHO] * N_SEMAFOROS
+        self._desde: list[float] = [t_s] * N_SEMAFOROS
+        # Boot em all-red: conta como se todos tivessem acabado de ir a vermelho,
+        # e a fase 1 só abre depois do all-red inteiro.
+        self._t_ultimo_vermelho = t_s
+
+        self._destino: frozenset[int] = FASES_DO_CICLO[0]
+        self._fechar: frozenset[int] = frozenset()
+        self._estabelecido = False
+        self._fim_verde_s: float | None = None
+
+        self._regime = Regime.CICLO
+        self._fase_ciclo = 0
+        self._atendido: _Ve | None = None
+        self._fila: _Ve | None = None
+        self._t_inicio_emergencia: float | None = None
+
+        self._ultima_publicada: tuple[object, ...] | None = None
         self._proxima_telemetria_s = t_s
-        self._fase_preemptada: int | None = None
-        self._preempcao_ate_s: float | None = None
+        self._saida: list[bytes] = [Evento(0, TipoEvento.BOOT).codificar()]
 
     # -- leitura do estado -----------------------------------------------------
+
+    @property
+    def t_dispositivo_ms(self) -> int:
+        """O `millis()` da placa: tempo desde o boot."""
+        return round((self._t_s - self._t0_s) * 1000)
 
     @property
     def regime(self) -> Regime:
         return self._regime
 
-    @property
-    def em_preempcao(self) -> bool:
-        """Há preempção em curso, em transição ou já com o verde aceso."""
-        return self._fase_preemptada is not None
-
-    @property
-    def t_dispositivo_ms(self) -> int:
-        """O `millis()` da placa: tempo desde o boot."""
-        return int((self._t_s - self._t0_s) * 1000)
-
     def cores(self) -> tuple[Cor, Cor, Cor, Cor]:
         """O que cada módulo exibe agora, na ordem S1 S2 S3 S4."""
-        if self._regime is Regime.TESTE:
-            return self._cores_teste
-        s1, s2, s3, s4 = (
-            _COR_DO_SINAL[self._estado.sinal]
-            if indice == self._estado.fase_corrente
-            else Cor.VERMELHO
-            for indice in self._cruzamento.indices_de_fase
-        )
+        s1, s2, s3, s4 = self._cores
         return (s1, s2, s3, s4)
 
     def telemetria(self) -> Telemetria:
         """A linha `ST` deste instante."""
-        verde_preemptado = (
-            self._fase_preemptada is not None
-            and self._estado.sinal is Sinal.VERDE
-            and self._estado.fase_corrente == self._fase_preemptada
-        )
         return Telemetria(
-            t_dispositivo_ms=self.t_dispositivo_ms,
-            fase=self._estado.fase_corrente,
-            cores=self.cores(),
-            em_preempcao=verde_preemptado,
-            em_teste=self._regime is Regime.TESTE,
+            self.t_dispositivo_ms,
+            self.cores(),
+            self._regime,
+            None if self._atendido is None else self._atendido.rua,
+            None if self._fila is None else self._fila.rua,
         )
 
     # -- entrada ---------------------------------------------------------------
 
     def avancar(self, t_s: float) -> list[bytes]:
-        """Faz o tempo passar até `t_s`; devolve o que o UNO enviou nesse meio.
+        """Faz o tempo passar até `t_s`; devolve o que o UNO escreveu nesse meio.
 
         Raises:
             ValueError: se `t_s` for anterior ao instante atual.
         """
-        if t_s < self._t_s:
+        if t_s < self._t_s - _EPS:
             raise ValueError(f"o tempo não volta: {t_s} < {self._t_s}")
-        self._t_s = t_s
-        saida: list[bytes] = []
-
-        if self._sob_watchdog() and t_s - self._t_ultimo_comando_s >= self._parametros.watchdog_s:
-            saida.append(self._evento(TipoEvento.WATCHDOG))
-            saida += self._voltar_ao_ciclo_fixo(t_s)
-            self._t_ultimo_comando_s = t_s
-
-        if self._regime is Regime.NORMAL:
-            saida += self._passo(t_s)
-        elif self._regime is Regime.PARADA and self._estado.sinal is not Sinal.VERMELHO:
-            # Termina o verde (respeitando o mínimo) e o amarelo; no all-red, para.
-            saida += self._passo(t_s)
-
-        if t_s >= self._proxima_telemetria_s:
-            saida.append(self.telemetria().codificar())
-            while self._proxima_telemetria_s <= t_s:
-                self._proxima_telemetria_s += PERIODO_TELEMETRIA_S
-        return saida
+        while True:
+            self._assentar()
+            proximo = self._proximo_instante()
+            if proximo > t_s + _EPS:
+                break
+            self._t_s = proximo
+        self._t_s = max(self._t_s, t_s)
+        self._assentar()
+        return self._esvaziar()
 
     def receber(self, linha: bytes, t_s: float) -> list[bytes]:
-        """Processa uma linha do host chegada em `t_s`.
+        """Processa uma linha chegada ao RX em `t_s` (`context/05` §3.2).
 
-        Linha malformada com nome de comando reconhecível recebe
-        `NAK,<comando>,FORMATO`; lixo sem nome reconhecível é ignorado, como
-        ruído. Nenhuma das duas alimenta o watchdog: só comando válido prova que
-        o host está vivo.
+        Linha sem vírgula é ignorada (lixo de boot do ESP8266); com vírgula e
+        conteúdo inválido, recebe `EV,RECUSADO`.
         """
         saida = self.avancar(t_s)
-        try:
-            comando = interpretar_comando(linha)
-        except LinhaInvalidaError:
-            nome = _nome_do_comando(linha)
-            if nome is not None:
-                saida.append(Nak(nome, MotivoNak.FORMATO).codificar())
+        if not parece_deteccao(linha):
             return saida
-        self._t_ultimo_comando_s = t_s
-        return saida + self._executar(comando, t_s)
+        try:
+            deteccao = interpretar_deteccao(linha)
+        except LinhaInvalidaError:
+            self._emitir(Evento(self.t_dispositivo_ms, TipoEvento.RECUSADO))
+            return saida + self._esvaziar()
+        self._decidir(_Ve(deteccao.rua, deteccao.veiculo))
+        self._assentar()
+        return saida + self._esvaziar()
 
-    # -- comandos --------------------------------------------------------------
+    # -- decisão (context/05 §3.3) --------------------------------------------
 
-    def _executar(self, comando: ComandoSerial, t_s: float) -> list[bytes]:
-        argumentos = comando.argumentos
-        match comando.nome:
-            case NomeComando.PING:
-                return [Ack(NomeComando.PING).codificar()]
-            case NomeComando.CONSULTA:
-                return [self.telemetria().codificar()]
-            case NomeComando.PRE:
-                return self._pre(int(argumentos[0]), int(argumentos[1]), t_s)
-            case NomeComando.CLR:
-                return self._clr(t_s)
-            case NomeComando.CFG:
-                verde, amarelo, all_red = (float(a) for a in argumentos)
-                return self._cfg(verde, amarelo, all_red)
-            case NomeComando.SAFE:
-                return self._safe(t_s)
-            case NomeComando.TESTMODE:
-                return self._testmode(argumentos[0] == "1", t_s)
-            case NomeComando.TEST:
-                return self._test(argumentos[0])
-
-    def _pre(self, fase: int, duracao_s: int, t_s: float) -> list[bytes]:
-        if self._regime is not Regime.NORMAL:
-            return [Nak(NomeComando.PRE, MotivoNak.MODO).codificar()]
-        if fase not in self._cruzamento.indices_de_fase:
-            return [Nak(NomeComando.PRE, MotivoNak.FASE_INVALIDA).codificar()]
-
-        nova = self._fase_preemptada is None
-        self._fase_preemptada = fase
-        self._preempcao_ate_s = t_s + duracao_s
-        saida = [Ack(NomeComando.PRE).codificar()]
-        if nova:
-            saida.append(self._evento(TipoEvento.PREEMP_INI))
-
-        estado = self._estado
-        if estado.sinal is Sinal.VERDE and estado.fase_corrente == fase:
-            saida += self._passo(t_s, (self._estender(duracao_s),))
-        elif estado.sinal is Sinal.VERDE:
-            ir = Comando(
-                TipoComando.IR_PARA_FASE,
-                ID_CRUZAMENTO,
-                fase_alvo=fase,
-                duracao_s=duracao_s,
-                id_veiculo=_VE_SERIAL,
-                motivo=f"PRE,{fase},{duracao_s} pela serial",
-            )
-            saida += self._passo(t_s, (ir,))
+    def _decidir(self, novo: _Ve) -> None:
+        """A regra do sketch, com uma linha de decisão por detecção, antes de tudo."""
+        atendido = self._atendido
+        if atendido is None:
+            self._atender(novo)
+        elif novo == atendido:
+            if self._estabelecido:
+                self._fim_verde_s = self._t_s + self._c.verde_por_tipo_s[novo.tipo]
+            self._evento(TipoEvento.RENOVADO, novo)
+        elif self._c.nivel(novo.tipo) < self._c.nivel(atendido.tipo):
+            self._atender(novo)
+            self._enfileirar(atendido)
+        elif self._fila is None or self._c.nivel(novo.tipo) < self._c.nivel(self._fila.tipo):
+            self._enfileirar(novo)
         else:
-            # Amarelo ou all-red: só o destino da transição em curso muda
-            # (afastamento 1 da docstring do módulo).
-            self._estado = replace(
-                estado,
-                fase_alvo=fase,
-                em_preempcao=True,
-                t_inicio_preempcao=estado.t_inicio_preempcao if estado.em_preempcao else t_s,
-                id_veiculo=_VE_SERIAL,
-            )
-        return saida
+            self._evento(TipoEvento.DESCARTADO, novo)
 
-    def _clr(self, t_s: float) -> list[bytes]:
-        if self._regime is Regime.PARADA:
-            self._regime = Regime.NORMAL
-            return [Ack(NomeComando.CLR).codificar()]
-        if self._regime is Regime.NORMAL and self._fase_preemptada is not None:
-            return [Ack(NomeComando.CLR).codificar(), *self._encerrar_preempcao(t_s)]
-        return [Nak(NomeComando.CLR, MotivoNak.MODO).codificar()]
+    def _enfileirar(self, ve: _Ve) -> None:
+        """Fila de um lugar: quem estava nela sai, e sai com `DESCARTADO`."""
+        deslocado, self._fila = self._fila, ve
+        self._evento(TipoEvento.FILA, ve)
+        if deslocado is not None:
+            self._evento(TipoEvento.DESCARTADO, deslocado)
 
-    def _cfg(self, verde_s: float, amarelo_s: float, all_red_s: float) -> list[bytes]:
-        if self._regime is not Regime.NORMAL or self._fase_preemptada is not None:
-            return [Nak(NomeComando.CFG, MotivoNak.MODO).codificar()]
-        if verde_s < self._parametros.verde_min_s:
-            # Um verde de ciclo abaixo do mínimo seria I4 violado por construção.
-            return [Nak(NomeComando.CFG, MotivoNak.VERDE_MIN).codificar()]
-        self._parametros = replace(self._parametros, amarelo_s=amarelo_s, all_red_s=all_red_s)
-        self._cruzamento = cruzamento_da_bancada(verde_s, self._parametros)
-        return [Ack(NomeComando.CFG).codificar()]
+    def _atender(self, ve: _Ve) -> None:
+        if self._regime is Regime.CICLO:
+            self._regime = Regime.EMERGENCIA
+            self._t_inicio_emergencia = self._t_s
+        self._atendido = ve
+        self._evento(TipoEvento.PREEMP_INI, ve)
+        self._mirar(frozenset({ve.rua - 1}))
 
-    def _safe(self, t_s: float) -> list[bytes]:
-        saida = [Ack(NomeComando.SAFE).codificar()]
-        if self._regime is Regime.TESTE:
-            saida += self._sair_do_teste(t_s)
-        elif self._regime is Regime.NORMAL and self._fase_preemptada is not None:
-            saida += self._encerrar_preempcao(t_s)
-        if self._estado.sinal is Sinal.VERDE:
-            # Pede a troca para que o verde saia pelo amarelo, depois do mínimo.
-            proxima = self._cruzamento.proxima_fase(self._estado.fase_corrente)
-            self._estado = replace(self._estado, fase_alvo=proxima)
-        self._regime = Regime.PARADA
-        return saida
+    def _encerrar_atendimento(self) -> None:
+        """O verde do VE acabou: atende a fila ou volta ao ciclo pelo eixo oposto."""
+        atendido = self._atendido
+        assert atendido is not None
+        self._evento(TipoEvento.PREEMP_FIM, atendido)
+        self._atendido = None
+        if self._fila is not None:
+            proximo, self._fila = self._fila, None
+            self._atender(proximo)
+        else:
+            self._voltar_ao_ciclo(atendido)
 
-    def _testmode(self, ativo: bool, t_s: float) -> list[bytes]:
-        if not ativo:
-            if self._regime is not Regime.TESTE:
-                return [Ack(NomeComando.TESTMODE).codificar()]
-            return [Ack(NomeComando.TESTMODE).codificar(), *self._sair_do_teste(t_s)]
-        if self._regime is Regime.TESTE:
-            return [Ack(NomeComando.TESTMODE).codificar()]
-        if self._regime is Regime.PARADA or self._fase_preemptada is not None:
-            return [Nak(NomeComando.TESTMODE, MotivoNak.MODO).codificar()]
-        self._regime = Regime.TESTE
-        self._cores_teste = _TODOS_VERMELHOS
-        return [Ack(NomeComando.TESTMODE).codificar(), self._evento(TipoEvento.TESTE_INI)]
+    def _estourar_teto(self) -> None:
+        atendido = self._atendido
+        assert atendido is not None
+        self._emitir(Evento(self.t_dispositivo_ms, TipoEvento.TIMEOUT))
+        self._evento(TipoEvento.PREEMP_FIM, atendido)
+        self._atendido = None
+        self._fila = None
+        self._voltar_ao_ciclo(atendido)
 
-    def _test(self, cores: str) -> list[bytes]:
-        if self._regime is not Regime.TESTE:
-            return [Nak(NomeComando.TEST, MotivoNak.MODO).codificar()]
-        if cores.count(Cor.VERDE.value) > 1:
-            # A guarda de I1 vale inclusive em modo de teste (contrato §6, regra 3).
-            return [
-                Nak(NomeComando.TEST, MotivoNak.CONFLITO).codificar(),
-                self._evento(TipoEvento.CONFLITO_RECUSADO),
-            ]
-        s1, s2, s3, s4 = (Cor(c) for c in cores)
-        self._cores_teste = (s1, s2, s3, s4)
-        return [Ack(NomeComando.TEST).codificar()]
+    def _voltar_ao_ciclo(self, ultimo: _Ve) -> None:
+        # Recomeça pelo eixo que ficou esperando (context/05 §3.4, item 6).
+        self._regime = Regime.CICLO
+        self._t_inicio_emergencia = None
+        self._fase_ciclo = 1 - EIXO_DE[ultimo.rua - 1]
+        self._mirar(FASES_DO_CICLO[self._fase_ciclo])
 
-    # -- mecânica --------------------------------------------------------------
+    def _mirar(self, destino: frozenset[int]) -> None:
+        """Troca o destino. Fica aceso só o que já está verde e cabe nele inteiro."""
+        verdes = frozenset(i for i, cor in enumerate(self._cores) if cor is Cor.VERDE)
+        manter = destino if destino <= verdes and destino else frozenset()
+        self._destino = destino
+        # Os verdes acesos agora que não podem ficar. Os que o destino abrir
+        # depois não entram aqui: esses ficam até o destino mudar de novo.
+        self._fechar = verdes - manter
+        self._estabelecido = False
+        self._fim_verde_s = None
 
-    def _passo(self, t_s: float, comandos: tuple[Comando, ...] = ()) -> list[bytes]:
-        """Um passo da máquina do core, mais o que a preempção serial exige."""
-        avanco = avancar(self._estado, t_s, self._cruzamento, self._parametros, comandos)
-        self._estado = avanco.estado
-        if self._fase_preemptada is None:
-            return []
+    def _deve_fechar(self, i: int) -> bool:
+        return self._cores[i] is Cor.VERDE and (i not in self._destino or i in self._fechar)
 
-        if not self._estado.em_preempcao:
-            # O core encerrou sozinho: timeout de E6 (PREEMP_MAX, contrato §7 req. 5).
-            self._limpar_preempcao()
-            return [self._evento(TipoEvento.TIMEOUT), self._evento(TipoEvento.PREEMP_FIM)]
+    # -- luzes ----------------------------------------------------------------
 
-        for transicao in avanco.transicoes:
-            if transicao.fase != self._fase_preemptada:
-                continue
-            if transicao.sinal is Sinal.VERDE and self._preempcao_ate_s is not None:
-                restante = self._preempcao_ate_s - t_s
-                if restante > 0:
-                    self._estado = avancar(
-                        self._estado,
-                        t_s,
-                        self._cruzamento,
-                        self._parametros,
-                        (self._estender(restante),),
-                    ).estado
-            elif transicao.sinal is Sinal.AMARELO:
-                # O verde da preempção acabou (afastamento 2 da docstring).
-                self._limpar_preempcao()
-                liberar = Comando(
-                    TipoComando.LIBERAR, ID_CRUZAMENTO, motivo="dur_s do PRE esgotado"
-                )
-                self._estado = avancar(
-                    self._estado, t_s, self._cruzamento, self._parametros, (liberar,)
-                ).estado
-                return [self._evento(TipoEvento.PREEMP_FIM)]
-        return []
+    def _assentar(self) -> None:
+        """Aplica as regras no instante atual até nada mais mudar."""
+        while self._um_passo():
+            pass
+        publicou = self._publicar_se_mudou()
+        if self._t_s >= self._proxima_telemetria_s - _EPS:
+            if not publicou:  # uma `ST` por instante basta
+                self._emitir(self.telemetria())
+            while self._proxima_telemetria_s <= self._t_s + _EPS:
+                self._proxima_telemetria_s += PERIODO_TELEMETRIA_S
 
-    def _estender(self, duracao_s: float) -> Comando:
-        return Comando(
-            TipoComando.ESTENDER_VERDE,
-            ID_CRUZAMENTO,
-            fase_alvo=self._fase_preemptada,
-            duracao_s=duracao_s,
-            id_veiculo=_VE_SERIAL,
-            motivo="PRE pela serial",
+    def _um_passo(self) -> bool:
+        t = self._t_s
+        c = self._c
+
+        if (
+            self._t_inicio_emergencia is not None
+            and t - self._t_inicio_emergencia >= c.teto_s - _EPS
+        ):
+            self._estourar_teto()
+            return True
+        if self._estabelecido and self._fim_verde_s is not None and t >= self._fim_verde_s - _EPS:
+            if self._regime is Regime.EMERGENCIA:
+                self._encerrar_atendimento()
+            else:
+                self._fase_ciclo = 1 - self._fase_ciclo
+                self._mirar(FASES_DO_CICLO[self._fase_ciclo])
+            return True
+
+        mudou = False
+        for i, cor in enumerate(self._cores):
+            if self._deve_fechar(i):
+                if t - self._desde[i] >= c.verde_min_s - _EPS:
+                    self._acender(i, Cor.AMARELO)
+                    mudou = True
+            elif cor is Cor.AMARELO and t - self._desde[i] >= c.amarelo_s - _EPS:
+                self._acender(i, Cor.VERMELHO)
+                self._t_ultimo_vermelho = t
+                mudou = True
+        if mudou:
+            return True
+
+        a_abrir = [i for i in self._destino if self._cores[i] is not Cor.VERDE]
+        todos_vermelhos = all(cor is Cor.VERMELHO for cor in self._cores)
+        if a_abrir and todos_vermelhos and t - self._t_ultimo_vermelho >= c.all_red_s - _EPS:
+            self._guarda_i1(self._destino)
+            for i in a_abrir:
+                self._acender(i, Cor.VERDE)
+            return True
+
+        if not self._estabelecido and self._destino_estabelecido():
+            self._estabelecido = True
+            if self._regime is Regime.EMERGENCIA:
+                assert self._atendido is not None
+                self._fim_verde_s = t + c.verde_por_tipo_s[self._atendido.tipo]
+            else:
+                self._fim_verde_s = t + c.verde_s
+            return True
+        return False
+
+    def _destino_estabelecido(self) -> bool:
+        return all(
+            (cor is Cor.VERDE) == (i in self._destino) and cor is not Cor.AMARELO
+            for i, cor in enumerate(self._cores)
         )
 
-    def _encerrar_preempcao(self, t_s: float) -> list[bytes]:
-        self._limpar_preempcao()
-        self._passo(t_s, (fallback_seguro(ID_CRUZAMENTO, "fim da preempção serial"),))
-        return [self._evento(TipoEvento.PREEMP_FIM)]
+    def _guarda_i1(self, novos: frozenset[int]) -> None:
+        """Independente da máquina: nada verde fora do eixo dos novos verdes."""
+        verdes = {i for i, cor in enumerate(self._cores) if cor is Cor.VERDE} | novos
+        if len({EIXO_DE[i] for i in verdes}) > 1:
+            raise ViolacaoDeSegurancaError(f"I1: verde nos dois eixos, {sorted(verdes)}")
+        if self._regime is Regime.EMERGENCIA and len(novos) > 1:
+            raise ViolacaoDeSegurancaError(f"emergência abrindo mais de um verde: {sorted(novos)}")
 
-    def _limpar_preempcao(self) -> None:
-        self._fase_preemptada = None
-        self._preempcao_ate_s = None
+    def _acender(self, i: int, cor: Cor) -> None:
+        self._cores[i] = cor
+        self._desde[i] = self._t_s
 
-    def _sair_do_teste(self, t_s: float) -> list[bytes]:
-        # Recomeça pelo all-red: as cores do teste são arbitrárias, e o ciclo só
-        # volta depois de o cruzamento estar limpo (I3).
-        self._regime = Regime.NORMAL
-        self._estado = replace(
-            self._estado, sinal=Sinal.VERMELHO, t_mudanca=t_s, fase_alvo=None, verde_ate=None
-        )
-        return [self._evento(TipoEvento.TESTE_FIM)]
+    def _proximo_instante(self) -> float:
+        """O próximo instante em que alguma coisa vence."""
+        c = self._c
+        candidatos = [self._proxima_telemetria_s]
+        if self._t_inicio_emergencia is not None:
+            candidatos.append(self._t_inicio_emergencia + c.teto_s)
+        if self._estabelecido and self._fim_verde_s is not None:
+            candidatos.append(self._fim_verde_s)
+        for i, cor in enumerate(self._cores):
+            if self._deve_fechar(i):
+                candidatos.append(self._desde[i] + c.verde_min_s)
+            elif cor is Cor.AMARELO:
+                candidatos.append(self._desde[i] + c.amarelo_s)
+        if all(cor is Cor.VERMELHO for cor in self._cores):
+            candidatos.append(self._t_ultimo_vermelho + c.all_red_s)
+        futuros = [t for t in candidatos if t > self._t_s + _EPS]
+        return min(futuros)
 
-    def _voltar_ao_ciclo_fixo(self, t_s: float) -> list[bytes]:
-        if self._regime is Regime.TESTE:
-            return self._sair_do_teste(t_s)
-        if self._regime is Regime.PARADA:
-            self._regime = Regime.NORMAL
-            return []
-        return self._encerrar_preempcao(t_s)
+    # -- saída ----------------------------------------------------------------
 
-    def _sob_watchdog(self) -> bool:
-        """I6 vale em preempção, em teste e em parada — nunca no ciclo fixo."""
-        return self._regime is not Regime.NORMAL or self._fase_preemptada is not None
+    def _evento(self, tipo: TipoEvento, ve: _Ve) -> None:
+        self._emitir(Evento(self.t_dispositivo_ms, tipo, ve.rua, ve.tipo))
 
-    def _evento(self, tipo: TipoEvento) -> bytes:
-        return Evento(self.t_dispositivo_ms, tipo).codificar()
+    def _emitir(self, mensagem: Telemetria | Evento) -> None:
+        if isinstance(mensagem, Telemetria):
+            self._ultima_publicada = _assinatura(mensagem)
+        self._saida.append(mensagem.codificar())
+
+    def _publicar_se_mudou(self) -> bool:
+        """`ST` a cada mudança de estado (luz, regime, rua ativa ou fila)."""
+        atual = self.telemetria()
+        if _assinatura(atual) == self._ultima_publicada:
+            return False
+        self._emitir(atual)
+        return True
+
+    def _esvaziar(self) -> list[bytes]:
+        saida, self._saida = self._saida, []
+        return saida
 
 
-def _nome_do_comando(linha: bytes) -> NomeComando | None:
-    primeiro = linha.split(b",", 1)[0].strip()
-    try:
-        return NomeComando(primeiro.decode("ascii"))
-    except (UnicodeDecodeError, ValueError):
-        return None
+def _assinatura(telemetria: Telemetria) -> tuple[object, ...]:
+    return (telemetria.cores, telemetria.regime, telemetria.rua_ativa, telemetria.rua_fila)
 
 
 def uno_da_bancada(t_s: float = 0.0) -> UnoSimulado:
     """Um `UnoSimulado` com o perfil `hardware` lido de `backend/config/`."""
-    from adapters.configuracao import carregar_dicionario
-
-    dados = carregar_dicionario("hardware")
-    return UnoSimulado(Parametros.de_dicionario(dados), float(dados["verde_s"]), t_s)
+    return UnoSimulado(config_da_bancada(), t_s)
 
 
 class TransporteSimulado:
-    """`Transporte` em memória, com o `UnoSimulado` do outro lado do "cabo".
+    """`Transporte` em memória, com o `UnoSimulado` do outro lado do cabo USB.
 
-    O UNO da bancada tem **fonte externa** neste modelo: `puxar_cabo()` corta a
-    comunicação, mas a placa continua rodando — e o watchdog dispara, que é o
-    passo 6 da demonstração (`context/05` §7). Abrir de novo **reinicia** a
-    placa, como o DTR faz no UNO real.
+    Modela a fiação da bancada (`context/05` §1):
+
+    * o cabo USB é a **alimentação** do UNO: `puxar_cabo()` corta a ligação e
+      desliga a placa;
+    * abrir a porta **reinicia** a placa, como o DTR faz no UNO real;
+    * com o fio do NodeMCU no RX (`fio_do_nodemcu_no_rx=True`), o que a ponte
+      escreve **se perde**: o TX do NodeMCU prevalece sobre o do conversor USB.
+      O padrão é o fio solto, que é como se testa.
 
     Args:
         fabrica: Cria o UNO no boot, a partir do instante do relógio.
-        latencia_s: Atraso entre o comando sair e a resposta ser produzida.
-            Arbitrária — ver a docstring do módulo.
-        passo_s: De quanto em quanto tempo o relógio do UNO avança.
+        latencia_s: Atraso entre a linha sair e o UNO processá-la. Arbitrária —
+            ver a docstring do módulo.
+        passo_s: De quanto em quanto tempo o relógio do UNO avança. Não afeta os
+            instantes das transições, só quando elas são publicadas.
+        fio_do_nodemcu_no_rx: Se o fio do receptor está ligado ao RX do UNO.
     """
 
     def __init__(
@@ -483,12 +502,14 @@ class TransporteSimulado:
         *,
         latencia_s: float = LATENCIA_PADRAO_S,
         passo_s: float = 0.05,
+        fio_do_nodemcu_no_rx: bool = False,
     ) -> None:
         self._fabrica = fabrica
         self._latencia_s = latencia_s
         self._passo_s = passo_s
+        self.fio_do_nodemcu_no_rx = fio_do_nodemcu_no_rx
         self.uno: UnoSimulado | None = None
-        self._fila: asyncio.Queue[bytes | None] = asyncio.Queue()
+        self._fila: asyncio.Queue[LinhaRecebida | None] = asyncio.Queue()
         self._conectado = False
         self._relogio: asyncio.Task[None] | None = None
 
@@ -510,9 +531,11 @@ class TransporteSimulado:
     async def escrever(self, linha: bytes) -> None:
         if not self._conectado:
             raise ConexaoPerdidaError("porta simulada fechada")
+        if self.fio_do_nodemcu_no_rx:
+            return  # o NodeMCU domina o RX; a linha não chega ao UNO
         asyncio.get_running_loop().call_later(self._latencia_s, self._entregar, linha)
 
-    async def ler_linha(self) -> bytes:
+    async def ler_linha(self) -> LinhaRecebida:
         if not self._conectado:
             raise ConexaoPerdidaError("porta simulada fechada")
         linha = await self._fila.get()
@@ -521,8 +544,17 @@ class TransporteSimulado:
         return linha
 
     def puxar_cabo(self) -> None:
-        """Corta a comunicação; o UNO segue rodando sozinho."""
+        """Corta a ligação — e a alimentação: a placa para."""
         self._desconectar()
+        if self._relogio is not None:
+            self._relogio.cancel()
+            self._relogio = None
+
+    def simular_receptor(self, deteccao: Deteccao) -> None:
+        """O NodeMCU receptor entregando uma detecção ao RX, como na operação."""
+        asyncio.get_running_loop().call_later(
+            self._latencia_s, self._entregar, deteccao.codificar()
+        )
 
     # -- interno ---------------------------------------------------------------
 
@@ -540,8 +572,10 @@ class TransporteSimulado:
 
     def _publicar(self, linhas: Sequence[bytes]) -> None:
         if self._conectado:
+            # A linha "chega" quando o UNO a escreve: o carimbo é desse instante.
+            agora = time.perf_counter()
             for linha in linhas:
-                self._fila.put_nowait(linha)
+                self._fila.put_nowait(LinhaRecebida(linha, agora))
 
     async def _rodar_relogio(self) -> None:
         while self.uno is not None:

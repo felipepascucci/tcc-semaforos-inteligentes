@@ -5,7 +5,8 @@
 | Nível | Onde | O que cobre | Ferramenta |
 | --- | --- | --- | --- |
 | Unitário | `backend/tests/core/` | Motor de decisão, invariantes, compensação, conflito | pytest |
-| Unitário | `bridge/tests/` | Serialização do protocolo serial | pytest |
+| Unitário | `bridge/tests/` | Protocolo serial, ponte, carimbo no primeiro byte, casamento de H3 | pytest + Hypothesis |
+| Unitário | `tests/firmware/` | Núcleo do firmware do UNO contra o dublê, linha por linha; sketches dos NodeMCUs iguais aos da equipe; compilação para o UNO | pytest + Hypothesis + `ziglang` + `arduino-cli` |
 | Integração | `backend/tests/api/` | Rotas, persistência, WebSocket | pytest + httpx + testcontainers |
 | Integração | `sim/tests/` | Adaptador TraCI em cenário curto (60 s) | pytest |
 | Sistema | `tests/e2e/` | Fluxo completo com adaptador simulado | pytest |
@@ -21,17 +22,17 @@ Cada RF/RNF vira pelo menos um teste automatizado. Esta tabela é a rastreabilid
 | --- | --- | --- | --- |
 | RF01 | VE a 480 m na rota é detectado; a 520 m não é | Detecção exata no limiar | `test_deteccao.py` |
 | RF01 | VE a 100 m em linha reta mas **fora da rota** não é detectado | Distância de rota, não euclidiana | `test_deteccao.py` |
-| RF02 | Da detecção ao **início da atuação** < 3 s (decisão P14) | `t_atuacao - t_deteccao < 3000 ms`, com `t_atuacao` carimbado na chegada do `ACK` | `test_e2e_preempcao.py` |
+| RF02 | Da detecção ao **início da atuação** < 3 s (decisão P14) | `t_atuacao - t_deteccao < 3000 ms`. Na bancada, `t_atuacao` é a chegada do `EV,PREEMP_INI` do UNO (`05` §4.3) | `test_e2e_preempcao.py` + checklist HW |
 | RF03 | VE atravessa 8 cruzamentos sem parada | `waitingCount == 0` para o VE | `test_corredor_verde.py` |
 | RF04 | WebSocket emite mudança de estado em < 500 ms | Evento recebido no cliente de teste | `test_ws.py` |
 | RF05 | Toda preempção gera linha em `log_prioridade` | Contagem bate com nº de eventos | `test_persistencia.py` |
 | RF06 | Posição do VE é publicada a ≥ 1 Hz | Intervalo entre eventos ≤ 1 s | `test_ws.py` |
 | RF07 | Mudança de rota do VE recalcula os TLS-alvo | Novo conjunto de TLS após reroute | `test_recalculo.py` |
 | RNF01 | p95 de `latencia_decisao_ms` < 100 ms em 10.000 chamadas | Percentil, não média. **Latência de decisão** — só `motor.avaliar()`, sem I/O (decisão P2) | `test_desempenho.py` |
-| H3 | `latencia_total_ms` (t_deteccao→t_atuacao) < 200 ms em **5 repetições de bancada** | **Latência fim-a-fim**, inclui rede e atuação. Medida no fluxo de hardware e no e2e. Com n = 5 o p95 **não é estimável**: reportar mín/mediana/máx com o n declarado e verificar o limiar sobre o **máximo observado** (decisão de 2026-08-31) | `test_e2e_preempcao.py` + checklist HW |
+| H3 | `latencia_total_ms` (t_deteccao→t_atuacao) < 200 ms em **5 repetições de bancada** | **Latência fim-a-fim**: da leitura da tag no veículo ao `PREEMP_INI` do UNO, os dois carimbados no relógio do notebook pela ponte (`05` §4.3). Inclui ESP-NOW, a serial e a decisão do UNO. Com n = 5 o p95 **não é estimável**: reportar mín/mediana/máx com o n declarado e verificar o limiar sobre o **máximo observado** (decisão de 2026-08-31) | `test_e2e_preempcao.py` + checklist HW |
 | RNF02 | Sistema opera 60 min contínuos sem vazamento de memória | RSS estável ± 10% | `test_soak.py` |
 | RNF03 | Motor processa malha de 32 TLS mantendo p95 < 100 ms | Escala linear ou melhor | `test_desempenho.py` |
-| RNF04 | POST sem `X-Device-Token` válido → 401; UID não cadastrado → 403 | Códigos corretos | `test_seguranca.py` |
+| RNF04 | POST sem `X-Device-Token` válido → 401; UID não cadastrado → 403 | Códigos corretos. Vale para a API; na bancada nenhum dispositivo chama a API, e a ausência de criptografia no ESP-NOW é limitação declarada (`02` §6) | `test_seguranca.py` |
 | RNF05 | Taxa de reconhecimento de tag ≥ 95% em 100 leituras | Medição manual em bancada | Checklist HW |
 | RNF07 | `core/` não importa framework nem I/O | Teste de arquitetura via AST | `test_arquitetura.py` |
 | RF01 (P20) | Tag reconhecida **sem** ocorrência ativa não é autorizada; com ocorrência, é, e carrega a criticidade | Os quatro desfechos de `autorizar()`: tag desconhecida, veículo inativo, sem ocorrência, autorizado | `test_autorizacao.py` |
@@ -79,7 +80,8 @@ Estes são os testes mais importantes do projeto. Falha aqui é falha crítica, 
 | I3 | All-red entre fases | Idem, sobre a mesma sequência de transições |
 | I4 | Verde mínimo respeitado | `duracao_fase_anterior_s` de toda fase verde ≥ `verde_min` |
 | I5 | Sem starvation | Nenhum acesso em vermelho por > 120 s |
-| I6 | Watchdog do firmware | Teste manual: desconectar USB durante preempção, cronometrar retorno ao ciclo fixo (< 3 s) |
+| I1–I4 no firmware | Mesmos invariantes, na bancada | Hypothesis contra o dublê (sequências aleatórias de linhas de entrada em instantes aleatórios) e `bridge.verificar` contra a placa, sobre a sequência de `ST` (`05` §4.2) |
+| I6 | Emergência termina sozinha (redefinido em 2026-10-05, `01` §6) | Dublê e `bridge.verificar`: o verde do VE acaba na duração do tipo, e renovações sucessivas param no teto de 30 s com `EV,TIMEOUT` |
 
 Property-based testing para I1 é altamente recomendado: gerar milhares de sequências de comandos aleatórios e verificar que o invariante nunca quebra. É um argumento forte de qualidade para a banca — muito mais convincente que "testamos manualmente".
 
@@ -148,23 +150,32 @@ Estrutura obrigatória:
 
 Executar e registrar antes da apresentação. Marcar data, executor e resultado.
 
+Reescrito em 2026-10-05 para a arquitetura da bancada (`05`). Os itens que
+dependiam do notebook comandar o UNO, de Wi-Fi ou de ocorrência (P20) saíram;
+ver a nota abaixo da tabela.
+
 | # | Verificação | OK |
 | --- | --- | --- |
-| 1 | Ciclo fixo alterna corretamente as **4 fases** (ciclo de 24 s, decisão P13) por 5 min sem travar | ☐ |
-| 2 | Nenhuma combinação com verdes conflitantes em 5 min de observação — sob *split phasing* I1 é `contar_verdes() <= 1` | ☐ |
-| 3 | Toda transição verde→vermelho passa por amarelo | ☐ |
-| 4 | Tag da ambulância reconhecida em 100 aproximações (≥ 95 sucessos) — **com ocorrência aberta**, para que cada leitura também exercite a preempção | ☐ |
-| 5 | Tag não cadastrada gera negação e não preempta | ☐ |
-| 5b | **P20** — tag cadastrada **sem ocorrência aberta** → LCD `SEM OCORRENCIA`, nenhuma preempção, tentativa gravada em `deteccao` com `autorizado = false` | ☐ |
-| 6 | LCD atualiza em < 1 s após a leitura | ☐ |
-| 7 | Preempção ocorre em < 3 s da leitura da tag | ☐ |
-| 7b | **H3** — `latencia_total_ms` < 200 ms em **5 repetições**, com mín/mediana/máx registrados | ☐ |
+| 1 | Ciclo alterna os **2 eixos** (ciclo de 12 s) por 5 min sem travar; liga em all-red | ☐ |
+| 2 | Nunca há verde nos dois eixos ao mesmo tempo; em emergência só a aproximação do VE fica verde — 5 min de observação e a telemetria do mesmo período | ☐ |
+| 3 | Toda transição verde→vermelho passa por amarelo, e há all-red antes de todo verde novo, **inclusive na entrada e na saída da emergência** | ☐ |
+| 4 | 100 passagens sobre as tags das ruas: em ≥ 95 a linha chega ao UNO com a rua certa, ou seja, há um evento de decisão com a rua da tag — RNF05 | ☐ |
+| 5 | Tag fora das 4 ruas não gera envio nem mexe no semáforo | ☐ |
+| 6 | LCD mostra o VE e a rua em < 1 s após a leitura | ☐ |
+| 7 | Preempção iniciada (`PREEMP_INI`) em < 3 s da leitura da tag — RF02 | ☐ |
+| 7b | **H3** — `latencia_total_ms` < 200 ms em **5 repetições**, com o emissor no USB do notebook, mín/mediana/máx registrados. `python -m bridge.main --porta COM3 --porta-veiculo COM4`; cada passagem atendida vira uma linha de `analysis/data/latencia_bancada.csv` (`05` §6) | ☐ |
 | 8 | Dashboard mostra o evento em tempo real | ☐ |
 | 9 | Log gravado no PostgreSQL com `id_correlacao` completo | ☐ |
-| 10 | Desconexão do USB → retorno ao ciclo fixo em < 3 s | ☐ |
-| 11 | Queda do Wi-Fi → LCD mostra "SEM CONEXAO", semáforos seguem em ciclo | ☐ |
+| 10 | Com o fio do RX solto, a injeção pela ponte mostra a regra de prioridade: ambulância interrompe bombeiro pelo amarelo e all-red, o bombeiro vai para a fila (LCD `Fila:BOMB na R1`) e é atendido depois | ☐ |
+| 11 | Renovações sucessivas param no teto de 30 s (`EV,TIMEOUT`) e o ciclo volta pelo eixo oposto | ☐ |
 | 12 | Operação contínua de 30 min sem travamento ou reboot | ☐ |
 | 13 | Nenhum LED com brilho anômalo ou aquecimento perceptível | ☐ |
+| 14 | Ponte encerrada no meio de uma emergência → o semáforo segue, e o carrinho continua preemptando | ☐ |
+
+> **O que saiu em 2026-10-05:** o 5 antigo (tag não cadastrada → negação) e o 5b
+> (P20, sem ocorrência), porque o UNO não consulta cadastro nem ocorrência; o 10
+> antigo (USB desconectado → watchdog), porque o UNO não depende do notebook e o
+> USB é a alimentação dele; o 11 antigo (queda do Wi-Fi), porque não há Wi-Fi.
 
 Item 12 é o que pega: sketches com `String` travam depois de ~20 min. Rodar esse teste **antes** do dia da apresentação, não no dia.
 
@@ -177,6 +188,13 @@ Item 12 é o que pega: sketches com `String` travam depois de ~20 min. Rodar ess
 > repetições do item 7b ficam então como verificação roteirizada, e as 100 como a
 > amostra que vai para T2 e F2. `DECISÃO DO GRUPO — avaliar ao escrever o firmware
 > do Bloco 5.`
+>
+> **Com a arquitetura de 2026-10-05, o custo ficou concreto.** Basta fazer as 100
+> passagens com o emissor no USB do notebook e a ponte gravando
+> `latencia_bancada.csv`. Só conta como amostra a passagem que gera
+> `PREEMP_INI`; uma passagem durante a emergência anterior vira `RENOVADO` e não
+> mede atuação. Por isso cada passagem espera o ciclo voltar, ~20 s cada, ~35 min
+> no total. A decisão continua com o grupo.
 
 ## 7. Estratégia de dados de teste
 

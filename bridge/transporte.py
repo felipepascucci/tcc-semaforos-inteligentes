@@ -12,19 +12,45 @@ não sabe se do outro lado há um Arduino.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Protocol
+
+
+@dataclass(frozen=True)
+class LinhaRecebida:
+    """Uma linha e o instante em que o **primeiro byte** dela chegou.
+
+    O carimbo é do primeiro byte, e não da linha completa, porque a 9600 baud
+    cada caractere leva ~1 ms: carimbar o fim somaria a duração da linha à
+    latência de H3, e as linhas das duas pontas têm comprimentos diferentes
+    (`context/05` §4.3).
+
+    Attributes:
+        dados: A linha, com o terminador.
+        t_chegada: `time.perf_counter()` na chegada do primeiro byte. A ponte o
+            converte para o relógio de parede (`Relogio.em`).
+        bytes_em_espera: Quantos bytes já esperavam na porta quando o primeiro
+            foi lido. Diagnóstico do carimbo: zero quer dizer que a ponte estava
+            esperando o byte chegar; um número alto quer dizer que ele chegou
+            antes de ser lido, e o carimbo está atrasado de pelo menos ~1 ms por
+            byte. Zero onde não se aplica (dublê, testes).
+    """
+
+    dados: bytes
+    t_chegada: float
+    bytes_em_espera: int = 0
 
 
 class ConexaoPerdidaError(ConnectionError):
     """A porta sumiu: cabo puxado, dispositivo desconectado, porta fechada.
 
     É condição de operação, não bug. A ponte reage reabrindo a porta; o UNO,
-    do outro lado, reage sozinho pelo watchdog (I6).
+    do outro lado, não depende dela para nada (`context/05` §2).
     """
 
 
 class Transporte(Protocol):
-    """Uma ligação por linhas com o UNO."""
+    """Uma ligação por linhas com uma placa: o UNO, ou o emissor na medição de H3."""
 
     async def abrir(self) -> None:
         """Abre a ligação.
@@ -51,8 +77,8 @@ class Transporte(Protocol):
         """
         ...
 
-    async def ler_linha(self) -> bytes:
-        """Espera a próxima linha completa vinda do UNO.
+    async def ler_linha(self) -> LinhaRecebida:
+        """Espera a próxima linha completa, carimbada no primeiro byte.
 
         Raises:
             ConexaoPerdidaError: a ligação caiu.

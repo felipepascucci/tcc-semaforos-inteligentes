@@ -1,12 +1,13 @@
-"""HTTP da ponte — `/health`, `/estado` e `/comandos` (`context/05` §6).
+"""HTTP da ponte — `/health`, `/estado` e `/injecao` (`context/05` §6).
 
 A ponte é um processo separado do backend (`context/02` §3: precisa da porta
-USB, e o backend roda no compose). É por aqui que o backend lhe entrega o que o
-motor decidiu e recebe de volta o `t_atuacao`.
+USB, e o backend roda no compose). Desde 2026-10-05 ela só **escuta** o UNO: o
+backend e o dashboard leem a bancada em `GET /estado`. Se a ponte também deve
+empurrar os eventos ao backend, decide-se no Bloco 6.
 
-O sentido é **backend → ponte**: o backend chama `POST /comandos` e lê a
-telemetria em `GET /estado`. A alternativa, a ponte empurrar telemetria para o
-backend, fica para o Bloco 6, que é quando o backend passa a ter onde recebê-la.
+`POST /injecao` é a única escrita, e é de teste: com o fio do NodeMCU solto do
+RX, faz o papel do receptor. É o que o roteiro de aceitação (`bridge/verificar.py`)
+e o passo 4 da demonstração usam.
 """
 
 from __future__ import annotations
@@ -17,70 +18,42 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Literal
-from uuid import UUID
 
 from fastapi import FastAPI, HTTPException, Response, status
 from pydantic import BaseModel, Field
 
-from bridge.ponte import Ponte, ResultadoEnvio
-from bridge.protocolo import (
-    ComandoInvalidoError,
-    MotivoNak,
-    Nak,
-    Telemetria,
-    TipoEvento,
-)
+from bridge.ponte import Ponte
+from bridge.protocolo import N_SEMAFOROS, Deteccao, Regime, Telemetria, TipoEvento
 from bridge.transporte import ConexaoPerdidaError
-from core.comandos import Comando, TipoComando
+from core.modelos import TipoVeiculo
 
 # ---------------------------------------------------------------------------
 # Schemas
 # ---------------------------------------------------------------------------
 
 
-class PedidoComando(BaseModel):
-    """Um `Comando` do motor (`context/01` §9), mais a correlação da detecção."""
-
-    tipo: TipoComando
-    id_semaforo: str
-    fase_alvo: int | None = None
-    duracao_s: float | None = None
-    id_veiculo: str | None = None
-    # Obrigatório na prática (core/comandos.py): é o que justifica a decisão.
-    motivo: str = Field(min_length=1)
-    id_correlacao: UUID | None = None
-
-
-class RespostaComando(BaseModel):
-    """O que o UNO fez com o comando, e quando."""
-
-    linha: str | None = Field(description="Linha enviada; nula se o comando não tem tradução")
-    aceito: bool
-    resposta: str | None = Field(description="Resposta do UNO, como chegou")
-    motivo_recusa: MotivoNak | None
-    t_envio: datetime | None
-    t_atuacao: datetime | None = Field(description="Chegada do ACK (P14)")
-    latencia_serial_ms: float | None
-    id_correlacao: UUID | None
-
-
 class TelemetriaSchema(BaseModel):
+    recebida_em: datetime
     t_dispositivo_ms: int
-    fase: int
     cores: str = Field(description="S1 S2 S3 S4, como na linha ST")
-    em_preempcao: bool
-    em_teste: bool
+    regime: Regime
+    rua_ativa: int | None
+    rua_fila: int | None
 
 
 class EventoSchema(BaseModel):
     recebido_em: datetime
     t_dispositivo_ms: int
     tipo: TipoEvento
+    rua: int | None
+    veiculo: TipoVeiculo | None
 
 
 class RespostaEstado(BaseModel):
-    telemetria: TelemetriaSchema | None
-    recebida_em: datetime | None
+    telemetria: TelemetriaSchema | None = Field(description="A mais recente")
+    telemetrias: list[TelemetriaSchema] = Field(
+        description="As mais recentes, em ordem; a ST sai a cada mudança de estado"
+    )
     eventos: list[EventoSchema]
 
 
@@ -92,30 +65,53 @@ class RespostaHealth(BaseModel):
     ultima_telemetria_ha_s: float | None
     reconexoes: int
     linhas_invalidas: int
-    telemetrias_com_dois_verdes: int
-
-
-def _telemetria(telemetria: Telemetria) -> TelemetriaSchema:
-    return TelemetriaSchema(
-        t_dispositivo_ms=telemetria.t_dispositivo_ms,
-        fase=telemetria.fase,
-        cores="".join(cor.value for cor in telemetria.cores),
-        em_preempcao=telemetria.em_preempcao,
-        em_teste=telemetria.em_teste,
+    telemetrias_violando_i1: int
+    emissor_conectado: bool | None = Field(
+        description="Porta do NodeMCU emissor; null fora da medição de H3"
+    )
+    amostras_h3: int | None = Field(
+        description="Amostras de H3 desta sessão; null fora da medição de H3"
+    )
+    deteccoes_sem_amostra: dict[str, int] = Field(
+        description="Detecções que viraram FILA, RENOVADO, DESCARTADO ou SEM_DECISAO"
     )
 
 
-def _resposta_comando(resultado: ResultadoEnvio) -> RespostaComando:
-    resposta = resultado.resposta
-    return RespostaComando(
-        linha=resultado.linha,
-        aceito=resultado.aceito,
-        resposta=None if resposta is None else resposta.codificar().decode("ascii").strip(),
-        motivo_recusa=resposta.motivo if isinstance(resposta, Nak) else None,
-        t_envio=resultado.t_envio,
-        t_atuacao=resultado.t_atuacao,
-        latencia_serial_ms=resultado.latencia_serial_ms,
-        id_correlacao=UUID(resultado.id_correlacao) if resultado.id_correlacao else None,
+class PedidoInjecao(BaseModel):
+    """Um VE chegando pela rua — a linha que o NodeMCU receptor escreveria."""
+
+    rua: int = Field(ge=1, le=N_SEMAFOROS)
+    veiculo: TipoVeiculo
+
+
+class RespostaInjecao(BaseModel):
+    linha: str
+    t_envio: datetime
+    decisao: TipoEvento | None = Field(description="PREEMP_INI, RENOVADO, FILA ou DESCARTADO")
+    decisao_t_dispositivo_ms: int | None = Field(description="millis() do UNO na decisão")
+    t_decisao: datetime | None
+    latencia_ms: float | None = Field(description="Envio -> decisão; conferência, não H3")
+
+
+class PedidoInjecaoBruta(BaseModel):
+    """Uma linha qualquer, para conferir que o UNO recusa o que não entende."""
+
+    linha: str = Field(min_length=1, max_length=64, pattern=r"^[\x20-\x7e]+$")
+
+
+class RespostaInjecaoBruta(BaseModel):
+    linha: str
+    t_envio: datetime
+
+
+def _telemetria(recebida_em: datetime, telemetria: Telemetria) -> TelemetriaSchema:
+    return TelemetriaSchema(
+        recebida_em=recebida_em,
+        t_dispositivo_ms=telemetria.t_dispositivo_ms,
+        cores=telemetria.estado,
+        regime=telemetria.regime,
+        rua_ativa=telemetria.rua_ativa,
+        rua_fila=telemetria.rua_fila,
     )
 
 
@@ -142,12 +138,13 @@ def criar_app(ponte: Ponte, porta: str) -> FastAPI:
             with contextlib.suppress(asyncio.CancelledError):
                 await asyncio.wait_for(tarefa, 5.0)
 
-    app = FastAPI(title="Ponte serial", version="0.1.0", lifespan=ciclo_de_vida)
+    app = FastAPI(title="Ponte serial", version="0.2.0", lifespan=ciclo_de_vida)
 
     @app.get("/health", response_model=RespostaHealth)
     def health(resposta: Response) -> RespostaHealth:
         """Estado da porta serial e do UNO do outro lado."""
         ultima = ponte.t_ultima_telemetria
+        medindo = ponte.transporte_veiculo is not None
         corpo = RespostaHealth(
             estado="ok" if ponte.uno_respondendo() else "degradado",
             porta=porta,
@@ -158,7 +155,10 @@ def criar_app(ponte: Ponte, porta: str) -> FastAPI:
             ),
             reconexoes=ponte.reconexoes,
             linhas_invalidas=ponte.linhas_invalidas,
-            telemetrias_com_dois_verdes=ponte.telemetrias_com_dois_verdes,
+            telemetrias_violando_i1=ponte.telemetrias_violando_i1,
+            emissor_conectado=ponte.emissor_conectado if medindo else None,
+            amostras_h3=len(ponte.amostras_h3) if medindo else None,
+            deteccoes_sem_amostra=dict(ponte.deteccoes_sem_amostra),
         )
         if corpo.estado != "ok":
             resposta.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
@@ -166,45 +166,61 @@ def criar_app(ponte: Ponte, porta: str) -> FastAPI:
 
     @app.get("/estado", response_model=RespostaEstado)
     def estado() -> RespostaEstado:
-        """Última telemetria do UNO e os eventos mais recentes."""
-        telemetria = ponte.ultima_telemetria
+        """Telemetrias e eventos mais recentes do UNO."""
+        telemetrias = [_telemetria(quando, st) for quando, st in ponte.telemetrias]
         return RespostaEstado(
-            telemetria=None if telemetria is None else _telemetria(telemetria),
-            recebida_em=ponte.t_ultima_telemetria,
+            telemetria=telemetrias[-1] if telemetrias else None,
+            telemetrias=telemetrias,
             eventos=[
-                EventoSchema(recebido_em=quando, t_dispositivo_ms=ev.t_dispositivo_ms, tipo=ev.tipo)
+                EventoSchema(
+                    recebido_em=quando,
+                    t_dispositivo_ms=ev.t_dispositivo_ms,
+                    tipo=ev.tipo,
+                    rua=ev.rua,
+                    veiculo=ev.veiculo,
+                )
                 for quando, ev in ponte.eventos
             ],
         )
 
     @app.post(
-        "/comandos",
-        response_model=RespostaComando,
+        "/injecao",
+        response_model=RespostaInjecao,
         responses={
-            422: {"description": "Comando sem fase ou duração válida"},
             503: {"description": "Porta serial fechada"},
-            504: {"description": "O UNO não respondeu no prazo"},
+            504: {"description": "O UNO não decidiu no prazo — o fio do NodeMCU está no RX?"},
         },
     )
-    async def comandos(pedido: PedidoComando, resposta: Response) -> RespostaComando:
-        """Envia ao UNO o que o motor decidiu e devolve o `t_atuacao`."""
-        comando = Comando(
-            tipo=pedido.tipo,
-            id_semaforo=pedido.id_semaforo,
-            fase_alvo=pedido.fase_alvo,
-            duracao_s=pedido.duracao_s,
-            id_veiculo=pedido.id_veiculo,
-            motivo=pedido.motivo,
-        )
-        correlacao = str(pedido.id_correlacao) if pedido.id_correlacao else None
+    async def injecao(pedido: PedidoInjecao, resposta: Response) -> RespostaInjecao:
+        """Escreve a detecção no RX do UNO e devolve a decisão dele."""
         try:
-            resultado = await ponte.enviar(comando, correlacao)
-        except ComandoInvalidoError as erro:
-            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(erro)) from erro
+            resultado = await ponte.injetar(Deteccao(pedido.rua, pedido.veiculo))
         except ConexaoPerdidaError as erro:
             raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(erro)) from erro
-        if resultado.linha is not None and resultado.resposta is None:
+        decisao = resultado.decisao
+        if decisao is None:
             resposta.status_code = status.HTTP_504_GATEWAY_TIMEOUT
-        return _resposta_comando(resultado)
+        return RespostaInjecao(
+            linha=resultado.linha,
+            t_envio=resultado.t_envio,
+            decisao=None if decisao is None else decisao.tipo,
+            decisao_t_dispositivo_ms=None if decisao is None else decisao.t_dispositivo_ms,
+            t_decisao=resultado.t_decisao,
+            latencia_ms=resultado.latencia_ms,
+        )
+
+    @app.post(
+        "/injecao/bruta",
+        response_model=RespostaInjecaoBruta,
+        status_code=status.HTTP_202_ACCEPTED,
+        responses={503: {"description": "Porta serial fechada"}},
+    )
+    async def injecao_bruta(pedido: PedidoInjecaoBruta) -> RespostaInjecaoBruta:
+        """Escreve uma linha qualquer; a reação do UNO aparece em `/estado`."""
+        try:
+            t_envio = await ponte.injetar_bruta(pedido.linha)
+        except ConexaoPerdidaError as erro:
+            raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(erro)) from erro
+        return RespostaInjecaoBruta(linha=pedido.linha, t_envio=t_envio)
 
     return app
