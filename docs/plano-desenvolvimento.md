@@ -324,7 +324,7 @@ a menos que `--repetir MOTIVO` autorize.
 
 | # | Entrega |
 |---|---|
-| 5.1 | `bridge/protocolo.py` — 100% testável sem hardware, ambos os sentidos |
+| 5.1 | `bridge/protocolo.py` — 100% testável sem hardware, ambos os sentidos · ✅ **2026-10-04**, tradução comando → linha em `context/05` §4 |
 | 5.2 | `adapters/hardware/simulado.py` — dublê com latência artificial, permite o trio trabalhar sem a bancada |
 | 5.3 | Firmware UNO reescrito: máquina de estados `millis()`, **zero `delay()`**, **zero `String`**, watchdog 3 s (I6), timeout de preempção 30 s, telemetria 2 Hz |
 | 5.4 | **P8** — testar boot do NodeMCU com RC522 ligado; se falhar, RST → D0 (GPIO 16) e atualizar `context/05` §1 |

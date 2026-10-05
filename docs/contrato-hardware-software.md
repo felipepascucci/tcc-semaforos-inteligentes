@@ -234,6 +234,14 @@ uno   <- EV,156100,PREEMP_FIM
 
 `<ms>` é o `millis()` do próprio Arduino, sem relação com o relógio do servidor. Serve para detectar reordenação e medir intervalos *dentro* do dispositivo. **A latência oficial é sempre medida no relógio do notebook.**
 
+### O que o firmware precisa saber da tradução (entrega 5.1)
+
+A tabela completa, comando do motor → linha, está em `context/05` §4. Para quem escreve o firmware do UNO, três pontos:
+
+1. **`PRE` para a fase que já está verde estende o verde**, sem recomeçar a transição (primeiro ramo de E5).
+2. **Todo fim de preempção chega como `CLR`**, seja liberação normal, compensação ou fail-safe. A ponte nunca envia `SAFE` sozinha.
+3. **A ponte não filtra fase inválida nem conflito.** `PRE,5,20` e `TEST,GG--` chegam ao UNO, e recusá-los com `NAK` é responsabilidade dele.
+
 ---
 
 ## §7 — Firmware do UNO
@@ -572,7 +580,7 @@ Fechados na rodada de 2026-08-24: pinagem confirmada, P10 resolvida, e o conjunt
 | 1 | **P9** — testar o LCD quando as peças chegarem, e escolher entre 3,3 V ou conversor de nível | Hardware | aguardando peças |
 | 2 | **P8** — testar boot do NodeMCU com o RC522 conectado (GPIO 0) | Hardware | pendente |
 | 3 | ~~Tempos de bancada~~ | Equipe | ✅ **fechado 24/08** — verde 3 s, ciclo de 24 s |
-| 4 | O **protocolo do §6** atende — falta algum comando ou telemetria? | Equipe | pendente |
+| 4 | ~~O **protocolo do §6** atende — falta algum comando ou telemetria?~~ | Equipe | ✅ **fechado 04/10** — atende, sem comando novo. A compensação (E7) não é demonstrada na bancada, que não mede fila; ver `context/05` §4 |
 | 5 | ~~Ponto final de medição do RF02~~ | Equipe | ✅ **fechado 25/08** — P14: mede até o **início da atuação**; perfil de tempos inalterado |
 | 6 | Divisão: quem reescreve o firmware do UNO, quem faz o NodeMCU | Equipe | pendente |
 | 7 | **UIDs reais das tags**, para os seeds | Hardware | assim que o RC522 ler |
