@@ -325,12 +325,12 @@ a menos que `--repetir MOTIVO` autorize.
 | # | Entrega |
 |---|---|
 | 5.1 | `bridge/protocolo.py` — 100% testável sem hardware, ambos os sentidos · ✅ **2026-10-04**, tradução comando → linha em `context/05` §4 |
-| 5.2 | `adapters/hardware/simulado.py` — dublê com latência artificial, permite o trio trabalhar sem a bancada |
+| 5.2 | `adapters/hardware/simulado.py` — dublê com latência artificial, permite o trio trabalhar sem a bancada · ✅ **2026-10-04**, comportamento de referência do firmware em `context/05` §8 |
 | 5.3 | Firmware UNO reescrito: máquina de estados `millis()`, **zero `delay()`**, **zero `String`**, watchdog 3 s (I6), timeout de preempção 30 s, telemetria 2 Hz |
 | 5.4 | **P8** — testar boot do NodeMCU com RC522 ligado; se falhar, RST → D0 (GPIO 16) e atualizar `context/05` §1 |
 | 5.5 | **P9** — decidir LCD em 3,3 V ou conversor de nível; documentar a escolha |
 | 5.6 | Firmware NodeMCU: dedup por UID com cooldown 3 s, `sequencia` monotônica, HTTP com timeout, reconexão Wi-Fi com backoff, `secrets.h` gerado por `firmware/gerar_secrets.py` |
-| 5.7 | `bridge/main.py` — asyncio, PING 1 s, reconexão serial, `t_atuacao` carimbado **na chegada do ACK** |
+| 5.7 | `bridge/main.py` — asyncio, PING 1 s, reconexão serial, `t_atuacao` carimbado **na chegada do ACK** · ✅ **2026-10-04**, API da ponte (`/health`, `/estado`, `/comandos`) em `context/05` §6 |
 | 5.8 | Ler os UIDs reais das tags e atualizar os seeds |
 | 5.9 | **P20** — LCD `SEM OCORRENCIA` / `SEM PRIORIDADE` (vem pronto em `mensagem_lcd`, sem lógica no firmware) e passo 1b do roteiro de demonstração (`context/05` §7): tag sem ocorrência negada, ocorrência aberta no painel, tag passa a preemptar |
 

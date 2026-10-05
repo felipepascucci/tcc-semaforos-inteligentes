@@ -238,6 +238,21 @@ SUMO e de GUI para gravar a demonstração; `bridge/` precisa de acesso a `COM3`
 Ambos usam a `DATABASE_URL` do `.env` e falam com o backend em
 `http://localhost:8000`.
 
+A ponte roda a partir da raiz do repositório e expõe a própria API em
+`http://127.0.0.1:8001` (`/health`, `/estado`, `/comandos`, documentação em
+`/docs`):
+
+```powershell
+.venv\Scripts\python.exe -m bridge.main             # porta do .env (SERIAL_PORT)
+.venv\Scripts\python.exe -m bridge.main --porta COM5
+.venv\Scripts\python.exe -m bridge.main --simulado  # sem bancada: dublê do UNO
+```
+
+Precisa do extra `hardware` (`pip install -e ".[dev,hardware]"`).
+
+Para conferir a ponte de ponta a ponta (~2 min), noutro terminal, logo depois de
+subi-la: `.venv\Scripts\python.exe -m bridge.verificar`.
+
 ## Estrutura
 
 ```
