@@ -51,8 +51,8 @@ prototipo:
   # firmware e no protocolo serial, não chaves de `semaforo`.
   #
   # A emergência abre o verde EXCLUSIVO de uma aproximação, que não é fase do
-  # ciclo e por isso não tem linha em `fase_semaforo`. Como registrá-la em
-  # log_prioridade decide-se no Bloco 6.
+  # ciclo e por isso não tem linha em `fase_semaforo`. Em log_prioridade ela vai
+  # no `motivo`, com `fase_aplicada` nula (decisão de 2026-10-05, Bloco 6).
   semaforo:
     codigo_externo: PROTO_CRUZ_01
     descricao: Protótipo físico — cruzamento de 4 aproximações, ciclo de 2 fases

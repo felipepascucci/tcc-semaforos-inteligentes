@@ -58,6 +58,10 @@ Não introduzir dependência fora desta lista sem registrar em `09-pendencias-e-
 > `psycopg` já estava implícita na `DATABASE_URL` do §4; `structlog` já constava
 > do §7 deste arquivo; `ruff` e `mypy` já constavam do §3 de `08`.
 >
+> **`httpx` passou a dependência de runtime no Bloco 6 (2026-10-05).** Já estava
+> na stack, para teste. O backend o usa para ler `GET /estado` da ponte, e o
+> executor para transmitir o estado ao vivo. Registrado em `09`.
+>
 > **Acrescentados no Bloco 5 (2026-10-05)**, registrados em `09`: o
 > **`arduino-cli`**, para compilar o firmware do UNO sem a IDE, com o core e a
 > biblioteca do LCD fixados na versão acima; e o **`ziglang`**, dependência
@@ -125,6 +129,9 @@ SUMO_BINARY=sumo                     # ou sumo-gui
 SERIAL_PORT=COM3                     # UNO
 SERIAL_BAUDRATE=9600                 # a do NodeMCU receptor; o UNO tem uma UART só
 SERIAL_PORT_VEICULO=COM4             # NodeMCU emissor, só na medição de H3
+PONTE_URL=http://localhost:8001      # o backend lê GET /estado da ponte (vazio desliga)
+PONTE_URL_CONTEINER=http://host.docker.internal:8001   # a mesma, vista do compose
+BACKEND_URL=http://localhost:8000    # para onde o executor e o atendente transmitem
 LOG_LEVEL=INFO
 ```
 
@@ -183,6 +190,13 @@ Escopo realista para TCC, com honestidade sobre o que é demonstração:
 - **`id_correlacao`** — gerado na detecção e propagado por todo o fluxo até a atuação. É o que permite reconstruir uma priorização completa nos relatórios de validação. Sem ele, o item 6 do escopo (relatórios de validação) fica inviável.
 - **Métricas de latência** gravadas em `metrica_latencia` a cada priorização, com os três carimbos: `t_deteccao`, `t_decisao`, `t_atuacao`.
 - **Health check** em `/health` retornando estado de banco, adaptadores e da porta serial da bancada.
+
+> **Implementado no Bloco 6** (`app/logs.py`, `app/api/v1/health.py`). Os seis
+> campos saem em toda linha, nulos quando não se aplicam. O `id_correlacao` é
+> amarrado ao contexto do fluxo (`structlog.contextvars`). O `/health` traz
+> `banco`, `ponte`, `uno_respondendo` (a última `ST` tem menos de 2 s) e
+> `simulacao_ao_vivo`. **Só o banco decide o `estado`**: bancada e simulação são
+> opcionais. O antigo `watchdog_serial` saiu com a redefinição de I6 (`01` §6).
 
 ## 8. Arquitetura-alvo em AWS (documental)
 

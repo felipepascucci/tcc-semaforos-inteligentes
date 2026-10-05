@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any
 from sqlalchemy import (
     BigInteger,
     Boolean,
+    CheckConstraint,
     ForeignKey,
     Index,
     Integer,
@@ -104,3 +105,55 @@ class EstadoSemaforoAmostra(Base):
 
     def __repr__(self) -> str:
         return f"<Transicao exec={self.fk_execucao} t={self.t_simulacao} fase={self.fase}>"
+
+
+#: Os estados de um pedido, na ordem em que ele passa por eles.
+STATUS_PEDIDO = ("PENDENTE", "RODANDO", "CONCLUIDA", "FALHA")
+
+
+class PedidoSimulacao(Base):
+    """Uma execução pedida pela API, à espera do atendente do host (Bloco 6).
+
+    O backend roda no contêiner e o SUMO fica no host (`context/02` §3), então
+    `POST /simulacoes` não roda nada: grava o pedido, e
+    `python -m sim.controlador.atendente` o pega, roda o executor e grava o
+    desfecho aqui. É demonstração, não experimento: a API recusa as seeds
+    reservadas ao Bloco 8 e à calibração, e o atendente nunca escreve em
+    `analysis/data/` (decisão de 2026-10-05).
+
+    `resumo` guarda o que o executor mediu nessa execução, para
+    `GET /simulacoes/{id}`. Não é fonte de número do capítulo 5.
+    """
+
+    __tablename__ = "pedido_simulacao"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('PENDENTE', 'RODANDO', 'CONCLUIDA', 'FALHA')", name="status_conhecido"
+        ),
+        CheckConstraint("duracao_s IS NULL OR duracao_s > 0", name="duracao_positiva"),
+        # O atendente procura sempre "o pendente mais antigo".
+        Index("idx_pedido_status_criado", "status", "criado_em"),
+    )
+
+    id_pedido: Mapped[int] = mapped_column(Integer, primary_key=True)
+    nome_cenario: Mapped[str] = mapped_column(String(50), nullable=False)
+    modo: Mapped[ModoControle] = mapped_column(MODO_CONTROLE, nullable=False)
+    seed: Mapped[int] = mapped_column(Integer, nullable=False)
+    # Nulo usa a duração de cenarios.yaml.
+    duracao_s: Mapped[int | None] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(String(12), nullable=False, server_default="PENDENTE")
+    fk_execucao: Mapped[int | None] = mapped_column(
+        ForeignKey("execucao_simulacao.id_execucao", ondelete="SET NULL")
+    )
+    mensagem: Mapped[str | None] = mapped_column(String(200))
+    resumo: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    criado_em: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
+    )
+    iniciado_em: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True))
+    finalizado_em: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True))
+
+    execucao: Mapped[ExecucaoSimulacao | None] = relationship()
+
+    def __repr__(self) -> str:
+        return f"<PedidoSimulacao {self.id_pedido} {self.nome_cenario}/{self.modo} {self.status}>"

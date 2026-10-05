@@ -477,8 +477,13 @@ Processo Python no notebook. Responsabilidades:
 - `GET /estado` traz as **últimas 200 telemetrias**, não só a mais recente: como
   a `ST` sai a cada mudança de estado, quem lê o histórico não perde transição
   entre duas consultas.
-- Repassar detecções e eventos ao backend — **como, decide-se no Bloco 6**
-  (empurrar ou o backend ler `/estado`).
+- **Repassar ao backend: é o backend que lê** (decisão de 2026-10-05, Bloco 6).
+  Ele consulta `GET /estado` a 5 Hz, e a ponte continua sem saber que ele
+  existe. Por isso o `/estado` traz também `amostras_h3`, as amostras da sessão,
+  com o mesmo carimbo do `EV,…,PREEMP_INI` que as originou. É por esse carimbo
+  que o backend liga a amostra à linha de `log_prioridade`. O código de H3 (o
+  casamento e o CSV) não mudou. O backend grava a amostra em `metrica_latencia`
+  com `t_decisao` nulo, e o CSV continua sendo a fonte do número de H3.
 
 **Refeito em 2026-10-05 (entregas 5.1, 5.2 e 5.7).** Saíram o envio de comandos
 (`POST /comandos`, `PING` a cada 1 s, tradução `Comando` → linha) e o

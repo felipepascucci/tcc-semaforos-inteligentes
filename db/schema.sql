@@ -8,13 +8,13 @@
 --   docker compose exec -T db pg_dump -s -U tcc semaforo
 --
 -- Gerado de: PostgreSQL 16 (serviço `db` do docker-compose)
--- Revisão Alembic: 3f9c2a71d5e8
+-- Revisão Alembic: c4d81f2b9a60
 
 --
 -- PostgreSQL database dump
 --
 
-\restrict e5fREWJ9CgSMyUukuJc2umfn5QAom4eMaQtsD6C057EiRemI182m771cP4L3Xch
+\restrict Ek4B8ci5NneZc0arqA48UbndHRexqzmLcBJseaIraCSS06IjnRCb2nIci3qpUvz
 
 -- Dumped from database version 16.15
 -- Dumped by pg_dump version 16.15
@@ -338,9 +338,9 @@ CREATE TABLE public.metrica_latencia (
     id_correlacao uuid NOT NULL,
     fk_log integer,
     t_deteccao timestamp with time zone NOT NULL,
-    t_decisao timestamp with time zone NOT NULL,
+    t_decisao timestamp with time zone,
     t_atuacao timestamp with time zone,
-    latencia_decisao_ms integer GENERATED ALWAYS AS (((EXTRACT(epoch FROM (t_decisao - t_deteccao)) * (1000)::numeric))::integer) STORED NOT NULL,
+    latencia_decisao_ms integer GENERATED ALWAYS AS (((EXTRACT(epoch FROM (t_decisao - t_deteccao)) * (1000)::numeric))::integer) STORED,
     latencia_total_ms integer,
     ambiente character varying(20) NOT NULL
 );
@@ -471,6 +471,48 @@ CREATE SEQUENCE public.ocorrencia_id_ocorrencia_seq
 --
 
 ALTER SEQUENCE public.ocorrencia_id_ocorrencia_seq OWNED BY public.ocorrencia.id_ocorrencia;
+
+
+--
+-- Name: pedido_simulacao; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.pedido_simulacao (
+    id_pedido integer NOT NULL,
+    nome_cenario character varying(50) NOT NULL,
+    modo public.modo_controle NOT NULL,
+    seed integer NOT NULL,
+    duracao_s integer,
+    status character varying(12) DEFAULT 'PENDENTE'::character varying NOT NULL,
+    fk_execucao integer,
+    mensagem character varying(200),
+    resumo jsonb,
+    criado_em timestamp with time zone DEFAULT now() NOT NULL,
+    iniciado_em timestamp with time zone,
+    finalizado_em timestamp with time zone,
+    CONSTRAINT ck_pedido_simulacao_duracao_positiva CHECK (((duracao_s IS NULL) OR (duracao_s > 0))),
+    CONSTRAINT ck_pedido_simulacao_status_conhecido CHECK (((status)::text = ANY ((ARRAY['PENDENTE'::character varying, 'RODANDO'::character varying, 'CONCLUIDA'::character varying, 'FALHA'::character varying])::text[])))
+);
+
+
+--
+-- Name: pedido_simulacao_id_pedido_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.pedido_simulacao_id_pedido_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: pedido_simulacao_id_pedido_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.pedido_simulacao_id_pedido_seq OWNED BY public.pedido_simulacao.id_pedido;
 
 
 --
@@ -649,6 +691,13 @@ ALTER TABLE ONLY public.ocorrencia ALTER COLUMN id_ocorrencia SET DEFAULT nextva
 
 
 --
+-- Name: pedido_simulacao id_pedido; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.pedido_simulacao ALTER COLUMN id_pedido SET DEFAULT nextval('public.pedido_simulacao_id_pedido_seq'::regclass);
+
+
+--
 -- Name: semaforo id_semaforo; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -755,6 +804,14 @@ ALTER TABLE ONLY public.metrica_via_transversal
 
 ALTER TABLE ONLY public.ocorrencia
     ADD CONSTRAINT pk_ocorrencia PRIMARY KEY (id_ocorrencia);
+
+
+--
+-- Name: pedido_simulacao pk_pedido_simulacao; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.pedido_simulacao
+    ADD CONSTRAINT pk_pedido_simulacao PRIMARY KEY (id_pedido);
 
 
 --
@@ -869,6 +926,13 @@ CREATE INDEX idx_log_inicio ON public.log_prioridade USING btree (timestamp_inic
 --
 
 CREATE INDEX idx_metrica_exec ON public.metrica_simulacao USING btree (id_execucao);
+
+
+--
+-- Name: idx_pedido_status_criado; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_pedido_status_criado ON public.pedido_simulacao USING btree (status, criado_em);
 
 
 --
@@ -1007,6 +1071,14 @@ ALTER TABLE ONLY public.ocorrencia
 
 
 --
+-- Name: pedido_simulacao fk_pedido_simulacao_fk_execucao; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.pedido_simulacao
+    ADD CONSTRAINT fk_pedido_simulacao_fk_execucao FOREIGN KEY (fk_execucao) REFERENCES public.execucao_simulacao(id_execucao) ON DELETE SET NULL;
+
+
+--
 -- Name: tag_rfid fk_tag_rfid_fk_veiculo; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1018,5 +1090,5 @@ ALTER TABLE ONLY public.tag_rfid
 -- PostgreSQL database dump complete
 --
 
-\unrestrict e5fREWJ9CgSMyUukuJc2umfn5QAom4eMaQtsD6C057EiRemI182m771cP4L3Xch
+\unrestrict Ek4B8ci5NneZc0arqA48UbndHRexqzmLcBJseaIraCSS06IjnRCb2nIci3qpUvz
 

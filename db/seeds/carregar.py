@@ -34,7 +34,7 @@ ARQUIVO_DADOS = Path(__file__).with_name("dados.yaml")
 METROS_POR_GRAU_LAT = 111_320.0
 
 
-def _metros_por_grau_lon(latitude_graus: float) -> float:
+def metros_por_grau_lon(latitude_graus: float) -> float:
     """Metros por grau de longitude na latitude dada.
 
     Os meridianos convergem em direção aos polos, então um grau de longitude
@@ -62,7 +62,7 @@ def coordenadas_da_grade(config: dict[str, Any]) -> list[tuple[str, str, Decimal
     prefixo = config["prefixo_codigo"]
 
     passo_lat = passo_m / METROS_POR_GRAU_LAT
-    passo_lon = passo_m / _metros_por_grau_lon(lat0)
+    passo_lon = passo_m / metros_por_grau_lon(lat0)
 
     cruzamentos: list[tuple[str, str, Decimal, Decimal]] = []
     numero = 0

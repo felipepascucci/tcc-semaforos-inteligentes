@@ -70,10 +70,14 @@ class MetricaLatencia(Base):
     * `latencia_decisao_ms` (RNF01, < 100 ms p95) — `t_deteccao` → `t_decisao`,
       só `motor.avaliar()`, sem rede e sem I/O. Coluna **gerada** pelo Postgres,
       para que não exista a possibilidade de o cálculo divergir da fonte.
-    * `latencia_total_ms` (H3, < 200 ms p95) — `t_deteccao` → `t_atuacao`,
-      incluindo Wi-Fi, HTTP e serial. Gravada pela aplicação porque `t_atuacao`
-      pode não existir (preempção abortada), e porque é carimbada **na chegada do
-      ACK**, não no envio do comando.
+    * `latencia_total_ms` (H3, < 200 ms) — `t_deteccao` → `t_atuacao`. Gravada
+      pela aplicação porque `t_atuacao` pode não existir.
+
+    **Na bancada `t_decisao` é nulo** (decisão de 2026-10-05). O UNO decide
+    sozinho, e o instante da decisão não é observável à parte (`context/05`
+    §4.3): as linhas com `ambiente = 'HARDWARE'` trazem a leitura da tag e o
+    `PREEMP_INI`, e `latencia_decisao_ms` sai nula sozinha. Um carimbo inventado
+    faria a latência fim-a-fim passar por latência de decisão (RNF01).
     """
 
     __tablename__ = "metrica_latencia"
@@ -82,10 +86,11 @@ class MetricaLatencia(Base):
     id_correlacao: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     fk_log: Mapped[int | None] = mapped_column(ForeignKey("log_prioridade.id_log"))
     t_deteccao: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
-    t_decisao: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
+    # Nulo na bancada: o UNO decide sem expor o instante (context/05 §4.3).
+    t_decisao: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True))
     t_atuacao: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True))
 
-    latencia_decisao_ms: Mapped[int] = mapped_column(
+    latencia_decisao_ms: Mapped[int | None] = mapped_column(
         Integer,
         Computed("(EXTRACT(EPOCH FROM (t_decisao - t_deteccao)) * 1000)::INT", persisted=True),
     )

@@ -1,11 +1,12 @@
-"""Banco efêmero para os testes de integração.
+"""Banco efêmero para os testes de integração (`db/` e `api/`).
 
 `context/06` §7 é explícito: banco de teste efêmero, **nunca** o de
 desenvolvimento. Um teste que trunca tabelas no banco errado custa uma tarde de
 reseed no meio da semana de entrega.
 
 O contêiner sobe uma vez por sessão de teste (é o passo caro, ~5 s) e cada teste
-recebe o schema recém-migrado.
+recebe o schema recém-migrado. As fixtures só sobem o contêiner quando um teste
+as pede, então a suíte sem `-m banco` não precisa de Docker.
 """
 
 from __future__ import annotations
@@ -22,9 +23,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.repositories.sessao import criar_engine, criar_fabrica_sessao
 
-RAIZ = Path(__file__).resolve().parents[3]
-
-pytestmark = pytest.mark.banco
+RAIZ = Path(__file__).resolve().parents[2]
 
 
 @pytest.fixture(scope="session")
@@ -69,8 +68,8 @@ def sessao(fabrica_sessao: sessionmaker[Session], engine: Engine) -> Iterator[Se
     """
     tabelas = (
         "metrica_latencia, log_prioridade, metrica_simulacao, metrica_via_transversal, "
-        "estado_semaforo_amostra, deteccao, ocorrencia, execucao_simulacao, dispositivo_iot, "
-        "tag_rfid, fase_semaforo, veiculo_emergencia, semaforo"
+        "estado_semaforo_amostra, deteccao, ocorrencia, pedido_simulacao, execucao_simulacao, "
+        "dispositivo_iot, tag_rfid, fase_semaforo, veiculo_emergencia, semaforo"
     )
     with engine.begin() as conexao:
         conexao.execute(text(f"TRUNCATE {tabelas} RESTART IDENTITY CASCADE"))

@@ -26,6 +26,7 @@ O QUE ESTA FUNÇÃO GARANTE, E POR QUÊ
 from __future__ import annotations
 
 import argparse
+import os
 import shutil
 import subprocess
 import time
@@ -47,7 +48,9 @@ from core.priorizacao.motor import MotorDecisao
 from core.seguranca import VerificadorSeguranca
 from sim.ambiente import executavel
 from sim.controlador.coletor import DADOS, ColetorMetricas, ResultadoExecucao, gravar_csv
+from sim.controlador.transmissor import Transmissor
 from sim.demanda import gerar_rotas
+from sim.rede import georreferencia
 
 RAIZ = Path(__file__).resolve().parents[2]
 CONFIGURACAO_SUMO = RAIZ / "sim" / "config" / "malha.sumocfg"
@@ -95,6 +98,10 @@ class Opcoes:
             restritos a `AJUSTAVEIS`. Existe para a calibração de P17. Exige
             `persistir=False`: `execucao_simulacao` guarda o snapshot do YAML, e
             a linha mentiria sobre os parâmetros usados.
+        transmitir: URL do backend para onde empurrar o estado a 5 Hz
+            (`sim/controlador/transmissor.py`). `None`, o padrão, não transmite:
+            é assim que o lote roda (decisão de 2026-10-05, Bloco 6).
+        id_pedido: O pedido do atendente que originou esta execução, se houver.
     """
 
     cenario: str
@@ -109,6 +116,8 @@ class Opcoes:
     atraso_ms: int = 20
     diretorio_csv: Path | None = None
     ajustes: Ajustes = ()
+    transmitir: str | None = None
+    id_pedido: int | None = None
 
 
 def versao_do_codigo() -> str:
@@ -347,11 +356,14 @@ def executar(opcoes: Opcoes) -> ResultadoExecucao:
 
     registro = _abrir_registro(opcoes, parametros, duracao_s) if opcoes.persistir else None
 
+    transmissor = _transmissor(opcoes)
     adaptador.iniciar(_comando_sumo(opcoes, rotas, saida, duracao_s))
     try:
-        _laco(adaptador, motor, verificador, coletor, duracao_s, controlar, conflitos)
+        _laco(adaptador, motor, verificador, coletor, duracao_s, controlar, conflitos, transmissor)
     finally:
         adaptador.fechar()
+        if transmissor is not None:
+            transmissor.encerrar()
 
     resultado = coletor.consolidar(
         tripinfo=saida / "tripinfo.xml",
@@ -380,6 +392,21 @@ def executar(opcoes: Opcoes) -> ResultadoExecucao:
     return resultado
 
 
+def _transmissor(opcoes: Opcoes) -> Transmissor | None:
+    if opcoes.transmitir is None:
+        return None
+    transmissor = Transmissor(
+        url_backend=opcoes.transmitir,
+        cenario=opcoes.cenario,
+        modo=opcoes.modo,
+        seed=opcoes.seed,
+        georreferencia=georreferencia.carregar(),
+        id_pedido=opcoes.id_pedido,
+    )
+    transmissor.iniciar()
+    return transmissor
+
+
 def _laco(
     adaptador: AdaptadorSumo,
     motor: MotorDecisao,
@@ -388,6 +415,7 @@ def _laco(
     duracao_s: float,
     controlar: bool,
     conflitos: list[EventoConflito],
+    transmissor: Transmissor | None = None,
 ) -> None:
     """O laço de `context/04` §8.
 
@@ -396,20 +424,25 @@ def _laco(
     a verificação dos invariantes sobre o estado resultante.
 
     O buffer `conflitos` é preenchido pelo motor durante a decisão e drenado
-    depois que o cronômetro para.
+    depois que o cronômetro para. A transmissão ao vivo, quando ligada, também
+    fica fora do trecho cronometrado, e só anexa o estado numa fila.
     """
     while adaptador.cliente.tempo() < duracao_s:
         t = adaptador.passo()
         estado = adaptador.ler_estado(t)
 
+        latencia_ms: float | None = None
         if controlar:
             inicio = time.perf_counter()
             comandos = motor.avaliar(estado)
-            coletor.registrar_decisao((time.perf_counter() - inicio) * 1000.0, len(comandos))
+            latencia_ms = (time.perf_counter() - inicio) * 1000.0
+            coletor.registrar_decisao(latencia_ms, len(comandos))
             coletor.registrar_conflitos(conflitos)
             conflitos.clear()
         else:
             comandos = []
+        if transmissor is not None:
+            transmissor.publicar(estado, latencia_ms)
 
         transicoes = adaptador.aplicar(comandos, t)
 
@@ -588,6 +621,14 @@ def main(argumentos: Sequence[str] | None = None) -> int:
         help="grava também queue.xml (~77 MB por execução; redundante com os detectores E2)",
     )
     analisador.add_argument(
+        "--transmitir",
+        nargs="?",
+        const=os.getenv("BACKEND_URL", "http://localhost:8000"),
+        default=None,
+        metavar="URL",
+        help="empurra o estado a 5 Hz ao backend, para o dashboard (padrão: $BACKEND_URL)",
+    )
+    analisador.add_argument(
         "--atraso-ms",
         type=int,
         default=20,
@@ -607,6 +648,7 @@ def main(argumentos: Sequence[str] | None = None) -> int:
             persistir=not opcoes.sem_banco,
             saida_detalhada=opcoes.saida_detalhada,
             atraso_ms=opcoes.atraso_ms,
+            transmitir=opcoes.transmitir,
         )
     )
     print(_resumo(resultado))
