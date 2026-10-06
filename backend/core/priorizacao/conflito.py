@@ -25,6 +25,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
+from typing import Protocol
 
 from core.malha import Cruzamento
 from core.parametros import Parametros
@@ -101,6 +102,20 @@ class Resolucao:
     motivo: str = ""
 
 
+class PoliticaDesempate(Protocol):
+    """Quem escolhe o vencedor de E8 no lugar da chave determinística (P19).
+
+    É o ponto em que a rotulagem por bifurcação (10.4) força uma escolha e em que
+    a política aprendida (10.6) vai decidir. A política **propõe**; quem decide se
+    a proposta vale é `resolver`, que mantém a criticidade como regra acima de
+    qualquer política (P20).
+    """
+
+    def escolher(self, id_semaforo: str, disputas: Sequence[Disputa], t: float) -> Disputa | None:
+        """O pedido que deve vencer, ou `None` para deixar a chave de E8 decidir."""
+        ...
+
+
 def _chave_de_desempate(disputa: Disputa, parametros: Parametros) -> tuple[int, int, float, int]:
     """Chave de ordenação: menor vence, na ordem 0 → 1 → 2 → 3 de `context/01` §5.2."""
     return (
@@ -116,6 +131,7 @@ def resolver(
     disputas: Sequence[Disputa],
     cruzamento: Cruzamento,
     parametros: Parametros,
+    imposto: Disputa | None = None,
 ) -> Resolucao | None:
     """Etapa **E8** — decide quem recebe o verde e quem espera.
 
@@ -124,6 +140,10 @@ def resolver(
         disputas: Pedidos concorrentes no mesmo cruzamento.
         cruzamento: Topologia, que define quais fases conflitam.
         parametros: Parâmetros do algoritmo, com a ordem de prioridade por tipo.
+        imposto: Vencedor proposto por uma `PoliticaDesempate`. **Só vale se for
+            um dos pedidos e tiver a criticidade mais alta entre eles**: a
+            criticidade é regra acima de qualquer política (P20). Fora disso, a
+            proposta é ignorada e decide a chave de E8.
 
     Returns:
         A resolução, ou `None` se não houver pedido nenhum.
@@ -133,6 +153,14 @@ def resolver(
 
     ordenadas = sorted(disputas, key=lambda d: _chave_de_desempate(d, parametros))
     vencedor = ordenadas[0]
+    imposto_valido = (
+        imposto is not None
+        and imposto in ordenadas
+        and imposto.deteccao.criticidade == vencedor.deteccao.criticidade
+    )
+    if imposto_valido and imposto is not None:
+        vencedor = imposto
+        ordenadas = [imposto, *(d for d in ordenadas if d != imposto)]
 
     juntos: list[Disputa] = []
     adiados: list[Disputa] = []
@@ -153,11 +181,13 @@ def resolver(
         vencedor=vencedor,
         atendidos_juntos=tuple(juntos),
         adiados=tuple(adiados),
-        motivo=_motivo(vencedor, adiados, parametros),
+        motivo=_motivo(vencedor, adiados, parametros, imposto=imposto_valido),
     )
 
 
-def _motivo(vencedor: Disputa, adiados: Iterable[Disputa], parametros: Parametros) -> str:
+def _motivo(
+    vencedor: Disputa, adiados: Iterable[Disputa], parametros: Parametros, *, imposto: bool = False
+) -> str:
     """Texto que explica o desempate, para o log e para a banca."""
     veiculo = vencedor.deteccao
     base = (
@@ -169,7 +199,9 @@ def _motivo(vencedor: Disputa, adiados: Iterable[Disputa], parametros: Parametro
         return base
 
     perdedor = lista[0].deteccao
-    if veiculo.criticidade < perdedor.criticidade:
+    if imposto and veiculo.criticidade == perdedor.criticidade:
+        criterio = f"escolha da política de desempate sobre {perdedor.id_veiculo}"
+    elif veiculo.criticidade < perdedor.criticidade:
         criterio = (
             f"criticidade {int(veiculo.criticidade)} sobre {int(perdedor.criticidade)} "
             f"de {perdedor.id_veiculo}"

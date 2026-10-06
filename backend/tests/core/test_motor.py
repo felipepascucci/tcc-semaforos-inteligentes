@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+from dataclasses import dataclass
+
 import pytest
 
 from core.comandos import TipoComando
 from core.malha import TopologiaMalha
 from core.modelos import EstadoMalha, EstadoSemaforo, Sinal, TipoVeiculo, VeiculoEmergencia
 from core.parametros import Parametros
-from core.priorizacao.conflito import EventoConflito
+from core.priorizacao.conflito import Disputa, EventoConflito
 from core.priorizacao.motor import MotorDecisao
 from tests.core.conftest import (
     CRITICIDADE_TIPICA,
@@ -572,3 +575,88 @@ def test_abortar_devolve_fallback_e_limpa_o_estado(
     assert comando.tipo is TipoComando.FALLBACK_SEGURO
     assert motor.preempcao_ativa("CRUZ_TESTE_1") is None
     assert motor.plano_de_compensacao("CRUZ_TESTE_1") is None
+
+
+# ---------------------------------------------------------------------------
+# Política de desempate e consulta de conflitos — P19 (10.4 e 10.6)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class _Preferir:
+    """Política de teste: prefere sempre o mesmo VE, quando ele disputa."""
+
+    id_veiculo: str
+
+    def escolher(self, id_semaforo: str, disputas: Sequence[Disputa], t: float) -> Disputa | None:
+        del id_semaforo, t
+        return next((d for d in disputas if d.deteccao.id_veiculo == self.id_veiculo), None)
+
+
+def _dois_iguais() -> tuple[VeiculoEmergencia, VeiculoEmergencia]:
+    """Dois VEs de mesmo nível em fases conflitantes de `CRUZ_TESTE_1`."""
+    arterial = construir_ve("ART", TipoVeiculo.AMBULANCIA, n_vias=4, posicao_na_via_m=410.0)
+    transversal = VeiculoEmergencia(
+        id="TRV",
+        tipo=TipoVeiculo.AMBULANCIA,
+        criticidade=arterial.criticidade,
+        posicao=(0.0, 0.0),
+        velocidade=10.0,
+        rota=("T1_IN", "T1_OUT"),
+        indice_via_atual=0,
+        posicao_na_via_m=410.0,
+    )
+    return arterial, transversal
+
+
+def _comando_no_cruzamento(motor: MotorDecisao, estado: EstadoMalha) -> str | None:
+    comandos = [c for c in motor.avaliar(estado) if c.id_semaforo == "CRUZ_TESTE_1"]
+    return comandos[0].id_veiculo if comandos else None
+
+
+def test_politica_escolhe_quem_passa_entre_iguais(
+    topologia: TopologiaMalha, parametros: Parametros
+) -> None:
+    estado = construir_estado(topologia, veiculos=_dois_iguais(), fase_atual=FASE_ARTERIAL)
+    sem_politica = MotorDecisao(parametros=parametros, topologia=topologia)
+    com_politica = MotorDecisao(
+        parametros=parametros, topologia=topologia, politica=_Preferir("TRV")
+    )
+
+    assert _comando_no_cruzamento(sem_politica, estado) == "ART"
+    assert _comando_no_cruzamento(com_politica, estado) == "TRV"
+
+
+def test_politica_nao_passa_por_cima_da_criticidade_no_motor(
+    topologia: TopologiaMalha, parametros: Parametros
+) -> None:
+    ambulancia = construir_ve("AMB", TipoVeiculo.AMBULANCIA, n_vias=4, posicao_na_via_m=410.0)
+    motor = MotorDecisao(parametros=parametros, topologia=topologia, politica=_Preferir("BMB"))
+
+    estado = construir_estado(topologia, veiculos=(ambulancia, _ve_transversal()))
+
+    assert _comando_no_cruzamento(motor, estado) == "AMB"
+
+
+def test_politica_que_nao_opina_mantem_o_e8(
+    topologia: TopologiaMalha, parametros: Parametros
+) -> None:
+    estado = construir_estado(topologia, veiculos=_dois_iguais(), fase_atual=FASE_ARTERIAL)
+    motor = MotorDecisao(parametros=parametros, topologia=topologia, politica=_Preferir("NINGUEM"))
+
+    assert _comando_no_cruzamento(motor, estado) == "ART"
+
+
+def test_conflitos_em_ve_a_disputa_sem_decidir(
+    topologia: TopologiaMalha, parametros: Parametros
+) -> None:
+    """A consulta devolve o que `avaliar` publicaria, e não mexe no estado do motor."""
+    motor, eventos = _motor_observado(topologia, parametros)
+    estado = construir_estado(topologia, t=3.0, veiculos=_dois_iguais(), fase_atual=FASE_ARTERIAL)
+
+    consultados = motor.conflitos_em(estado)
+
+    assert motor.preempcao_ativa("CRUZ_TESTE_1") is None
+    assert eventos == []
+    motor.avaliar(estado)
+    assert consultados == eventos

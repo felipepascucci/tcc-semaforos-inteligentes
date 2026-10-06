@@ -343,6 +343,16 @@ class ColetorMetricas:
         self.colisoes += colisoes
         self.teleportes += teleportes
 
+    def abriria_episodio(self, evento: EventoConflito) -> bool:
+        """Se `registrar_conflitos` abriria um episódio novo com este evento.
+
+        Consulta pura, para a rotulagem (10.4) bifurcar exatamente nas aberturas
+        de episódio que a 10.1 conta, e não em cada passo da disputa.
+        """
+        aberto = self._abertos.get((evento.id_semaforo, evento.ids_veiculos))
+        folga = FOLGA_ENTRE_EPISODIOS_EM_PASSOS * self.passo_s
+        return aberto is None or evento.t - aberto.t_fim_s > folga
+
     def registrar_conflitos(self, eventos: Iterable[EventoConflito]) -> None:
         """Agrega os conflitos observados neste passo em episódios (10.1).
 

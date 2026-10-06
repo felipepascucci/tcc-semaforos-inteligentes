@@ -1179,6 +1179,76 @@ python -m sim.controlador.lote --cenarios treino_multiplas --modos PREEMPCAO \
 python -m analysis.resumo_conflitos --dados analysis/data/bloco10_treino_volume
 ```
 
+#### Entrega 10.4, 2026-10-05 · ✅ **IMPLEMENTADA E RODADA** — 652 exemplos rotulados
+
+Rotulagem por bifurcação em `sim/controlador/rotulagem.py`, com as decisões da
+tabela do fim (reexecução do zero em vez de `saveState`/`loadState`; o ramo força
+só a disputa bifurcada e depois decide o E8; empate fora do treino; teto de 900 s).
+Rodada nas 50 seeds de treino e validação, `--paralelo 6`, 272,9 min de parede
+(parte dele com a máquina dividida com outro programa; o resultado não depende
+disso). Cinquenta válidas. Dados em `analysis/data/bloco10_rotulos/`.
+
+| Grandeza | Treino (201..240) | Validação (241..250) |
+| --- | ---: | ---: |
+| Disputas bifurcadas | 529 | 139 |
+| Rótulo A / B | 376 / 141 | 86 / 49 |
+| Empate (fora do treino) | 12 | 4 |
+| Descartadas | 0 | 0 |
+| **Exemplos de treino (A ou B)** | **517** | **135** |
+| E8 faz a escolha do rótulo | 341 (66,0%) | 82 (60,7%) |
+| Margem do minimax entre as escolhas, mediana | 13,3 s | 13,3 s |
+| Custo do E8 pela régua do rótulo, média por exemplo | 5,12 s | 7,19 s |
+
+**As garantias, todas medidas:**
+
+1. **Reexecução fiel em 668 de 668 disputas.** Nos dois ramos de cada uma, a
+   disputa foi reencontrada no mesmo passo, com os mesmos VEs e os mesmos ETAs
+   da principal, sem tolerância.
+2. **A trajetória principal é a da 10.2.** Os CSV consolidados saíram idênticos
+   aos de `analysis/data/bloco10_treino_volume/` — conflitos, VEs e transversal
+   byte a byte, execuções fora das colunas de latência e de versão. As 668
+   disputas bifurcadas são exatamente as 529 + 139 decidíveis de mesmo nível que
+   a 10.2 contou.
+3. **Ramo que força a escolha do E8 reproduz a principal**, verificado no teste
+   de ponta a ponta (`sim/tests/test_rotulagem.py`, seed 900): os dois VEs chegam
+   no mesmo instante, com a travessia 0,1 s acima do `tripinfo` pela convenção do
+   instante de chegada.
+4. Nenhuma colisão, teleporte ou violação de invariante em ramo nenhum, e nenhum
+   ramo no teto de 900 s.
+
+**O que o dado diz, para a 10.5 — e o que não diz:**
+
+- **Há o que aprender.** O E8 faz a escolha que o minimax prefere em 66% dos
+  exemplos de treino. Nos outros 34%, a escolha certa ganharia uma mediana de
+  13,3 s no VE mais prejudicado. **Isto não é resultado de H4**: é o conjunto de
+  treino descrito pela régua do próprio rótulo. H4 é testada no Bloco 8, com o
+  braço `PREEMPCAO_ML` rodando de verdade.
+- **O rótulo é desbalanceado: A vence em 73% do treino** (376 de 517). A é sempre
+  o VE do corredor, porque a ordem é por id e `VE_ROTA_VE_CORREDOR_*` vem antes
+  de `VE_ROTA_VE_TRANSVERSAL_*`. O modelo de P19 não tem intercepto — é o que
+  garante `score(B,A) = −score(A,B)` —, então esse desequilíbrio **não** pode
+  ser absorvido por um termo constante: ou os atributos o explicam (o corredor
+  tem mais `cruzamentos_restantes`), ou ele aparece como erro. É a primeira coisa
+  a olhar na 10.5.
+- Os atributos foram gravados com a fila **somada e por faixa**; qual entra no
+  modelo é decisão da 10.5 (`core/priorizacao/atributos.py`).
+
+> **Ressalva de versão, a declarar.** A coluna `versao_codigo` de
+> `rotulos.csv` e de `execucoes.csv` traz `48fff16`, mas o lote rodou com a
+> rotulagem ainda não commitada na árvore de trabalho: `versao_do_codigo()` lê
+> o `HEAD` e não acusa árvore modificada. O código de `sim/` e `backend/` não
+> mudou entre o disparo do lote e o commit da 10.4, que é, portanto, a versão
+> que produziu estes dados. Para o Bloco 8 vale corrigir a função, para que ela
+> marque árvore suja.
+
+**Como reproduzir:**
+
+```bash
+python -m sim.controlador.rotulagem --seeds 201..250 --paralelo 6 \
+    --saida analysis/data/bloco10_rotulos
+python -m analysis.resumo_rotulos --dados analysis/data/bloco10_rotulos
+```
+
 Toda disputa é entre **dois** VEs, sempre no cruzamento **CRUZ_02**, que é onde a
 rota do corredor cruza a transversal. A ausência de dispersão entre seeds é
 esperada e não é defeito: as partidas de VE não dependem da seed, só o tráfego de
@@ -1359,6 +1429,10 @@ a que der o melhor minimax.
 Tecnicamente viável: o TraCI expõe `simulation.saveState()` e `loadState()`. O
 custo por evento é limitado — a bifurcação não precisa ir até o fim da hora, só
 até os dois VEs saírem.
+
+> **Revisto em 2026-10-05 (entrega 10.4):** o estado carregado do arquivo não
+> reproduz a trajetória exatamente, e cada ramo passou a **reexecutar a seed do
+> zero** até a disputa. Ver a decisão na tabela do fim e o registro da 10.4.
 
 > **Por que não estimar o rótulo por heurística.** Rotular por uma regra
 > (ex.: "quem tem menor ETA é o certo") ensinaria ao modelo a própria regra, e o
@@ -1713,6 +1787,9 @@ diferenças) foram verificados.
 
 | Data | Item | Decisão | Justificativa |
 | --- | --- | --- | --- |
+| 2026-10-05 | **Entrega 10.4: bifurcação por reexecução, e não por `saveState`/`loadState`** (P19) | Cada ramo sobe um SUMO novo com a mesma seed e reexecuta do zero, com o mesmo código da trajetória principal, até o passo em que a disputa abre; só ali instala a escolha forçada. Cada rótulo carrega `replay_fiel`: os dois ramos reencontraram a disputa no mesmo passo, com os mesmos VEs e os mesmos ETAs da principal, sem tolerância. Implementado em `sim/controlador/rotulagem.py`. | Escolhida pela equipe contra "manter o estado salvo e medir o desvio". **Medido antes:** com `loadState` no mesmo processo, carregar o mesmo arquivo duas vezes deu trajetórias diferentes; com processo novo, `--save-state.rng` e `--save-state.precision 17`, ainda houve desvio de 0,1 a 0,3 s nas chegadas (seed 900), porque o SUMO grava o estado do modelo de troca de faixa (`lcState2`) arredondado. A reexecução é exata por construção, e o código ficou mais simples. Custo: ~3,5 h de máquina para 50 seeds, uma vez. |
+| 2026-10-05 | **Entrega 10.4: o que decide depois da escolha forçada** | O ramo força **só a disputa bifurcada**, enquanto os dois VEs a disputarem; daí em diante, inclusive num segundo encontro, decide o E8 determinístico. | Escolhida pela equipe contra "o mesmo VE vence as seguintes". O rótulo responde "qual escolha é melhor agora, se o resto seguir a regra atual", que é a pergunta de H4 (substituir o E8 numa decisão), e cada disputa da principal vira um exemplo independente. |
+| 2026-10-05 | **Entrega 10.4: empates e horizonte** | Minimax igual nos dois ramos (arredondado ao passo de 0,1 s) vira `EMPATE`: fora do treino, contado. Cada ramo roda até os dois VEs chegarem, com teto de 900 s; ramo no teto, com colisão, teleporte ou violação, ou com reexecução infiel, descarta a disputa (`DESCARTADA`, com o motivo). | Escolhidas pela equipe. Empate não ensina nada e não tem rótulo a inventar; o número de empates vai para o texto, porque diz quanto da decisão é irrelevante para o pior VE. O teto não mexe no rótulo: o corredor leva ~250 s, e P19 recusou rótulo estimado. |
 | 2026-10-05 | **Entrega 10.2: cenário de treino `treino_multiplas`** (P19) | Seção nova `cenarios_treino` em `sim/config/cenarios.yaml`, fora de `cenarios`. Mesmas rotas e mesmo fundo (700 veíc./h) de `multiplas_emergencias`, com três diferenças: **um par a cada 300 s** (contra 600); **atraso da segunda partida sorteado por par**, uniforme em [0, 20] s, por um gerador próprio derivado da seed (`Random("emergencias:<seed>")`); e **tipo e criticidade desacoplados** — criticidade em rodízio próprio `[1, 2, 3, 2]`, igual nos dois VEs do par exceto um par a cada cinco, em que o segundo vai ao nível seguinte (80% de mesmo nível), e tipo do segundo VE uma posição adiante no rodízio. Implementado em `partidas_de_treino` (`sim/demanda/gerar_rotas.py`). | Escolhida pela equipe contra "rotas novas com outros pontos de encontro" e "as duas coisas": a geometria da avaliação faz o modelo treinar no mesmo tipo de encontro em que vai ser testado. O atraso fixo deixava a diferença de ETA quase constante, e o peso de `eta_s` não teria o que aprender. Rodízio determinístico escolhido contra "sorteio pela seed": proporção fixa e explicável em uma frase. **Exceção declarada** à regra de `04` §7 (partida do VE independente da seed): vale só no treino, onde não há comparação a parear entre seeds; os braços de uma mesma seed leem o mesmo arquivo. Fora de `cenarios`, o cenário não entra na tabela da metodologia, no lote padrão nem na API. Os arquivos de rota dos cenários do experimento saem idênticos aos da main (verificado em `multiplas_emergencias`, seeds 101..110). |
 | 2026-10-05 | **Divisão por seed do treino de P19** | Treino **201..240**, validação **241..250**, em `execucao.seeds_treino_ml`; 201..250 entram em `seeds_reservadas`. H4 continua testada no Bloco 8 (seeds 1..50, cenário de avaliação). | Escolhida pela equipe contra 201..220 / 221..230. Fora de 1..50 (guarda de P16), de 101..105 (calibração) e de 101..110 (10.1). Fixada antes de qualquer rótulo ou treino. |
 | 2026-10-05 | **Rota secundária de `multiplas_emergencias` estendida** (pedido do Felipe ao testar o dashboard) | A `ROTA_VE_TRANSVERSAL` passa de `T2_S0 T2_S1 T2_S2` (CRUZ_02, CRUZ_06, sai pelo sul) para `T2_S0 T2_S1 A2_L2 A2_L3 A2_L4`: desce a transversal 2, **vira à esquerda** em CRUZ_06 e segue pela arterial 2 por CRUZ_07 e CRUZ_08. O encontro em CRUZ_02 e o `atraso_secundario_s` não mudam. Mudança no cenário do **experimento**, e não só da demonstração. | Escolhida pela equipe contra "só num cenário de demonstração" e "decidir no Bloco 10". Passado o conflito, o segundo VE só tinha mais um cruzamento pela frente, e a H4 avalia justamente a consequência adiante da escolha de E8. **Medido na seed 900, sem gravar:** disputas 6 → 10, com um segundo encontro em CRUZ_08 (fases 2×1) em 4 dos 6 pares; zero colisão, teleporte ou violação; paradas de VE 2 → 9. Das 9, **3 vêm da conversão à esquerda, que é permissiva** (`state="o"`): o VE cede ao tráfego oposto. As demais são o custo das disputas. Mantida, porque os braços pareados passam pela mesma rota, e declarada como limitação. **Custos:** os números do piloto e da remedição de P16 nesse cenário viram histórico não comparável; a contagem da 10.1 vale para a rota antiga e precisa ser remedida (seeds 101..110) antes da 10.2. O Bloco 8 ainda não rodou, então nenhum número oficial se perde. |
