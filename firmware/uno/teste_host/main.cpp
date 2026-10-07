@@ -6,7 +6,8 @@
 //
 //   B <ms>          boot no instante <ms> (o setup() do .ino)
 //   A <ms>          o tempo passa até <ms>, de 1 em 1 ms, como o loop() faria
-//   R <ms> <hex>    os bytes <hex> chegam ao RX no instante <ms>
+//   R <ms> <hex>    os bytes <hex> chegam ao RX (o USB, a ponte) no instante <ms>
+//   V <ms> <hex>    os bytes <hex> chegam ao A0 (o NodeMCU receptor) em <ms>
 //   L               pede o texto do LCD
 //   S <n>           o buffer de saída passa a ter <n> bytes livres
 //   G <i>           o pino verde da aproximação <i> fica aceso por fora da
@@ -82,14 +83,20 @@ int main() {
         break;
       }
       case 'A':
-      case 'R': {
+      case 'R':
+      case 'V': {
         char* fim = NULL;
         const uint32_t ate = static_cast<uint32_t>(strtoul(resto, &fim, 10));
         while (agora != ate) controlador.avancar(++agora);
-        if (comando[0] == 'R') {
+        if (comando[0] != 'A') {
           while (*fim == ' ') fim++;
           for (char* p = fim; valorHex(p[0]) >= 0 && valorHex(p[1]) >= 0; p += 2) {
-            controlador.receber(static_cast<char>(valorHex(p[0]) * 16 + valorHex(p[1])), agora);
+            const char c = static_cast<char>(valorHex(p[0]) * 16 + valorHex(p[1]));
+            if (comando[0] == 'R') {
+              controlador.receber(c, agora);
+            } else {
+              controlador.receberDoReceptor(c, agora);
+            }
           }
         }
         break;

@@ -12,24 +12,36 @@ from adapters.hardware.simulado import (
     UnoSimulado,
     config_da_bancada,
 )
+from bridge.protocolo import Autorizacoes
 from bridge.transporte import ConexaoPerdidaError, LinhaRecebida
 
 CONFIG_BANCADA = config_da_bancada()
 
+#: Uma ocorrência de cada tipo, na ordem antiga dos tipos (ambulância 1,
+#: bombeiro 2, polícia 3): com ela, a regra de antes de 2026-10-06 vale.
+TODOS: Autorizacoes = (1, 2, 3)
 
-def fabrica_de_uno() -> Callable[[float], UnoSimulado]:
-    return lambda t_s: UnoSimulado(CONFIG_BANCADA, t_s)
+
+class UnoJaAutorizado(UnoSimulado):
+    """Atalho de teste: o UNO como fica depois de a ponte mandar a lista.
+
+    O UNO de verdade liga negando todos; quem testa a autorização em si usa
+    `autorizacoes=NENHUMA_AUTORIZACAO` e manda as linhas `AUT`.
+    """
+
+    def __init__(self, autorizacoes: Autorizacoes, t_s: float) -> None:
+        super().__init__(CONFIG_BANCADA, t_s)
+        self._autorizacoes = list(autorizacoes)
+
+
+def fabrica_de_uno(autorizacoes: Autorizacoes = TODOS) -> Callable[[float], UnoSimulado]:
+    return lambda t_s: UnoJaAutorizado(autorizacoes, t_s)
 
 
 def transporte_rapido(
-    *, latencia_s: float = LATENCIA_PADRAO_S, fio_do_nodemcu_no_rx: bool = False
+    *, latencia_s: float = LATENCIA_PADRAO_S, autorizacoes: Autorizacoes = TODOS
 ) -> TransporteSimulado:
-    return TransporteSimulado(
-        fabrica_de_uno(),
-        passo_s=0.01,
-        latencia_s=latencia_s,
-        fio_do_nodemcu_no_rx=fio_do_nodemcu_no_rx,
-    )
+    return TransporteSimulado(fabrica_de_uno(autorizacoes), passo_s=0.01, latencia_s=latencia_s)
 
 
 async def ate(condicao: Callable[[], bool], limite_s: float = 2.0) -> None:

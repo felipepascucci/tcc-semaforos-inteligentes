@@ -1,6 +1,9 @@
 // A bancada (PROTO_CRUZ_01) ao vivo: as quatro aproximações S1..S4, o regime do
-// UNO, a rua atendida e a fila de um lugar (context/05 §3 e §4.2). Quem decide
-// é o UNO; o dashboard só mostra o que a ponte ouviu (context/01 §4).
+// UNO, a rua atendida, a fila de um lugar (context/05 §3 e §4.2) e, desde
+// 2026-10-06, a lista da Central que o UNO tem: quem pode preemptar, e com que
+// criticidade. Quem decide é o UNO; o dashboard só mostra o que a ponte ouviu
+// (context/01 §4).
+import { rotuloCriticidade, TIPOS_VEICULO } from "../api/tipos";
 import type { Sinal } from "../api/tipos";
 import type { SemaforoAoVivo } from "../stream/estado";
 import { aoVivo } from "../stream/estado";
@@ -26,6 +29,22 @@ export function Luzes({ sinal, rotulo }: { sinal: Sinal | "SEM_DADO"; rotulo: st
       <span className="text-xs font-medium text-slate-600">{rotulo}</span>
     </div>
   );
+}
+
+const NOME_TIPO: Record<string, string> = {
+  AMBULANCIA: "Ambulância",
+  BOMBEIRO: "Bombeiro",
+  POLICIA: "Polícia",
+};
+
+/** Quem a Central pôs em serviço, como o UNO tem: "Ambulância (1 — Risco à vida)". */
+export function textoAutorizacoes(lista: Record<string, number> | undefined): string {
+  if (!lista) return "—";
+  const emServico = TIPOS_VEICULO.filter((tipo) => (lista[tipo] ?? 0) > 0);
+  if (emServico.length === 0) return "ninguém (nenhum VE preempta)";
+  return emServico
+    .map((tipo) => `${NOME_TIPO[tipo]} (${rotuloCriticidade(lista[tipo] ?? 0)})`)
+    .join(" · ");
 }
 
 export function PainelBancada({
@@ -74,6 +93,8 @@ export function PainelBancada({
             <dd>{estado.rua_ativa ? `Rua ${estado.rua_ativa}` : "nenhuma"}</dd>
             <dt className="text-slate-500">Fila</dt>
             <dd>{estado.rua_fila ? `Rua ${estado.rua_fila}` : "vazia"}</dd>
+            <dt className="text-slate-500">Em serviço no UNO</dt>
+            <dd>{textoAutorizacoes(estado.autorizacoes)}</dd>
             <dt className="text-slate-500">Última telemetria</dt>
             <dd className={vivo ? "" : "font-semibold text-amber-700"}>
               {hora(estado.chegou_em)}

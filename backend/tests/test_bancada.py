@@ -9,8 +9,12 @@ interrompido, e o teto descarta a fila **sem** `DESCARTADO`.
 from __future__ import annotations
 
 import itertools
+import json
 import uuid
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+
+import httpx
 
 from app.models import StatusExecucao
 from app.services.bancada import (
@@ -19,10 +23,12 @@ from app.services.bancada import (
     EventoBancada,
     InserirLatencia,
     InserirLog,
+    LeitorPonte,
     Operacao,
     TradutorBancada,
     estado_do_semaforo,
 )
+from app.services.difusao import Difusor
 
 T0 = datetime(2026, 10, 5, 12, tzinfo=UTC)
 
@@ -154,6 +160,79 @@ def test_recusado_nao_vira_linha() -> None:
     assert _tradutor().traduzir(_ev("RECUSADO", 1)) == []
 
 
+def test_sem_ocorrencia_vira_linha_de_falha_fechada() -> None:
+    """P20 na bancada (2026-10-06): a detecção negada fica no log, como na API."""
+    (linha,) = _tradutor().traduzir(_ev("SEM_OCORRENCIA", 2, 3, "AMBULANCIA"))
+    assert isinstance(linha, InserirLog)
+    assert (linha.status, linha.timestamp_inicio, linha.timestamp_fim) == (
+        StatusExecucao.FALHA,
+        _t(2),
+        _t(2),
+    )
+    assert "sem ocorrência ativa na Central" in linha.motivo
+
+
+# ---------------------------------------------------------------------------
+# A lista da Central mantida no UNO (decisão de 2026-10-06)
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class _CentralFixa:
+    lista: dict[str, int]
+
+    def autorizacoes(self) -> dict[str, int]:
+        return dict(self.lista)
+
+
+def _leitor_com_central(
+    central: _CentralFixa | None,
+) -> tuple[LeitorPonte, list[httpx.Request]]:
+    pedidos: list[httpx.Request] = []
+
+    def responder(pedido: httpx.Request) -> httpx.Response:
+        pedidos.append(pedido)
+        return httpx.Response(202, json={"linhas": [], "t_envio": T0.isoformat()})
+
+    cliente = httpx.AsyncClient(transport=httpx.MockTransport(responder), base_url="http://ponte")
+    leitor = LeitorPonte(cliente, Difusor(), central=central)  # type: ignore[arg-type]
+    return leitor, pedidos
+
+
+NEGA_TODOS = {"AMBULANCIA": 0, "BOMBEIRO": 0, "POLICIA": 0}
+
+
+async def test_lista_diferente_da_st_e_enviada_a_ponte() -> None:
+    leitor, pedidos = _leitor_com_central(_CentralFixa({**NEGA_TODOS, "AMBULANCIA": 1}))
+    await leitor._sincronizar_central({"autorizacoes": NEGA_TODOS})
+
+    (pedido,) = pedidos
+    assert (pedido.method, pedido.url.path) == ("PUT", "/autorizacoes")
+    assert json.loads(pedido.content) == {
+        "autorizacoes": {"AMBULANCIA": 1, "BOMBEIRO": 0, "POLICIA": 0}
+    }
+    assert leitor.envios_de_autorizacao == 1
+
+
+async def test_lista_igual_a_da_st_nao_e_reenviada() -> None:
+    leitor, pedidos = _leitor_com_central(_CentralFixa(NEGA_TODOS))
+    await leitor._sincronizar_central({"autorizacoes": NEGA_TODOS})
+    assert pedidos == []
+
+
+async def test_reenvio_espera_o_intervalo_enquanto_a_st_nao_confirma() -> None:
+    leitor, pedidos = _leitor_com_central(_CentralFixa({**NEGA_TODOS, "POLICIA": 2}))
+    for _ in range(5):  # cinco leituras a 5 Hz, e o UNO ainda sem a lista
+        await leitor._sincronizar_central({"autorizacoes": NEGA_TODOS})
+    assert len(pedidos) == 1
+
+
+async def test_sem_banco_ninguem_sincroniza() -> None:
+    leitor, pedidos = _leitor_com_central(None)
+    await leitor._sincronizar_central({"autorizacoes": NEGA_TODOS})
+    assert pedidos == []
+
+
 def test_amostra_de_h3_liga_ao_preemp_ini_do_mesmo_carimbo() -> None:
     """`id_correlacao` vai da decisão até a métrica (`context/02` §7)."""
     tradutor = _tradutor()
@@ -180,6 +259,7 @@ def _telemetria(cores: str, regime: str) -> dict[str, object]:
         "regime": regime,
         "rua_ativa": 3 if regime == "E" else None,
         "rua_fila": None,
+        "autorizacoes": {"AMBULANCIA": 1, "BOMBEIRO": 0, "POLICIA": 0},
     }
 
 
@@ -198,3 +278,5 @@ def test_estado_do_semaforo_da_bancada_no_websocket() -> None:
         True,
         "RRGR",
     )
+    # O que o UNO tem da Central vai junto, para o painel mostrar.
+    assert emergencia["autorizacoes"] == {"AMBULANCIA": 1, "BOMBEIRO": 0, "POLICIA": 0}

@@ -71,6 +71,8 @@ export interface AoVivoBancada {
   /** 1..4; nula quando nenhuma. */
   rua_ativa: number | null;
   rua_fila: number | null;
+  /** A criticidade que o UNO tem para cada tipo; 0 é sem ocorrência (2026-10-06). */
+  autorizacoes: Record<string, number> | null;
   recebido_em: string;
 }
 

@@ -8,7 +8,7 @@ O pré-projeto define uma arquitetura híbrida **Edge + Nuvem**. Mapeamento conc
 | --- | --- | --- |
 | **Dispositivo / Veículo** | NodeMCU emissor + RC522 (lê a tag da rua, envia por ESP-NOW) | Bancada, no carrinho |
 | **Borda (Edge)** | NodeMCU receptor + Arduino UNO, que **decide** e atua; LCD 16x2 | Bancada, no cruzamento |
-| **Observação local** | Processo `bridge` (só escuta o UNO) + instância local do backend | Notebook junto ao protótipo |
+| **Observação local** | Processo `bridge` (escuta o UNO e lhe leva a lista da Central) + instância local do backend | Notebook junto ao protótipo |
 | **Nuvem** | PostgreSQL, API, dashboard, análise histórica | Docker local; AWS como arquitetura-alvo documentada |
 | **Simulação** | SUMO + controlador TraCI | Mesma máquina do backend |
 
@@ -41,7 +41,7 @@ Não introduzir dependência fora desta lista sem registrar em `09-pendencias-e-
 | Testes backend | pytest, pytest-asyncio, httpx, testcontainers, **hypothesis**, **ziglang** | — |
 | Testes frontend | Vitest + Testing Library | — |
 | Container | Docker + Docker Compose | — |
-| Firmware | Arduino IDE 2.3.10 (equipe) / **arduino-cli** 1.5 · core `arduino:avr` 1.8.8 · `LiquidCrystal I2C` 1.1.2 (Frank de Brabander) | — |
+| Firmware | Arduino IDE 2.3.10 (equipe) / **arduino-cli** 1.5 · core `arduino:avr` 1.8.8 · `LiquidCrystal I2C` 1.1.2 (Frank de Brabander) · `SoftwareSerial` (vem com o core, sem instalação; desde 2026-10-06, para o receptor no A0) | — |
 | Configuração | **PyYAML**, **python-dotenv** | — |
 | Observabilidade | structlog | — |
 | Driver do banco | psycopg | 3.x |
@@ -178,8 +178,8 @@ DASHBOARD_PORT=8443                  # porta HTTPS do nginx no host (opcional)
 acesso. O notebook se liga ao UNO só por USB.
 
 ```
-[NodeMCU emissor] --ESP-NOW--> [NodeMCU receptor] --serial 9600--> [Arduino UNO R3] --USB--> [Notebook]
-   (veículo)                       (cruzamento)                                                ├── bridge (só escuta)
+[NodeMCU emissor] --ESP-NOW--> [NodeMCU receptor] --serial 9600, A0--> [Arduino UNO R3] <--USB--> [Notebook]
+   (veículo)                       (cruzamento)                                                ├── bridge (escuta; leva a Central)
                                                                                                ├── backend :8000
                                                                                                ├── postgres :5432
                                                                                                └── frontend :8443 (nginx, HTTPS)

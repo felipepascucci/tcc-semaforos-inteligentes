@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { VALIDADE_MS } from "../stream/estado";
 import type { SemaforoAoVivo } from "../stream/estado";
-import { PainelBancada } from "./PainelBancada";
+import { PainelBancada, textoAutorizacoes } from "./PainelBancada";
 
 const AGORA = 1_000_000;
 
@@ -54,6 +54,26 @@ describe("PainelBancada", () => {
     expect(screen.getByText("Transversal (S3+S4)")).toBeInTheDocument();
     expect(screen.getByText("nenhuma")).toBeInTheDocument();
     expect(screen.getByText("vazia")).toBeInTheDocument();
+  });
+
+  it("mostra quem a Central pôs em serviço no UNO", () => {
+    render(
+      <PainelBancada
+        estado={bancada({ autorizacoes: { AMBULANCIA: 1, BOMBEIRO: 0, POLICIA: 3 } })}
+        agora={AGORA}
+      />,
+    );
+
+    expect(
+      screen.getByText("Ambulância (1 — Risco à vida) · Polícia (3 — Urgência)"),
+    ).toBeInTheDocument();
+  });
+
+  it("com a lista vazia avisa que nenhum VE preempta", () => {
+    expect(textoAutorizacoes({ AMBULANCIA: 0, BOMBEIRO: 0, POLICIA: 0 })).toBe(
+      "ninguém (nenhum VE preempta)",
+    );
+    expect(textoAutorizacoes(undefined)).toBe("—");
   });
 
   it("telemetria velha é marcada como parada", () => {

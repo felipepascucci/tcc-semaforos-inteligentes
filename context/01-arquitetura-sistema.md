@@ -23,7 +23,10 @@ O **motor de decisão é único e agnóstico ao mundo**. Ele recebe um estado no
 > **Desde 2026-10-05 o lado hardware não recebe comandos do motor.** O protótipo
 > decide localmente no Arduino UNO (§4), e `adapters/hardware/` passou a só
 > **observar** a bancada. O princípio deste parágrafo continua valendo para o
-> motor e para a simulação, que é onde ele é avaliado (`00` §3).
+> motor e para a simulação, que é onde ele é avaliado (`00` §3). Desde
+> 2026-10-06 o host manda ao UNO **um dado, não um comando**: a lista da
+> Central (quem tem ocorrência ativa, e com que criticidade), contra a qual o
+> UNO decide sozinho (`05` §3.3).
 
 **Consequência prática obrigatória:** nada dentro de `backend/core/priorizacao/` pode importar `traci`, `pyserial`, `sqlalchemy` ou `fastapi`. Se precisar, o desenho está errado. O núcleo é testável com `pytest` puro, sem SUMO instalado e sem hardware ligado.
 
@@ -34,7 +37,7 @@ O **motor de decisão é único e agnóstico ao mundo**. Ele recebe um estado no
 | C1 | **Motor de decisão** | Python puro | Detectar, decidir preempção, planejar corredor, compensar |
 | C2 | **API / Orquestrador** | FastAPI + Uvicorn | REST + WebSocket, persistência, coordenação dos adaptadores |
 | C3 | **Adaptador SUMO** | Python + TraCI | Loop de simulação, leitura de estado, aplicação de fases |
-| C4 | **Ponte / Adaptador Hardware** | Python + pyserial | **Só escuta** a telemetria e os eventos do UNO, carimba no relógio do notebook, mede H3 e injeta VEs em teste (`05` §6) |
+| C4 | **Ponte / Adaptador Hardware** | Python + pyserial | Escuta a telemetria e os eventos do UNO, carimba no relógio do notebook, mede H3, leva ao UNO a lista da Central (desde 2026-10-06) e injeta VEs em teste (`05` §6) |
 | C5 | **Firmware controlador** | C++ / Arduino UNO R3 | Decide a preempção (regra local, `05` §3), máquina de estados dos 4 semáforos com transição segura, LCD |
 | C6 | **Firmware V2I** | C++ / 2 × NodeMCU ESP8266 | Emissor no veículo: lê a tag da rua e envia por ESP-NOW. Receptor no cruzamento: repassa ao UNO pela serial |
 | C7 | **Banco de dados** | PostgreSQL 16 | Persistência de cadastros, logs e métricas |
@@ -82,9 +85,10 @@ Arduino UNO DECIDE (prioridade por tipo, fila de 1) e emite "EV,…,PREEMP_INI,3
   ▼
 UNO executa a transição segura até o verde exclusivo da Rua 3 e atualiza o LCD
   ▼
-bridge/ (só escuta, pelo USB; expõe GET /estado)
+bridge/ (escuta pelo USB; expõe GET /estado; escreve AUT por PUT /autorizacoes)
   ▲
-  │ o backend LÊ /estado a 5 Hz (decisão de 2026-10-05, Bloco 6)
+  │ o backend LÊ /estado a 5 Hz (decisão de 2026-10-05, Bloco 6) e, se a lista da
+  │ Central na ST difere da do banco, chama PUT /autorizacoes (2026-10-06)
 backend: log_prioridade (um registro por decisão do UNO), metrica_latencia (amostras de H3)
   ▼
 Broadcast WebSocket -> Dashboard
@@ -549,8 +553,9 @@ tentativa negada é gravada em `deteccao` com `autorizado = false`.
 >   ou inativa (`acao: ACESSO_NEGADO`).
 >
 > **Preempção manual.** `POST /semaforos/PROTO_CRUZ_01/preempcao` (`rua`,
-> `veiculo`) usa a injeção da ponte, que exige o fio do NodeMCU solto do RX
-> (`05` §6). Nos cruzamentos da simulação a resposta é 409, porque a API não
+> `veiculo`) usa a injeção da ponte (`05` §6), que desde 2026-10-06 funciona com
+> a bancada montada e passa pela Central: tipo sem ocorrência aberta volta
+> `SEM_OCORRENCIA`. Nos cruzamentos da simulação a resposta é 409, porque a API não
 > comanda o executor. `DELETE .../preempcao` é sempre 409: o UNO não aceita
 > cancelamento, porque a emergência termina sozinha (I6), e na simulação vale o
 > mesmo motivo.

@@ -24,8 +24,9 @@
  * vírgula e é ignorado (context/05 §3.2).
  *
  * Pinagem:
- *   TX  -> RX (0) do UNO. Prevalece sobre o conversor USB do UNO: para gravar o
- *          UNO, ou para injetar VEs pela ponte, solte este fio (context/05 §1).
+ *   TX  -> A0 do UNO, desde 2026-10-06 (context/09): o UNO o lê numa serial por
+ *          software, e o RX (0) ficou só para o USB. Antes ia ao RX (0), onde
+ *          prevalecia sobre o conversor USB e impedia a ponte de escrever.
  *   5V e GND do UNO -> alimentação deste NodeMCU (o pino do lado do NodeMCU
  *          não foi informado no questionário; VIN é o que aceita 5 V).
  */

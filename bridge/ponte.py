@@ -1,15 +1,19 @@
 """O laço da ponte — entrega 5.7, refeita para a arquitetura de 2026-10-05.
 
-A ponte **só escuta** o UNO (`context/05` §6). Na bancada o RX do UNO é do
-NodeMCU receptor, e o notebook não está no caminho da decisão: ele ouve a
+O notebook não está no caminho da decisão (`context/05` §6): a ponte ouve a
 telemetria e os eventos que o UNO escreve no USB, carimba cada linha no relógio
 do notebook e os entrega ao backend e ao dashboard. Se a ponte cair, o
-cruzamento continua funcionando.
+cruzamento continua funcionando, com a última lista da Central que recebeu.
 
-A única escrita é a **injeção de teste**: com o fio do NodeMCU solto do RX, a
-ponte escreve a mesma linha que o receptor escreveria (`RUA3,AMBULANCIA`) e
-espera o evento de decisão que o UNO publica para ela. Com o fio ligado, a linha
-se perde, e a injeção volta sem decisão.
+Duas escritas, pelo USB, que desde 2026-10-06 é só da ponte (o receptor foi
+para o A0):
+
+* a **lista da Central** (`autorizar`): `AUT,<VEICULO>,<0..3>` por tipo. Quem
+  decide o que mandar é o backend, que compara a lista dele com a que a `ST`
+  traz e chama `PUT /autorizacoes` quando diferem. A ponte continua sem saber
+  que o backend existe;
+* a **injeção de teste**: a mesma linha que o receptor escreveria
+  (`RUA3,AMBULANCIA`), esperando o evento de decisão do UNO para ela.
 
 O relógio é o do notebook, lido com a resolução do `perf_counter` (100 ns) e
 ancorado no relógio de parede uma vez: no Windows o relógio de parede declara
@@ -29,6 +33,7 @@ import asyncio
 import contextlib
 import time
 from collections import deque
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Final
@@ -46,6 +51,7 @@ from bridge.latencia import (
 from bridge.protocolo import (
     EVENTOS_DE_DECISAO,
     TERMINADOR,
+    Autorizacao,
     Deteccao,
     Evento,
     LinhaInvalidaError,
@@ -59,8 +65,8 @@ from bridge.transporte import ConexaoPerdidaError, LinhaRecebida, Transporte
 log = structlog.get_logger(__name__)
 
 #: Quanto esperar o evento de decisão de uma injeção. O UNO decide na mesma
-#: iteração em que lê a linha; um segundo inteiro sem resposta é RX tomado pelo
-#: NodeMCU ou UNO calado, não UNO lento.
+#: iteração em que lê a linha; um segundo inteiro sem resposta é UNO calado (ou
+#: um firmware de antes de 2026-10-06, com o receptor ainda no RX), não UNO lento.
 TIMEOUT_DECISAO_S: Final = 1.0
 
 #: Intervalo entre tentativas de reabrir a porta.
@@ -376,10 +382,27 @@ class Ponte:
             await self.transporte.escrever(linha)
         return t_envio
 
-    async def injetar(self, deteccao: Deteccao) -> ResultadoInjecao:
-        """Escreve a detecção no RX do UNO e espera a decisão dele.
+    async def autorizar(self, autorizacoes: Sequence[Autorizacao]) -> datetime:
+        """Escreve a lista da Central no UNO, uma linha `AUT` por tipo.
 
-        Só funciona com o fio do NodeMCU solto do RX (`context/05` §1).
+        Não espera resposta: a confirmação é a `ST` seguinte, que traz a lista
+        que o UNO tem (`Telemetria.autorizacoes`).
+
+        Raises:
+            ConexaoPerdidaError: a porta não está aberta.
+        """
+        if not autorizacoes:
+            raise ValueError("nenhuma autorização para enviar")
+        envios = [await self._escrever(autorizacao.codificar()) for autorizacao in autorizacoes]
+        t_envio = envios[0]
+        log.info(
+            "autorizacoes_enviadas",
+            autorizacoes={a.veiculo.value: a.criticidade for a in autorizacoes},
+        )
+        return t_envio
+
+    async def injetar(self, deteccao: Deteccao) -> ResultadoInjecao:
+        """Escreve a detecção no RX do UNO, pelo USB, e espera a decisão dele.
 
         Raises:
             ConexaoPerdidaError: a porta não está aberta, ou caiu antes da decisão.

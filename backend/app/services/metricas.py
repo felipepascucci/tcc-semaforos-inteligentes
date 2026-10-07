@@ -9,7 +9,8 @@ A latência segue as regras de cada ambiente:
   (decisão P2). `percentile_disc` devolve um valor medido, sem interpolação,
   como o posto mais próximo de `sim/controlador/coletor.py`.
 * **HARDWARE** (H3) — mínimo, mediana e máximo de `latencia_total_ms`, com o
-  `n`. Com 5 repetições o p95 não é estimável (decisão de 2026-08-31).
+  `n`. Desde 2026-10-06 H3 se mede em 100 passagens (`context/09`), e o p95
+  oficial sai de `analysis/`, sobre o `latencia_bancada.csv`.
 """
 
 from __future__ import annotations

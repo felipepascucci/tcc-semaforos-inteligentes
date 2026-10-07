@@ -7,27 +7,38 @@
 > chegou a existir na bancada. Registro e consequências em `09` (decisão de
 > 2026-10-05) e no histórico do git. As respostas do questionário de hardware e
 > os sketches originais estão em `docs/hardware/`.
+>
+> **Revisto em 2026-10-06 — a Central vale na bancada** (`09`, decisão de
+> 2026-10-06). **Um fio muda**: o TX do receptor sai do RX (0) e vai para o
+> **A0**, onde o UNO o lê numa serial por software. O RX (0) fica só para o
+> USB, e a ponte passa a mandar ao UNO a lista da Central (quem tem ocorrência
+> ativa, e com que criticidade). O UNO continua decidindo sozinho, e o notebook
+> continua fora do caminho da decisão.
 
 ## 1. Inventário do hardware montado
 
-Três placas. **Nenhuma ligação física muda** (decisão de 2026-10-05).
+Três placas. A única ligação que mudou desde o questionário é a do receptor,
+do RX (0) para o A0 (decisão de 2026-10-06).
 
 ```
  VEÍCULO (carrinho)                       CRUZAMENTO
-┌──────────────────────────┐   ESP-NOW   ┌────────────────────┐ TX→RX(0) ┌──────────────────────┐
+┌──────────────────────────┐   ESP-NOW   ┌────────────────────┐  TX→A0   ┌──────────────────────┐
 │ NodeMCU EMISSOR + RC522  │ ──rádio──▶  │ NodeMCU RECEPTOR   │ ──9600──▶│ Arduino UNO R3       │
 │ bateria 9 V (VIN)        │  MAC a MAC  │ 5 V vindo do UNO   │          │ 4 semáforos + LCD    │
 └──────────▲───────────────┘             └────────────────────┘          └──────────┬───────────┘
-           │ lê (2–5 cm)                                                            │ USB (TX do UNO
-   [tag fixa na rua]                                                                │  + alimentação)
+           │ lê (2–5 cm)                                                            │ USB: ST/EV para
+   [tag fixa na rua]                                                                │ o notebook; AUT e
+                                                                                    │ injeção para o UNO
                                                                                     ▼
-                                                                         [Notebook — só escuta]
+                                                                [Notebook — ponte, backend, Central]
 ```
 
-### Subsistema A — Controlador do cruzamento (Arduino UNO R3, clone com CH340)
+### Subsistema A — Controlador do cruzamento (Arduino UNO R3)
 
 ATmega328P a 16 MHz. Alimentado **só pelo USB do notebook**. LEDs acendem com
-`HIGH`, ligados direto aos pinos; os módulos já têm resistor (P10).
+`HIGH`, ligados direto aos pinos; os módulos já têm resistor (P10). A placa da
+bancada se identifica como UNO original (USB `2341:0043`, conversor 16U2), e
+não como o clone com CH340 que o questionário descrevia; nada muda por isso.
 
 | Semáforo | Aproximação | Rua (tag) | Eixo | R | Y | G |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -39,18 +50,52 @@ ATmega328P a 16 MHz. Alimentado **só pelo USB do notebook**. LEDs acendem com
 | Outro | Pino do UNO |
 | --- | --- |
 | LCD 16x2 I2C (`0x27`, 5 V) | SDA → A4 · SCL → A5 |
-| TX do NodeMCU receptor | RX (0) |
-| Alimentação do NodeMCU receptor | 5V e GND |
+| TX do NodeMCU receptor | **A0** (serial por software, desde 2026-10-06) |
+| Reservado: TX da serial por software, nada ligado | A1 |
+| Alimentação do NodeMCU receptor | **5V do ICSP (pino 2)** → VIN do NodeMCU, e GND (desde 2026-10-06; ver a nota abaixo) |
+| USB (a ponte) | RX (0) e TX (1) |
 
-Livres: **A0–A3** e o TX (1), que vai só para o USB.
+Livres: **A2 e A3**.
 
-> **O pino RX (0) é do NodeMCU, não do notebook.** O RX do UNO é o mesmo que o
-> conversor USB usa, e o TX do NodeMCU, ligado direto ao pino, prevalece sobre o
-> conversor. Duas consequências: (a) para **gravar** o UNO é preciso soltar esse
-> fio (relatado pela equipe); (b) o notebook **não manda nada** ao UNO em operação
-> — só **ouve** o que o UNO escreve no TX, que chega intacto pelo USB. Soltando o
-> fio, o notebook pode escrever no RX: é assim que se testa a bancada sem o
-> veículo (§6).
+> **Por que o receptor saiu do RX (0).** O RX do UNO é o mesmo que o conversor
+> USB usa, e o TX do NodeMCU, ligado direto ao pino, prevalecia sobre o
+> conversor: o notebook não conseguia escrever no UNO, e para gravá-lo era
+> preciso soltar o fio. Com o receptor no A0, o notebook manda a lista da
+> Central e as injeções de teste com a bancada montada, e o upload não pede
+> fio solto. O receptor continua a 9600 e continua sem mudar uma linha do
+> sketch dele (§5).
+>
+> **Alimentação do receptor — o que a bancada mostrou em 2026-10-06.** O
+> receptor estava ligado VIN (NodeMCU) → **VIN do UNO**. Com o UNO no USB, o VIN
+> do UNO não é saída de 5V: só chega o que vaza de volta pelo regulador. O
+> receptor funcionava no limite, e é a provável causa dos `RECUSADO` da primeira
+> captura: ele reinicia, e o lixo do boot do ESP8266 gruda na linha seguinte. O
+> **IOREF desta placa não fornece 5V** (o receptor nem ligou ali), e o 5V do UNO
+> está ocupado pelo LCD. Na sessão de 2026-10-06 o receptor ficou **no USB do
+> notebook** (COM4), com só o TX (A0) e o GND ligados ao UNO: 7 passagens, 7
+> decisões, nenhum `RECUSADO`. A alimentação definitiva fica para decidir (USB
+> próprio ou o 5V pela protoboard, junto com o LCD).
+>
+> **Decidido na mesma noite: o receptor tira 5V do pino 2 do ICSP do UNO**, com
+> um jumper fêmea-fêmea até o VIN do NodeMCU. O pino 5V da barra está com o LCD;
+> o **3.3V** do UNO não sustentou o ESP8266 (nenhuma passagem chegou), e o **VIN
+> do UNO** também não (LED do ESP fraco, nenhuma passagem, e o UNO reiniciou ao
+> ligar o receptor). No ICSP o LED do ESP acende forte, e as passagens chegaram
+> (`SEM_OCORRENCIA`, nenhum `RECUSADO`). **Cuidado no ICSP:** o pino 5 é o RESET
+> do ATmega328P; um fio nele mantém a placa reiniciando.
+>
+> **LCD sem texto = contraste.** Em 2026-10-06 o LCD acendia sem nenhum
+> caractere, embora respondesse no I2C (`0x27`) e um sketch mínimo também não
+> aparecesse: era o potenciômetro de contraste, atrás do módulo. Ajustado, o
+> texto voltou, ainda fraco.
+>
+> **Custo da serial por software, medido no código e a confirmar na placa.** A
+> `SoftwareSerial` do core desliga as interrupções enquanto recebe cada byte
+> (~1 ms a 9600). O `millis()` não perde tique (o estouro do Timer0 fica
+> pendente e é atendido logo depois), e a UART do USB guarda até 2 bytes nesse
+> meio-tempo, mais do que chega em 1 ms. O nível lógico do TX do NodeMCU (3,3 V)
+> é o mesmo que já chegava ao RX (0): acima do limiar de nível alto do
+> ATmega328P a 5 V (0,6 × Vcc = 3,0 V), com pouca folga.
 
 > **Atenção elétrica.** P10 resolvida (resistores integrados). Pior caso de
 > corrente nos LEDs: 4 acesos, ~80 mA. O 5V do UNO também alimenta o NodeMCU
@@ -107,28 +152,43 @@ GPIO de 3,3 V do ESP8266, ligação que não existe.
                               │ ESP-NOW { rua: "RUA3", veiculo: "AMBULANCIA" }
                               ▼
                      [NodeMCU receptor]
-                              │ "RUA3,AMBULANCIA\r\n"  @9600, TX -> RX(0)
+                              │ "RUA3,AMBULANCIA\r\n"  @9600, TX -> A0
                               ▼
-                     [Arduino UNO — DECIDE e ATUA]
-                       prioridade por tipo, fila de 1, verde exclusivo,
-                       transição segura, LCD
+                     [Arduino UNO — DECIDE e ATUA]  <── "AUT,AMBULANCIA,1"  @9600, USB -> RX(0)
+                       Central (lista em RAM),            (a lista da Central, pela ponte)
+                       criticidade, fila de 1,
+                       verde exclusivo, transição segura, LCD
                               │ "EV,…,PREEMP_INI,3,AMBULANCIA" / "ST,…"  @9600, TX -> USB
                               ▼
-                     [bridge/ — só escuta]  carimba no relógio do notebook
+                     [bridge/]  carimba no relógio do notebook; escreve AUT e injeções
+                              │                                   ▲ PUT /autorizacoes
+                              ▼                                   │
+                     [Backend: log, métricas, WebSocket; compara a Central do banco com a ST]
                               │
                               ▼
-                     [Backend: log, métricas, WebSocket -> Dashboard]   (Bloco 6)
+                     [Dashboard: painel da bancada e aba Central]
 ```
 
 **A decisão de preempção no protótipo é do UNO.** Ele roda uma regra local,
 mais simples que o motor (`01` §5): a mesma regra que a equipe de hardware já
-tinha escrita (prioridade por tipo e fila), agora com transição segura. O motor
-de decisão continua sendo o objeto do experimento, **na simulação** (`00` §3).
+tinha escrita (fila de um lugar), agora com transição segura e, desde
+2026-10-06, com a **Central**: só preempta o VE cujo tipo tem ocorrência ativa,
+e quem interrompe quem é a criticidade dela. O motor de decisão continua sendo
+o objeto do experimento, **na simulação** (`00` §3).
 
-**O notebook não está no caminho da decisão.** Ele só observa: se a ponte cair,
-o cruzamento continua funcionando e preemptando — o que muda é que o dashboard
-para de atualizar. A borda (Edge) do pré-projeto é, na bancada, o próprio
+**O notebook não está no caminho da decisão.** A lista da Central fica na RAM do
+UNO, e é contra ela que o UNO decide, sem perguntar nada a ninguém: se a ponte
+cair, o cruzamento continua funcionando e preemptando com a última lista que
+recebeu — o que muda é que o dashboard para de atualizar e a Central deixa de
+alcançar o UNO. A borda (Edge) do pré-projeto é, na bancada, o próprio
 controlador do cruzamento.
+
+**A lista se perde quando o UNO reinicia**, e ele volta **negando todos**
+(decisão de 2026-10-06). Abrir a porta serial reinicia o UNO (DTR), e fechá-la
+não; por isso o backend compara a cada leitura (5 Hz) a lista do banco com a que
+a `ST` traz, e manda a dele quando diferem — no máximo uma vez por segundo. Isso
+cobre abrir e encerrar ocorrência e o reinício. Sem backend, o UNO fica negando
+até alguém chamar `PUT /autorizacoes` na ponte.
 
 ## 3. Firmware do Arduino UNO — requisitos (entrega 5.3)
 
@@ -177,35 +237,80 @@ emergência **nunca trunca** um verde: espera o corrente completar 3 s.
 `<RUA>,<VEICULO>` terminada em `\n` (o receptor usa `println`, então chega
 `\r\n`; o `\r` é descartado). `RUA` ∈ `RUA1`..`RUA4` (o sketch atual também
 aceita `1`..`4`, e o firmware mantém isso). `VEICULO` ∈ `AMBULANCIA`,
-`BOMBEIRO`, `POLICIA`.
+`BOMBEIRO`, `POLICIA`. Chega pelo **A0** (desde 2026-10-06); a ponte pode
+escrever a mesma linha pelo USB, para testar.
 
-| Tipo | Prioridade | Verde do VE |
-| --- | --- | --- |
-| `AMBULANCIA` | 1 (maior) | 9 s |
-| `BOMBEIRO` | 2 | 8 s |
-| `POLICIA` | 3 | 7 s |
+| Tipo | Verde do VE |
+| --- | --- |
+| `AMBULANCIA` | 9 s |
+| `BOMBEIRO` | 8 s |
+| `POLICIA` | 7 s |
+
+**O tipo só fixa a duração do verde** desde 2026-10-06. Quem interrompe quem é a
+criticidade da ocorrência (§3.3). Antes, o tipo era a prioridade (ambulância 1,
+bombeiro 2, polícia 3), a regra do sketch da equipe.
 
 Linha **com vírgula** e rua ou tipo desconhecido → `EV,<ms>,RECUSADO`, sem
 efeito. **Mudança deliberada em relação ao sketch**, que dava prioridade 3 a
 qualquer tipo desconhecido: um texto corrompido na serial não pode virar uma
 viatura. Linha **sem vírgula** é ignorada em silêncio — é o que o ESP8266
-imprime no próprio boot, a 74880 baud, e que chega ao UNO como lixo.
+imprime no próprio boot, a 74880 baud, e que chega ao UNO como lixo. Cada
+entrada tem buffer próprio: **32 bytes no A0** (a maior linha que o receptor
+manda tem 25) e **72 no USB**; linha maior é ruído e é recusada. **Pedaço de linha
+seguido de mais de 100 ms de silêncio é descartado** (desde 2026-10-06): uma
+linha de verdade chega inteira em ~26 ms, e o lixo que o ESP8266 deixa no fio ao
+reiniciar grudava na linha seguinte e a fazia virar `RECUSADO` — era a causa dos
+`RECUSADO` da primeira captura na bancada.
 
-### 3.3 Decisão (a regra do sketch, preservada)
+### 3.2.1 Entrada — a lista da Central, pelo USB (desde 2026-10-06)
 
-Ao receber um VE válido:
+`AUT,<VEICULO>,<criticidade>`, com `criticidade` de um dígito: **0** é "sem
+ocorrência ativa", e **1 a 3** são os níveis de P20 (1 `RISCO_VIDA`, 2
+`RISCO_COLETIVO`, 3 `URGENCIA`). Forma exata, sem espaços; o `\r` final sai.
+Qualquer desvio → `EV,RECUSADO`, e a lista não muda.
 
+- **Não gera evento.** A lista nova aparece na `ST` (§4.2), que sai na hora,
+  porque a lista faz parte do que a `ST` publica.
+- **Só pelo USB.** Pelo A0, a linha é uma detecção inválida e recebe
+  `RECUSADO`: um VE não se autoriza pelo rádio.
+- **Vive na RAM.** O UNO liga com `000`, negando todos, e volta a isso a cada
+  reinício.
+
+Na bancada a identidade do VE é o tipo (§3.3), então a lista é por tipo: a
+criticidade mais alta entre as ocorrências abertas de veículos **ativos** daquele
+tipo (`app.repositories.ocorrencia.criticidade_por_tipo`).
+
+### 3.3 Decisão (a regra do sketch, com a Central)
+
+Ao receber um VE válido, com a criticidade que o tipo dele tem **agora** na
+lista:
+
+0. **Criticidade 0** (sem ocorrência ativa) → `SEM_OCORRENCIA`, e nada muda no
+   semáforo. O LCD mostra `SEM OCORRENCIA` por 3 s (§3.6).
 1. **Sem emergência** → o VE é atendido (`PREEMP_INI`).
 2. **Mesma rua e mesmo tipo do VE atendido** → o verde dele é **renovado**
    (`RENOVADO`): a duração recomeça a contar. *Acrescentado:* no sketch, o mesmo
    veículo relendo a tag ia para a fila e ganhava um segundo verde depois do
    primeiro.
-3. **Prioridade maior** que a do atendido → o atendido vai para a fila
-   (`FILA`), ocupando o lugar de quem estivesse nela, e o novo é atendido
-   (`PREEMP_INI`).
-4. **Senão, fila vazia ou prioridade maior que a da fila** → o novo vai para a
-   fila (`FILA`).
+3. **Criticidade estritamente mais alta** (número menor) que a do atendido → o
+   atendido vai para a fila (`FILA`), ocupando o lugar de quem estivesse nela, e
+   o novo é atendido (`PREEMP_INI`).
+4. **Senão, fila vazia ou criticidade estritamente mais alta que a da fila** →
+   o novo vai para a fila (`FILA`).
 5. **Senão** → descartado (`DESCARTADO`).
+
+**No mesmo nível, quem chegou primeiro fica.** É a guarda de oscilação do motor
+(P20): só o estritamente mais crítico passa à frente. Com a Central dando a cada
+tipo a criticidade da ordem antiga (ambulância 1, bombeiro 2, polícia 3), a
+regra é exatamente a do sketch — é assim que o roteiro de aceitação roda.
+
+**A criticidade vai com o VE lido.** Quem já está atendido ou na fila guarda a
+criticidade que tinha quando foi lido; mudar a Central depois vale da próxima
+leitura em diante. Em particular, **encerrar a ocorrência não corta um verde já
+concedido nem tira o VE da fila**: o verde termina pela duração do tipo (no
+máximo 9 s) ou pelo teto, e a releitura seguinte já recebe `SEM_OCORRENCIA`. Na
+simulação o motor libera a preempção no passo seguinte ao encerramento (E6);
+na bancada a diferença é de segundos, e é declarada.
 
 A fila tem **um lugar**. Quem perde o lugar para outro VE (casos 3 e 4) sai com
 `DESCARTADO`: no sketch ele sumia sem rastro, e o log da bancada perderia o VE de
@@ -213,7 +318,10 @@ vista. Quando o verde do VE atendido acaba (`PREEMP_FIM`), o da fila é atendido
 se não há fila, volta o ciclo.
 
 A identidade do veículo é o tipo (§1). Dois veículos do mesmo tipo são
-indistinguíveis — limitação da bancada, a declarar no texto.
+indistinguíveis — limitação da bancada, a declarar no texto. Pelo mesmo motivo,
+**o mesmo carrinho lido em duas ruas vira dois VEs**: na captura de 2026-10-06,
+o carrinho passou pela RUA1 e depois pela RUA3, e o UNO pôs a "segunda
+ambulância" na fila. "Autorizar o veículo" na bancada é autorizar o tipo.
 
 ### 3.4 Transição segura (o que muda em relação ao sketch)
 
@@ -243,7 +351,8 @@ Pior caso da chegada do VE até o verde dele: `3 + 2 + 1` = **6 s**.
 ### 3.5 Requisitos de implementação
 
 1. **Nenhum `delay()` no `loop()`.** `lcd.init()` no `setup()` pode bloquear.
-2. **Leitura da serial a cada iteração**, com buffer de linha de tamanho fixo.
+2. **Leitura das duas entradas a cada iteração** (o A0 e o USB), cada uma com o
+   seu buffer de linha de tamanho fixo: os bytes delas chegam intercalados.
 3. **Sem `String`.** Só `char[]`.
 4. **Guarda de conflito local (I1)** antes de acender qualquer verde:
    - nunca há verde nos dois eixos ao mesmo tempo;
@@ -265,10 +374,12 @@ Pior caso da chegada do VE até o verde dele: `3 + 2 + 1` = **6 s**.
 Ciclo:            "Semaforo: Normal"  /  "Aguardando Sinal"
 VE atendido:      "AMBULANCIA na R3"  /  ""
 Com fila:         "AMBULANCIA na R3"  /  "Fila:BOMB na R1 "
+Sem ocorrência:   "SEM OCORRENCIA"    /  "AMBULANCIA na R3"   (por 3 s; 2026-10-06)
 ```
 
 Cabem em 16 colunas (`AMBULANCIA na R1` tem exatamente 16). O LCD é decidido
-pelo próprio UNO; não há texto vindo do backend.
+pelo próprio UNO; não há texto vindo do backend. O aviso de `SEM OCORRENCIA`
+passa por cima das outras mensagens por 3 s e some sozinho.
 
 ### 3.7 Implementação (entrega 5.3, 2026-10-05)
 
@@ -278,9 +389,10 @@ pelo próprio UNO; não há texto vindo do backend.
   (§8) e o protocolo. Não inclui nada do Arduino: o tempo entra como argumento,
   e pinos e serial entram pela interface `Placa`. Segue o dublê função a função,
   com os mesmos nomes.
-- **`semaforo.ino` — a placa.** Pinos (tabela e índice), `Serial` a 9600, LCD e o
-  `loop()`: `millis()`, depois `avancar()`, depois a serial byte a byte, e o LCD
-  **por último**, só quando o texto muda e sem `lcd.clear()`.
+- **`semaforo.ino` — a placa.** Pinos (tabela e índice), `Serial` a 9600, a
+  `SoftwareSerial` do receptor no A0 (desde 2026-10-06), LCD e o `loop()`:
+  `millis()`, depois `avancar()`, depois o A0 e o USB byte a byte, e o LCD **por
+  último**, só quando o texto muda e sem `lcd.clear()`.
 
 **A guarda de I1 lê os pinos** (`digitalRead` do verde de cada aproximação), não o
 vetor de cores da máquina de estados. Se ela recusar, nada acende e o cruzamento
@@ -297,6 +409,12 @@ aleatórias (Hypothesis) com VEs, lixo e linhas quase válidas. Acrescenta o que
 dublê não modela: as mensagens do LCD, a `ST` periódica pulada com o buffer
 cheio e a guarda de I1 diante de um pino verde aceso por fora da máquina.
 
+Desde 2026-10-06 cada entrada do teste diz **por onde chega** (A0 ou USB), as
+sequências aleatórias incluem linhas `AUT` válidas e quase válidas nas duas
+entradas, e há um caso com os bytes das duas linhas intercalados, para provar
+que um buffer não corrompe o outro. O dublê modela o tamanho de cada buffer
+(32 e 72 bytes), para que a igualdade continue exata.
+
 **Verificação por mutação, 2026-10-05.** Nove sabotagens no `controlador.cpp`,
 todas pegas: sem all-red, sem verde mínimo, renovação que não reinicia o verde,
 rua 0 aceita, espaço ASCII de controle não aparado, teto que não descarta a
@@ -304,33 +422,57 @@ fila, volta pelo mesmo eixo, guarda lendo a máquina em vez do pino, e `ST`
 periódica nunca pulada.
 
 **Compilado com `arduino-cli`** (core `arduino:avr` 1.8.8, `LiquidCrystal I2C`
-1.1.2): 8.722 bytes de flash (27%) e 841 bytes de RAM global (41%), sem aviso nos
-arquivos do projeto. O teste confere que a RAM global fica abaixo de 1 KB:
+1.1.2, `SoftwareSerial` do core): **10.926 bytes de flash (33%) e 894 bytes de
+RAM global (43%)** em 2026-10-06, contra 8.722 e 841 antes da Central. A
+`SoftwareSerial` e o segundo buffer de linha passavam a RAM de 1 KB (1.080
+bytes); os textos fixos (nomes de evento e mensagens do LCD) foram para a flash
+(`FIXO(...)`, que é `PSTR` no AVR e literal comum no PC), e o buffer do A0 ficou
+com 32 bytes. O teste confere que a RAM global fica abaixo de 1 KB:
 
 ```powershell
 arduino-cli compile --fqbn arduino:avr:uno firmware/uno/semaforo
+python -m bridge.gravar_uno --porta COM3     # compila, grava e relê a flash inteira
 ```
 
-**O que só a placa confirma:** os pinos, a serial a 9600, o LCD físico e o tempo
-real do `loop()`. É a aceitação abaixo (§6), com `bridge.verificar`.
+**Gravar com `bridge.gravar_uno`, não com `arduino-cli upload`** (2026-10-06).
+Neste notebook o avrdude grava errado os bytes 60 a 63 de cada página de 128
+bytes (a fronteira do segundo pacote USB de 64 bytes, no conversor 16U2 da
+placa), e o `arduino-cli upload` não verifica por padrão. O gravador do
+repositório fala o mesmo protocolo do bootloader em pedaços de 16 bytes e
+**relê a flash inteira**; gravação que não confere é erro. Feche a ponte antes:
+os dois disputam a porta.
+
+**Boot e `lcd.init()`.** Na placa o `lcd.init()` bloqueia ~1,1 s logo depois do
+boot. O all-red dura esse tempo, mais do que o 1 s mínimo, o que é seguro; desde
+2026-10-06 a `ST` do all-red sai já no boot, e o primeiro verde aparece por volta
+dos 1.125 ms.
+
+**O que só a placa confirma:** os pinos, a serial a 9600, a serial por software
+no A0, o LCD físico e o tempo real do `loop()`. É a aceitação abaixo (§6), com
+`bridge.verificar` e o checklist de `06` §6.
 
 ## 4. Protocolo serial do UNO
 
-Texto ASCII, linhas terminadas em `\r\n`, **9600 baud** nos dois sentidos — é a
-velocidade do NodeMCU receptor, e o RX e o TX do UNO compartilham a mesma UART.
+Texto ASCII, linhas terminadas em `\r\n`, **9600 baud** — a velocidade do
+NodeMCU receptor, mantida também no USB.
 
-### 4.1 Entrada (RX)
+### 4.1 Entrada
 
-Só a linha de §3.2. **Não há comandos do host**: `PING`, `PRE`, `CLR`, `CFG`,
-`ST?`, `SAFE`, `TESTMODE` e `TEST`, do protocolo anterior, deixaram de existir
-(decisão de 2026-10-05). Para testar sem o veículo, solta-se o fio do RX e a
-ponte escreve a **mesma** linha que o receptor escreveria (§6).
+| Por onde | Linha | §  |
+| --- | --- | --- |
+| A0 (receptor) | `<RUA>,<VEICULO>` | 3.2 |
+| USB (ponte) | `AUT,<VEICULO>,<0..3>` — a lista da Central | 3.2.1 |
+| USB (ponte) | `<RUA>,<VEICULO>` — a injeção de teste, igual à do receptor | 3.2 |
+
+`PING`, `PRE`, `CLR`, `CFG`, `ST?`, `SAFE`, `TESTMODE` e `TEST`, do protocolo
+anterior, deixaram de existir em 2026-10-05 e **não voltaram**: o host não
+comanda o UNO; ele só lhe diz quem está em serviço (decisão de 2026-10-06).
 
 ### 4.2 Saída (TX → USB)
 
 | Linha | Quando |
 | --- | --- |
-| `ST,<ms>,<s1><s2><s3><s4>,<regime>,<rua_ativa>,<rua_fila>` | A 2 Hz **e** a cada mudança de estado (luz, regime, rua ativa ou fila); uma por instante |
+| `ST,<ms>,<s1><s2><s3><s4>,<regime>,<rua_ativa>,<rua_fila>,<aut>` | A 2 Hz **e** a cada mudança de estado (luz, regime, rua ativa, fila ou lista da Central); uma por instante |
 | `EV,<ms>,BOOT` | No `setup()` |
 | `EV,<ms>,PREEMP_INI,<rua>,<veiculo>` | VE passa a ser atendido (§3.3, casos 1 e 3, e quando sai da fila) |
 | `EV,<ms>,RENOVADO,<rua>,<veiculo>` | Caso 2 |
@@ -338,17 +480,21 @@ ponte escreve a **mesma** linha que o receptor escreveria (§6).
 | `EV,<ms>,DESCARTADO,<rua>,<veiculo>` | Caso 5, e quem perdeu o lugar na fila |
 | `EV,<ms>,PREEMP_FIM,<rua>,<veiculo>` | O verde do VE acabou, ou o teto estourou |
 | `EV,<ms>,TIMEOUT` | Teto de 30 s (§3.4, item 7), seguido do `PREEMP_FIM` do VE atendido |
-| `EV,<ms>,RECUSADO` | Linha com vírgula e conteúdo inválido |
+| `EV,<ms>,RECUSADO` | Linha com vírgula e conteúdo inválido, inclusive `AUT` mal formada ou vinda do A0 |
+| `EV,<ms>,SEM_OCORRENCIA,<rua>,<veiculo>` | Caso 0: o tipo do VE não tem ocorrência ativa na Central (desde 2026-10-06) |
 
 - `<ms>`: `millis()` do UNO. Serve para ordenar e medir intervalos **dentro**
   do UNO; a latência oficial usa o relógio do notebook.
 - Estados: `R`, `Y`, `G`, na ordem S1 S2 S3 S4.
 - `<regime>`: `C` ciclo, `E` emergência. `<rua_ativa>` e `<rua_fila>`: `1..4`
   ou `0` (nenhuma).
+- `<aut>`: três dígitos, a criticidade que o UNO tem para ambulância, bombeiro
+  e polícia, nessa ordem; `0` é sem ocorrência. `100` = só a ambulância, com
+  risco à vida. É por aqui que o backend confere se o UNO tem a lista certa.
 - `<rua>` nos eventos: `1..4`.
 
 **Cada linha válida recebida gera exatamente um evento de decisão**
-(`PREEMP_INI`, `RENOVADO`, `FILA` ou `DESCARTADO`), escrito **antes** de
+(`PREEMP_INI`, `RENOVADO`, `FILA`, `DESCARTADO` ou `SEM_OCORRENCIA`), escrito **antes** de
 qualquer outra linha. É o que mantém o carimbo de H3 sem fila de saída à frente
 (§4.3). A única linha que pode sair antes é uma `ST` que já estava vencida
 naquele mesmo milissegundo (a periódica, ou uma transição de luz): o firmware e
@@ -359,13 +505,17 @@ Exemplo — VE na Rua 3 chegando com o eixo principal verde há 1 s:
 
 ```
 uno <- EV,142350,PREEMP_INI,3,AMBULANCIA     (decisão, mesma iteração da leitura)
-uno <- ST,142350,GGRR,E,3,0                  (S1/S2 cumprem o resto do verde mínimo)
-uno <- ST,144350,YYRR,E,3,0                  (amarelo)
-uno <- ST,146350,RRRR,E,3,0                  (all-red)
-uno <- ST,147350,RRGR,E,3,0                  (verde exclusivo da Rua 3 — conta 9 s)
+uno <- ST,142350,GGRR,E,3,0,100              (S1/S2 cumprem o resto do verde mínimo)
+uno <- ST,144350,YYRR,E,3,0,100              (amarelo)
+uno <- ST,146350,RRRR,E,3,0,100              (all-red)
+uno <- ST,147350,RRGR,E,3,0,100              (verde exclusivo da Rua 3 — conta 9 s)
 uno <- EV,156350,PREEMP_FIM,3,AMBULANCIA
-uno <- ST,156350,RRYR,C,0,0                  (volta pelo eixo principal, que esperou)
+uno <- ST,156350,RRYR,C,0,0,100              (volta pelo eixo principal, que esperou)
 ```
+
+(Com a Central dando à ambulância risco à vida, `100`. Com `000`, a mesma
+detecção teria virado `EV,142350,SEM_OCORRENCIA,3,AMBULANCIA`, e nada mudaria
+nas luzes.)
 
 Em nenhuma linha há `G` nos dois eixos. A verificação de I1, I2 e I3 sobre a
 telemetria continua automatizável: como há `ST` a cada mudança de estado, a
@@ -385,7 +535,14 @@ atendê-lo**, os dois carimbados **no relógio do notebook** (decisão de
   Nenhum fio da bancada muda.
 - `t_atuacao` — chegada do primeiro byte da linha `EV,…,PREEMP_INI,…` do UNO.
 
-O intervalo cobre ESP-NOW, a serial do receptor ao UNO e a decisão do UNO. O
+**n = 100 passagens** (decisão do grupo de 2026-10-06, `06` §6): as mesmas 100
+do RNF05, com p95 de verdade. Durante a medição a ambulância precisa estar **em
+serviço na Central** — senão toda passagem vira `SEM_OCORRENCIA`, que não é
+amostra. Cada passagem espera o ciclo voltar (~20 s), para virar `PREEMP_INI`
+e não `RENOVADO`.
+
+O intervalo cobre ESP-NOW, a serial do receptor ao UNO (desde 2026-10-06, pela
+serial por software no A0) e a decisão do UNO. O
 `PREEMP_INI` corresponde ao `ACK` do protocolo anterior: o UNO se compromete com
 a transição, e a primeira mudança visível vem dali até 3 s depois, se o verde
 mínimo estiver pendente. É a leitura de P14 ("até o início da atuação").
@@ -393,7 +550,7 @@ mínimo estiver pendente. É a leitura de P14 ("até o início da atuação").
 **Por que o primeiro byte, e não o fim da linha.** A 9600 baud cada caractere
 leva ~1 ms; carimbar o fim da linha somaria ~35 ms à detecção e ~30 ms à
 atuação, e a diferença entraria no resultado. **O que sobra e precisa ser
-declarado:** a latência dos dois conversores USB-serial (o CH340 do UNO e o do
+declarado:** a latência dos dois conversores USB-serial (o 16U2 do UNO e o do
 emissor), que não se cancelam por serem chips diferentes, e até ~27 ms a mais
 se uma `ST` estiver saindo do UNO quando o VE chega (erro para cima, contra a
 hipótese).
@@ -404,7 +561,9 @@ medida na simulação, sobre o motor (`00` §5, decisão P2).
 
 ## 5. Firmware dos NodeMCUs — ficam como estão
 
-Os sketches do emissor e do receptor **não mudam** (decisão de 2026-10-05).
+Os sketches do emissor e do receptor **não mudam** (decisão de 2026-10-05,
+mantida em 2026-10-06: mudou o pino do UNO em que o TX do receptor chega, não o
+receptor).
 **Versionados em 2026-10-05 (entrega 5.6)** em
 `firmware/nodemcu/veiculo_ambulancia/` e `firmware/nodemcu/nodeMCU_semaforo/`,
 byte a byte iguais aos de `docs/hardware/`, com um cabeçalho de comentário: MAC
@@ -426,13 +585,18 @@ O que **não** se aplica mais: Wi-Fi, HTTP, `secrets.h`, `sequencia`,
 `X-Device-Token`, reconexão e a mensagem `SEM CONEXAO`. Não há rede (ESP-NOW é
 rádio direto, MAC a MAC, sem roteador).
 
-## 6. A ponte (`bridge/`) — só escuta
+## 6. A ponte (`bridge/`) — escuta, e escreve só a Central e a injeção
 
 Processo Python no notebook. Responsabilidades:
 
 - Abrir a serial do UNO (**9600**) e reconectar se o dispositivo sumir. Abrir a
-  porta **reinicia o UNO** (DTR do conversor USB), que volta pelo all-red;
-  fechar não reinicia.
+  porta **reinicia o UNO** (DTR do conversor USB), que volta pelo all-red e
+  **negando todos**; fechar não reinicia.
+- **Levar a lista da Central ao UNO** (desde 2026-10-06): `PUT /autorizacoes`
+  com `{"autorizacoes": {"AMBULANCIA": 1, …}}` escreve uma linha `AUT` por tipo
+  e responde `202`; a confirmação é a `ST` seguinte, que traz a lista que o UNO
+  tem. Quem chama é o backend (§2); sem backend, o roteiro de aceitação, ou
+  qualquer um pelo `/docs` da ponte.
 - Carimbar cada linha na chegada do **primeiro byte**, com `perf_counter`
   ancorado no relógio de parede (resolução de 100 ns contra os 15,6 ms do
   relógio de parede do Windows; o `datetime` final guarda microssegundos).
@@ -447,8 +611,9 @@ Processo Python no notebook. Responsabilidades:
 - **Na medição de H3**, abrir também a serial do emissor
   (`--porta-veiculo COM4`), casar cada `Tag … lida -> Enviando RUAn` com a
   decisão do UNO para ela e gravar a amostra em
-  `analysis/data/latencia_bancada.csv`. Detecção que vira `FILA`, `RENOVADO` ou
-  `DESCARTADO` não é amostra de H3: não houve atuação para medir. O casamento
+  `analysis/data/latencia_bancada.csv`. Detecção que vira `FILA`, `RENOVADO`,
+  `DESCARTADO` ou `SEM_OCORRENCIA` não é amostra de H3: não houve atuação para
+  medir. O casamento
   está em `bridge/latencia.py`:
   - cada detecção casa com o **primeiro evento de decisão da mesma rua**
     carimbado depois dela, seja qual for. Só se ele for `PREEMP_INI` há amostra.
@@ -469,11 +634,12 @@ Processo Python no notebook. Responsabilidades:
   **recusa** `--porta-veiculo` com `--simulado`: nenhum número do dublê chega
   ao CSV.
 - **Injeção de teste** (`POST /injecao` com `rua` e `veiculo`): escreve no RX do
-  UNO a mesma linha que o receptor escreveria e devolve a decisão do UNO, com o
-  `millis()` dela. **Só funciona com o fio do NodeMCU solto do RX**; com ele
-  ligado, o que a ponte escreve se perde, e a resposta é `504`.
-  `POST /injecao/bruta` escreve uma linha qualquer, para conferir o
-  `EV,RECUSADO`.
+  UNO, pelo USB, a mesma linha que o receptor escreveria e devolve a decisão do
+  UNO, com o `millis()` dela. Desde 2026-10-06 funciona **com a bancada
+  montada**, e passa pela Central como a do receptor: tipo sem ocorrência volta
+  `SEM_OCORRENCIA`. Sem decisão em 1 s, `504` (UNO calado, ou firmware anterior
+  a 2026-10-06, com o receptor ainda no RX). `POST /injecao/bruta` escreve uma
+  linha qualquer, para conferir o `EV,RECUSADO`.
 - `GET /estado` traz as **últimas 200 telemetrias**, não só a mais recente: como
   a `ST` sai a cada mudança de estado, quem lê o histórico não perde transição
   entre duas consultas.
@@ -495,60 +661,72 @@ segunda porta e o `latencia_bancada.csv`, testados sem hardware com `loop://` e
 portas roteirizadas. O CSV ainda não existe: ele só nasce de medição na
 bancada.
 
-**Aceitação do firmware (5.3).** Com a placa gravada e o fio do RX solto, subir
-`python -m bridge.main --porta COM3` e rodar o `python -m bridge.verificar`
-reescrito. Ele injeta VEs pela ponte e confere pela telemetria:
+**Aceitação do firmware (5.3).** Com a placa gravada e **o backend parado**,
+subir `python -m bridge.main --porta COM3` e rodar o `python -m bridge.verificar`.
+Ele manda a lista da Central (ambulância 1, bombeiro 2, polícia 3), injeta VEs
+pela ponte e confere pela telemetria:
 
-- boot em all-red e ciclo de 12 s;
+- boot em all-red e ciclo de 12 s; liga negando todos;
+- a lista da Central chega ao UNO e aparece na `ST`, e fica (se mudar sozinha,
+  o backend está no ar, e o roteiro para);
 - verde exclusivo, atingido em no máximo 6 s;
-- duração por tipo, renovação, interrupção por prioridade maior, fila e
+- duração por tipo, renovação, interrupção por criticidade maior, fila e
   descarte;
 - volta pelo eixo oposto, o teto de 30 s e o `RECUSADO`;
+- `SEM_OCORRENCIA` sem mexer no semáforo, e a criticidade, e não o tipo,
+  decidindo quem interrompe;
 - I1 a I4 em toda a telemetria.
 
 As durações são conferidas no `millis()` do UNO, com folga de 60 ms (uma volta do
 `loop()`). O mesmo roteiro, contra o dublê, é o que valida o próprio roteiro
-antes de haver placa: **16 de 16 em 2026-10-05**, em ~3 min. Ele mesmo pegou um
-defeito seu na primeira rodada: renovava depois do `TIMEOUT` e confundia a
+antes de haver placa: **16 de 16 em 2026-10-05**, em ~3 min, e **20 de 20 em
+2026-10-06**, com a Central, em ~4 min. Ele mesmo pegou um defeito seu na
+primeira rodada de 2026-10-05: renovava depois do `TIMEOUT` e confundia a
 emergência nova com a antiga.
 
 ## 7. Modo de demonstração
 
-Roteiro em `bridge/demo.py`, com o dashboard aberto:
+Roteiro em `bridge/demo.py` (ainda a escrever), com o dashboard aberto e o
+backend no ar:
 
 1. **Ciclo normal** — os dois eixos se alternando (12 s), ao vivo no dashboard.
-2. **O carrinho passa pela tag da Rua 3** → amarelo no eixo principal, all-red,
-   verde só no S3. O LCD mostra `AMBULANCIA na R3`, e o dashboard mostra o
-   evento.
-3. **Fim do verde da ambulância** → o ciclo volta pelo eixo principal, que ficou
-   esperando.
-4. **Prioridade entre VEs** — com o fio do RX solto, a ponte injeta um
-   `BOMBEIRO` na Rua 1 e, logo depois, a `AMBULANCIA` na Rua 3. A ambulância
-   interrompe o bombeiro (pelo amarelo e pelo all-red), o LCD mostra
-   `Fila:BOMB na R1`, e o bombeiro é atendido em seguida. O emissor físico é
-   sempre ambulância, então este passo precisa da injeção.
-5. **Autonomia do cruzamento** — encerrar a ponte. O semáforo continua, e o
-   carrinho continua preemptando; só o dashboard para. O cruzamento não depende
-   do notebook.
+   Ninguém em serviço na Central.
+2. **Tag sem ocorrência** (volta em 2026-10-06) — o carrinho passa pela tag da
+   Rua 3 → nada muda no semáforo, o LCD mostra `SEM OCORRENCIA` /
+   `AMBULANCIA na R3`, e o dashboard registra a negação.
+3. **A Central despacha a ambulância** — na aba Central, abrir uma ocorrência
+   para a ambulância. Em até ~1 s o painel da bancada mostra "Em serviço no UNO:
+   Ambulância".
+4. **O carrinho passa de novo** → amarelo no eixo principal, all-red, verde só
+   no S3. O LCD mostra `AMBULANCIA na R3`, e o dashboard mostra o evento. Ao fim
+   do verde, o ciclo volta pelo eixo principal, que ficou esperando.
+5. **Prioridade pela criticidade** — com a ambulância em `RISCO_COLETIVO` e um
+   bombeiro em `RISCO_VIDA` na Central, a ponte injeta a ambulância na Rua 3 e,
+   logo depois, o bombeiro na Rua 1: o bombeiro interrompe a ambulância (pelo
+   amarelo e pelo all-red), e ela vai para a fila. Com as criticidades
+   trocadas, quem interrompe é a ambulância. O emissor físico é sempre
+   ambulância, então o segundo VE vem da injeção — que, desde 2026-10-06,
+   funciona com a bancada montada.
+6. **Autonomia do cruzamento** — encerrar a ponte. O semáforo continua, e o
+   carrinho continua preemptando com a última lista; só o dashboard e a Central
+   param de alcançar o UNO. O cruzamento não depende do notebook para decidir.
 
-**O que saiu do roteiro em 2026-10-05, por consequência da arquitetura:**
+**O que continua fora do roteiro, por consequência da arquitetura:**
 
-- o passo 1b (tag sem ocorrência, P20): não há como o UNO saber de ocorrência;
 - a tag não cadastrada → `ACESSO NEGADO`: tag desconhecida é ignorada no
   veículo, sem nada visível no cruzamento;
 - o puxão do cabo USB → watchdog: o UNO não depende de comunicação, e o cabo é a
   alimentação dele.
-
-P20 continua no motor, na API e na simulação.
 
 ## 8. Testes com hardware desconectado
 
 `adapters/hardware/simulado.py` — o dublê do UNO, **reescrito em 2026-10-05**
 com o comportamento de §3 e §4 (entrega 5.2 refeita). Continua em duas camadas:
 `UnoSimulado`, dirigido por tempo injetado, e `TransporteSimulado`, a mesma
-interface da porta real. O transporte modela a fiação: com
-`fio_do_nodemcu_no_rx=True` o que a ponte escreve se perde, e
-`simular_receptor()` faz o papel do NodeMCU.
+interface da porta real. O transporte modela a fiação de 2026-10-06: o que a
+ponte escreve chega pelo USB (`Entrada.USB`), e `simular_receptor()` faz o papel
+do NodeMCU, pelo A0 (`Entrada.RECEPTOR`). Reabrir a porta reinicia o UNO, que
+perde a lista da Central.
 
 **O dublê é o modelo de referência do firmware:** o firmware deve se comportar
 como ele, e o `bridge.verificar` passa igual contra os dois. Desde 2026-10-05 o

@@ -7,12 +7,15 @@ lados do cabo::
     python -m bridge.main --simulado        # ou --porta COM3, com a placa
     python -m bridge.verificar              # noutro terminal, logo em seguida
 
-**Na bancada, solte o fio do NodeMCU do RX (pino 0) do UNO antes**: com ele
-ligado, o que a ponte escreve não chega ao UNO (`context/05` §1), e toda
-injeção volta sem decisão.
+**Com o backend parado.** Desde 2026-10-06 o roteiro manda ao UNO a lista da
+Central ele mesmo (`PUT /autorizacoes`), e o backend, se estiver no ar, a
+trocaria pela das ocorrências abertas no banco. O roteiro percebe e para.
 
-Leva cerca de três minutos, quase todos esperando o relógio do semáforo: o ciclo
-é de 12 s, o verde de um VE dura até 9 s e o teto da emergência é de 30 s.
+O receptor está no A0, e o RX do UNO é só do USB: a injeção chega com a bancada
+montada, sem soltar fio.
+
+Leva cerca de quatro minutos, quase todos esperando o relógio do semáforo: o
+ciclo é de 12 s, o verde de um VE dura até 9 s e o teto da emergência é de 30 s.
 
 As durações são conferidas no `millis()` do UNO, que vem em cada linha: é exato
 dentro da placa, e não depende de quando a ponte foi consultada.
@@ -47,6 +50,11 @@ FOLGA_MS = 60
 
 PRINCIPAL, TRANSVERSAL = "GGRR", "RRGG"
 _EIXO = (0, 0, 1, 1)
+
+#: A lista da Central com que o roteiro roda: uma ocorrência de cada tipo, na
+#: ordem antiga dos tipos, para que prioridade e fila tenham o mesmo roteiro de
+#: antes de 2026-10-06. Os passos da Central a trocam e a devolvem.
+CENTRAL_DO_ROTEIRO = {"AMBULANCIA": 1, "BOMBEIRO": 2, "POLICIA": 3}
 
 
 # ---------------------------------------------------------------------------
@@ -155,6 +163,9 @@ class Ponte:
     def injetar_bruta(self, linha: str) -> tuple[int, Any]:
         return self._pedir("POST", "/injecao/bruta", {"linha": linha})
 
+    def autorizar(self, autorizacoes: dict[str, int]) -> tuple[int, Any]:
+        return self._pedir("PUT", "/autorizacoes", {"autorizacoes": autorizacoes})
+
 
 @dataclass(frozen=True)
 class Amostra:
@@ -163,6 +174,7 @@ class Amostra:
     regime: str
     rua_ativa: int | None
     rua_fila: int | None
+    autorizacoes: tuple[tuple[str, int], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -213,6 +225,7 @@ class Observador:
                                 st["regime"],
                                 st["rua_ativa"],
                                 st["rua_fila"],
+                                tuple(sorted(st["autorizacoes"].items())),
                             )
                         )
                 for ev in estado["eventos"]:
@@ -313,9 +326,25 @@ class Roteiro:
         if status != 200:
             raise RuntimeError(
                 f"injeção RUA{rua},{veiculo} sem decisão (HTTP {status}). "
-                "O fio do NodeMCU está solto do RX do UNO?"
+                "A placa está com o firmware de 2026-10-06 (receptor no A0)?"
             )
         return Ev(corpo["decisao_t_dispositivo_ms"], corpo["decisao"], rua, veiculo)
+
+    def _central(self, autorizacoes: dict[str, int], limite_s: float = 3.0) -> None:
+        """Manda a lista ao UNO e espera a `ST` confirmá-la."""
+        status, corpo = self.ponte.autorizar(autorizacoes)
+        if status != 202:
+            raise RuntimeError(f"PUT /autorizacoes falhou (HTTP {status}): {corpo}")
+
+        def confirmada() -> bool:
+            amostras, _ = self.obs.copia()
+            return bool(amostras) and dict(amostras[-1].autorizacoes) == {
+                **dict(amostras[-1].autorizacoes),
+                **autorizacoes,
+            }
+
+        if not self.obs.esperar(confirmada, limite_s):
+            raise RuntimeError(f"a ST não confirmou a lista {autorizacoes} em {limite_s:.0f} s")
 
     def _abertura(self, estado: str, limite_s: float = CICLO_MS / 1000 + 3) -> Amostra:
         """Espera o eixo `estado` abrir no ciclo e devolve a amostra da abertura."""
@@ -350,6 +379,11 @@ class Roteiro:
         )
 
     def boot_em_all_red(self) -> None:
+        # A ST do all-red sai já no boot; o primeiro verde vem ~1 s depois (na
+        # placa, ~1,1 s, por causa do lcd.init()). Espera ele chegar.
+        self.obs.esperar(
+            lambda: any("G" in a.cores for a in self.obs.copia()[0]), limite_s=ALL_RED_MS / 1000 + 3
+        )
         amostras, eventos = self.obs.copia()
         primeiras = [a for a in amostras if a.ms < ALL_RED_MS]
         if not primeiras or not any(ev.tipo == "BOOT" for ev in eventos):
@@ -360,14 +394,77 @@ class Roteiro:
             )
             return
         abertura = next((a for a in amostras if "G" in a.cores), None)
+        # All-red de PELO MENOS 1 s: na placa o lcd.init() bloqueia ~1,1 s no
+        # setup(), e o primeiro verde sai depois disso. Mais all-red é seguro.
         self.registrar(
             "liga em all-red e só então abre o eixo principal",
             all(a.cores == "RRRR" for a in primeiras)
             and abertura is not None
             and abertura.cores == PRINCIPAL
-            and _proximo(abertura.ms, ALL_RED_MS),
+            and abertura.ms >= ALL_RED_MS - FOLGA_MS
+            and all(a.cores == "RRRR" for a in amostras if a.ms < abertura.ms),
             "primeiro verde: "
             + ("-" if abertura is None else f"{abertura.cores} em {abertura.ms} ms"),
+        )
+
+    def central(self) -> None:
+        """O UNO liga negando todos; o roteiro manda a lista e confere que ela fica."""
+        amostras, eventos = self.obs.copia()
+        if amostras and any(ev.tipo == "BOOT" for ev in eventos) and amostras[0].ms < ALL_RED_MS:
+            self.registrar(
+                "liga negando todos (nenhum tipo com ocorrência)",
+                all(c == 0 for _, c in amostras[0].autorizacoes),
+                f"lista no boot: {dict(amostras[0].autorizacoes)}",
+            )
+        self._central(CENTRAL_DO_ROTEIRO)
+        # Se o backend estiver no ar, ele troca a lista pela do banco em ~1 s.
+        time.sleep(2.0)
+        amostras, _ = self.obs.copia()
+        if dict(amostras[-1].autorizacoes) != CENTRAL_DO_ROTEIRO:
+            raise RuntimeError(
+                "a lista da Central mudou sozinha: o backend está no ar? "
+                "Pare-o e suba a ponte de novo antes do roteiro."
+            )
+        self.registrar(
+            "a lista da Central chega ao UNO e aparece na ST",
+            True,
+            f"{CENTRAL_DO_ROTEIRO}",
+        )
+
+    def sem_ocorrencia(self) -> None:
+        self._ciclo_ocioso()
+        self._central({"AMBULANCIA": 0})
+        antes = self.obs.agora_ms()
+        try:
+            decisao = self._injetar(3, "AMBULANCIA")
+            time.sleep(0.5)
+            preemptou = self.obs.evento("PREEMP_INI", antes)
+        finally:
+            self._central(CENTRAL_DO_ROTEIRO)
+        self.registrar(
+            "VE de tipo sem ocorrência na Central não preempta (SEM_OCORRENCIA)",
+            decisao.tipo == "SEM_OCORRENCIA" and preemptou is None,
+            f"decisão: {decisao.tipo}; preemptou: {preemptou is not None}",
+        )
+
+    def criticidade_decide(self) -> None:
+        """Polícia com risco à vida interrompe ambulância com urgência."""
+        self._ciclo_ocioso()
+        self._central({"AMBULANCIA": 3, "POLICIA": 1})
+        try:
+            ambulancia = self._injetar(3, "AMBULANCIA")
+            policia = self._injetar(1, "POLICIA")
+            fila = self.obs.esperar_evento("FILA", policia.ms, 2, rua=3)
+        finally:
+            self._central(CENTRAL_DO_ROTEIRO)
+        self.registrar(
+            "a criticidade, e não o tipo, decide quem interrompe",
+            ambulancia.tipo == "PREEMP_INI"
+            and policia.tipo == "PREEMP_INI"
+            and fila is not None
+            and fila.veiculo == "AMBULANCIA",
+            f"ambulância (3): {ambulancia.tipo}; polícia (1): {policia.tipo}; "
+            f"ambulância na fila: {fila is not None}",
         )
 
     def ciclo(self) -> None:
@@ -575,11 +672,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 2
         roteiro.health()
         roteiro.boot_em_all_red()
+        roteiro.central()
         roteiro.ciclo()
         roteiro.ve_em_outro_eixo()
         roteiro.ve_no_eixo_verde()
         roteiro.prioridade_e_fila()
         roteiro.renovacao_e_teto()
+        roteiro.sem_ocorrencia()
+        roteiro.criticidade_decide()
         roteiro.recusa()
         roteiro.invariantes()
     except RuntimeError as erro:
@@ -590,7 +690,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     falhas = [r for r in roteiro.resultados if r.ok is False]
     print(
         f"\n{len(roteiro.resultados) - len(falhas)} de {len(roteiro.resultados)} conferências ok."
-        " Fora do alcance da ponte: LCD, leitura da tag e ESP-NOW (checklist de bancada)."
+        " Fora do alcance da ponte: LCD, leitura da tag, ESP-NOW e o receptor no A0"
+        " (checklist de bancada)."
     )
     return 1 if falhas else 0
 

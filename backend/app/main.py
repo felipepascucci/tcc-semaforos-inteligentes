@@ -41,7 +41,7 @@ from app.configuracao import Configuracao
 from app.logs import configurar_logs
 from app.repositories.sessao import criar_engine, criar_fabrica_sessao
 from app.services.ao_vivo import SimulacaoAoVivo
-from app.services.bancada import GravadorBancada, LeitorPonte
+from app.services.bancada import CentralBancada, GravadorBancada, LeitorPonte
 from app.services.deteccoes import Deduplicador
 from app.services.difusao import Difusor
 
@@ -69,6 +69,7 @@ async def _abrir(config: Configuracao) -> Recursos:
             difusor=difusor,
             gravador=None if recursos.fabrica is None else GravadorBancada(recursos.fabrica),
             intervalo_s=config.intervalo_leitura_ponte_s,
+            central=None if recursos.fabrica is None else CentralBancada(recursos.fabrica),
         )
         recursos.tarefas.append(asyncio.create_task(recursos.leitor.rodar(), name="ponte"))
     log.info(

@@ -26,21 +26,25 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.models import LogPrioridade, Semaforo, StatusExecucao
-from app.services.bancada import GravadorBancada, LeitorPonte
+from app.models import LogPrioridade, Semaforo, StatusExecucao, TipoVeiculo, VeiculoEmergencia
+from app.repositories.ocorrencia import abrir_ocorrencia, encerrar_ocorrencia
+from app.services.bancada import CentralBancada, GravadorBancada, LeitorPonte
 from app.services.difusao import Difusor
 from bridge.api import criar_app as criar_app_da_ponte
 from bridge.ponte import Ponte
-from bridge.protocolo import EVENTOS_DE_DECISAO
-from bridge.tests.conftest import ate, transporte_rapido
+from bridge.protocolo import EVENTOS_DE_DECISAO, NENHUMA_AUTORIZACAO, Autorizacoes
+from bridge.tests.conftest import TODOS, ate, transporte_rapido
+from core.modelos import Criticidade
 
 pytestmark = pytest.mark.banco
 
 
 @asynccontextmanager
-async def _ponte() -> AsyncIterator[tuple[Ponte, httpx.AsyncClient]]:
+async def _ponte(
+    autorizacoes: Autorizacoes = TODOS,
+) -> AsyncIterator[tuple[Ponte, httpx.AsyncClient]]:
     """A ponte com o dublê, servida em memória (sem porta TCP)."""
-    ponte = Ponte(transporte_rapido())
+    ponte = Ponte(transporte_rapido(autorizacoes=autorizacoes))
     app = criar_app_da_ponte(ponte, "simulada")
     async with (
         app.router.lifespan_context(app),
@@ -84,6 +88,48 @@ async def test_cada_decisao_do_uno_vira_uma_linha_de_log(
     assert "S3 (RUA3)" in (logs[0].motivo or "")
     assert all(log.fase_aplicada is None and log.fk_execucao is None for log in logs)
     assert len({log.id_correlacao for log in logs}) == 3
+
+
+async def test_a_central_decide_quem_preempta_na_bancada(
+    semeado: Session, fabrica_sessao: sessionmaker[Session]
+) -> None:
+    """Abrir a ocorrência libera a ambulância no UNO; encerrar volta a negar.
+
+    Decisão de 2026-10-06: o UNO liga negando todos, e o backend manda a lista.
+    """
+    ambulancia = semeado.scalars(
+        select(VeiculoEmergencia).filter_by(tipo=TipoVeiculo.AMBULANCIA)
+    ).first()
+    assert ambulancia is not None
+
+    def autorizacoes(ponte: Ponte) -> tuple[int, int, int] | None:
+        st = ponte.ultima_telemetria
+        return None if st is None else st.autorizacoes
+
+    async with _ponte(NENHUMA_AUTORIZACAO) as (ponte, http):
+        leitor = LeitorPonte(
+            http, Difusor(), intervalo_s=0.05, central=CentralBancada(fabrica_sessao)
+        )
+        tarefa = asyncio.create_task(leitor.rodar())
+        try:
+            negada = await http.post("/injecao", json={"rua": 3, "veiculo": "AMBULANCIA"})
+            assert negada.json()["decisao"] == "SEM_OCORRENCIA"
+
+            with fabrica_sessao() as sessao, sessao.begin():
+                ocorrencia = abrir_ocorrencia(
+                    sessao, fk_veiculo=ambulancia.id_veiculo, criticidade=Criticidade.RISCO_COLETIVO
+                )
+                id_ocorrencia = ocorrencia.id_ocorrencia
+            await ate(lambda: autorizacoes(ponte) == (2, 0, 0), limite_s=5.0)
+            aceita = await http.post("/injecao", json={"rua": 3, "veiculo": "AMBULANCIA"})
+            assert aceita.json()["decisao"] == "PREEMP_INI"
+
+            with fabrica_sessao() as sessao, sessao.begin():
+                encerrar_ocorrencia(sessao, id_ocorrencia)
+            await ate(lambda: autorizacoes(ponte) == (0, 0, 0), limite_s=5.0)
+        finally:
+            leitor.parar()
+            await tarefa
 
 
 async def test_backend_que_reinicia_nao_regrava_o_historico(

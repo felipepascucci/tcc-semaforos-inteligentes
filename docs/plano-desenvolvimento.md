@@ -340,18 +340,21 @@ a menos que `--repetir MOTIVO` autorize.
 | 5.6 | Sketches dos NodeMCUs (emissor e receptor) versionados **como estão** em `firmware/nodemcu/`, com cabeçalho documentando o MAC do receptor, o tipo do veículo e o mapa UID → rua — ✅ **2026-10-05**, com teste que confere o corpo idêntico ao original e o cabeçalho de acordo com o código |
 | 5.7 | `bridge/` — ✅ **em parte, 2026-10-05**: só escuta a 9600, `/estado` com histórico, `/health`, `POST /injecao` e `/injecao/bruta`, `bridge.verificar` reescrito (**16 de 16 contra o dublê**), `.env.example` sem Wi-Fi, `parametros.hardware.yaml` com 2 fases. ✅ **H3 também, 2026-10-05**: carimbo no primeiro byte, `--porta-veiculo` e o casamento detecção → decisão que grava `analysis/data/latencia_bancada.csv` (`context/05` §6). O CSV só nasce de medição na bancada |
 | 5.8 | ✅ UIDs lidos (identificam ruas, `context/05` §1). ✅ **2026-10-05:** seeds com as 2 fases de `PROTO_CRUZ_01` e os dispositivos `EMISSOR_VE_01`, `RECEPTOR_CRUZ_01` e `CTRL_PROTO_01`; migration de dados para bancos já semeados (`context/03` §5) |
-| 5.9 | ~~**P20** na bancada~~ — **não se aplica desde 2026-10-05**: o UNO decide sem consultar ocorrência. P20 segue no motor, na API e na simulação |
+| 5.9 | **P20 na bancada** — ~~não se aplica desde 2026-10-05~~ 🛠️ **implementada em 2026-10-06, esperando a placa** ("caminho A", `context/09`): o receptor passa do RX (0) para o A0 (`SoftwareSerial`), a ponte manda ao UNO a lista da Central (`AUT,<VEICULO>,<0..3>`, `PUT /autorizacoes`), o backend a mantém sincronizada pela `ST`, o UNO liga negando todos e decide pela criticidade. Firmware, dublê, protocolo, ponte, backend, painel e `bridge.verificar` mudaram juntos; **20 de 20 contra o dublê e 20 de 20 na placa** (2026-10-06, gravada com `bridge.gravar_uno`: primeiro verde aos 1.125 ms, 55 transições sem violação de I1 a I4, zero linha inválida). A aceitação rodou com o receptor desligado. **Com o carrinho, na mesma noite:** pelo A0, 7 passagens sem ocorrência → 7 `SEM_OCORRENCIA` (LCD `SEM OCORRENCIA`); com a ambulância em serviço → `PREEMP_INI`, verde exclusivo, 9 s, inclusive chegando com o S4 no amarelo. Falta o checklist completo de `context/06` §6 (100 passagens, H3, soak) |
 
-> **Pendente de bancada (2026-10-05).** A bancada não está com o Felipe. Tudo o
-> que dá para fazer sem a placa está feito; ficam para quando ela chegar a
-> aceitação do firmware na placa (`bridge.verificar`, 16 de 16), a medição de H3,
-> o checklist de `context/06` §6 e o ensaio da demonstração. O projeto segue
-> para o Bloco 6 enquanto isso.
+> **A bancada chegou em 2026-10-06.** A primeira captura, com o firmware que já
+> estava na placa e o receptor ainda no RX (0), mostrou a cadeia física inteira
+> funcionando (preempção, renovação, fila, descarte e teto corretos) e dois
+> `RECUSADO` a investigar nas 100 passagens (`context/09`). Ficam, nesta ordem:
+> mover o fio para o A0, gravar o firmware, `bridge.verificar` na placa,
+> as 100 passagens (RNF05 e H3), o checklist de `context/06` §6 e o ensaio da
+> demonstração.
 
 **Pronto quando:**
 - o carrinho passa pela tag → o UNO inicia a preempção em < 3 s (RF02) e chega ao verde exclusivo pelo amarelo e pelo all-red;
+- sem ocorrência na Central, a mesma passagem vira `SEM_OCORRENCIA` e não mexe no semáforo;
 - `bridge.verificar` passa contra o dublê e contra a placa;
-- H3 medida em 5 repetições com o emissor no USB do notebook;
+- H3 medida em 100 passagens com o emissor no USB do notebook (decisão de 2026-10-06);
 - com a ponte encerrada, o cruzamento continua funcionando.
 
 ---
@@ -579,7 +582,9 @@ desempate determinístico.
   rotulada como estimativa preliminar, e o capítulo 5 passa a vir só de
   `analysis/gerar_resultados_tcc.py`. A migração não depende do Bloco 8 e pode ser
   feita já; o conteúdo final depende.
-- **H3** — **n definido em 2026-08-31: 5 repetições de bancada.** A evidência só
+- **H3** — ✅ **n redefinido em 2026-10-06: 100 passagens, critério no p95**
+  (decisão do grupo; `context/09`). O registro abaixo é o de 2026-08-31.
+  **n definido em 2026-08-31: 5 repetições de bancada.** A evidência só
   existe no protótipo (na simulação `t_atuacao` é o mesmo passo de `t_decisao`).
   Com n = 5 o p95 não é estimável: reportar mín/mediana/máx com o n declarado e
   verificar os 200 ms sobre o máximo. Fica registrada em `context/06` §6 a opção

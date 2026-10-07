@@ -15,7 +15,7 @@ import pytest
 from adapters.hardware.simulado import TransporteSimulado
 from bridge.latencia import JANELA_S, GravadorCsv
 from bridge.ponte import Ponte
-from bridge.protocolo import Deteccao, Regime, TipoEvento
+from bridge.protocolo import NENHUMA_AUTORIZACAO, Autorizacao, Deteccao, Regime, TipoEvento
 from bridge.tests.conftest import (
     PortaAusente,
     PortaRoteirizada,
@@ -63,8 +63,8 @@ async def test_escuta_o_boot_e_a_telemetria(ponte: Ponte) -> None:
 
 
 async def test_decisao_vinda_do_receptor_tambem_e_ouvida() -> None:
-    """Na operação quem escreve no RX é o NodeMCU, e a ponte só ouve."""
-    transporte = transporte_rapido(fio_do_nodemcu_no_rx=True)
+    """Na operação quem manda a detecção é o NodeMCU, pelo A0, e a ponte só ouve."""
+    transporte = transporte_rapido()
     async with _rodando(Ponte(transporte)) as ponte:
         transporte.simular_receptor(AMB_RUA_3)
         await ate(lambda: _eventos(ponte, TipoEvento.PREEMP_INI) == 1)
@@ -74,7 +74,7 @@ async def test_decisao_vinda_do_receptor_tambem_e_ouvida() -> None:
 
 async def test_ruido_e_contado_e_verde_nos_dois_eixos_e_denunciado() -> None:
     porta = PortaRoteirizada(
-        [b"\xff\x00lixo de boot\n", b"ST,100,GGRR,C,0,0\n", b"ST,600,GRGR,C,0,0\n"]
+        [b"\xff\x00lixo de boot\n", b"ST,100,GGRR,C,0,0,000\n", b"ST,600,GRGR,C,0,0,000\n"]
     )
     ponte = Ponte(porta)
     tarefa = asyncio.create_task(ponte.rodar())
@@ -120,13 +120,31 @@ async def test_injecoes_seguidas_casam_cada_uma_com_a_sua_decisao(ponte: Ponte) 
     ]
 
 
-async def test_com_o_fio_do_nodemcu_no_rx_a_injecao_volta_sem_decisao() -> None:
-    transporte = transporte_rapido(fio_do_nodemcu_no_rx=True)
-    async with _rodando(Ponte(transporte, timeout_decisao_s=0.2)) as ponte:
+async def test_sem_a_lista_da_central_a_injecao_volta_sem_ocorrencia() -> None:
+    """O UNO liga negando todos (decisão de 2026-10-06)."""
+    transporte = transporte_rapido(autorizacoes=NENHUMA_AUTORIZACAO)
+    async with _rodando(Ponte(transporte)) as ponte:
         resultado = await ponte.injetar(AMB_RUA_3)
 
-        assert resultado.decisao is None
-        assert resultado.latencia_ms is None
+        assert resultado.decisao is not None
+        assert resultado.decisao.tipo is TipoEvento.SEM_OCORRENCIA
+
+
+async def test_autorizar_escreve_as_linhas_e_a_st_confirma() -> None:
+    transporte = transporte_rapido(autorizacoes=NENHUMA_AUTORIZACAO)
+    async with _rodando(Ponte(transporte)) as ponte:
+        await ponte.autorizar(
+            [Autorizacao(TipoVeiculo.AMBULANCIA, 1), Autorizacao(TipoVeiculo.POLICIA, 3)]
+        )
+        await ate(
+            lambda: (
+                ponte.ultima_telemetria is not None
+                and ponte.ultima_telemetria.autorizacoes == (1, 0, 3)
+            )
+        )
+        resultado = await ponte.injetar(AMB_RUA_3)
+        assert resultado.decisao is not None
+        assert resultado.decisao.tipo is TipoEvento.PREEMP_INI
 
 
 async def test_injecao_bruta_recebe_recusa(ponte: Ponte) -> None:
@@ -195,7 +213,7 @@ async def test_porta_ausente_continua_tentando() -> None:
 async def test_carimbo_e_o_do_transporte_e_nao_o_da_leitura() -> None:
     """O instante vem do primeiro byte; a ponte só o converte para o relógio de parede."""
     t_primeiro_byte = time.perf_counter() - 0.5  # chegou meio segundo antes de ser lido
-    porta = PortaRoteirizada([LinhaRecebida(b"ST,100,GGRR,C,0,0\r\n", t_primeiro_byte)])
+    porta = PortaRoteirizada([LinhaRecebida(b"ST,100,GGRR,C,0,0,000\r\n", t_primeiro_byte)])
     ponte = Ponte(porta)
     tarefa = asyncio.create_task(ponte.rodar())
     await ate(lambda: ponte.ultima_telemetria is not None)
@@ -283,7 +301,7 @@ async def test_deteccao_que_nao_chega_ao_uno_expira_sem_amostra(tmp_path: Path) 
         emissor.entregar(_tag(3, t))
         await asyncio.sleep(0.05)
         # A telemetria segue chegando; passada a janela, a detecção é encerrada.
-        uno.entregar(_ev("ST,4000,GGRR,C,0,0", t + JANELA_S + 0.5))
+        uno.entregar(_ev("ST,4000,GGRR,C,0,0,000", t + JANELA_S + 0.5))
         await ate(lambda: ponte.deteccoes_sem_amostra == {"SEM_DECISAO": 1})
     assert ponte.amostras_h3 == []
 
@@ -302,13 +320,13 @@ async def test_sem_medicao_nao_ha_casador_nem_gravador(tmp_path: Path) -> None:
         Ponte(PortaRoteirizada(), gravador=GravadorCsv(tmp_path / "x.csv", datetime.now(UTC)))
 
 
-async def test_fim_a_fim_contra_o_duble_com_o_receptor_no_rx(tmp_path: Path) -> None:
+async def test_fim_a_fim_contra_o_duble_com_o_receptor_no_a0(tmp_path: Path) -> None:
     """O caminho inteiro da operação: emissor imprime, receptor entrega, UNO decide.
 
     A latência aqui é a constante do dublê, **não dado experimental**; o CSV vai
     para `tmp_path`.
     """
-    transporte = transporte_rapido(latencia_s=0.03, fio_do_nodemcu_no_rx=True)
+    transporte = transporte_rapido(latencia_s=0.03)
     emissor = PortaRoteirizada()
     csv_h3 = tmp_path / "h3.csv"
     gravador = GravadorCsv(csv_h3, sessao=datetime.now(UTC), versao_codigo="teste")

@@ -18,6 +18,7 @@ Evento do UNO      `log_prioridade`              `timestamp_fim`
 ``FILA``           linha nova, `CONFLITO_ADIADO` quando sai da fila: atendido, deslocado
                                                  ou descartado pelo teto
 ``DESCARTADO``     linha nova, `FALHA`           o próprio instante
+``SEM_OCORRENCIA`` linha nova, `FALHA`           o próprio instante
 ``TIMEOUT``        —                             o episódio em curso termina `TIMEOUT`
 ``BOOT``           —                             tudo o que estava aberto termina
                                                  `FALHA` (o UNO reiniciou)
@@ -34,12 +35,21 @@ H3 em `metrica_latencia`, ligada à linha do `PREEMP_INI` pelo carimbo.
 
 **A identidade do VE na bancada é (rua, tipo).** Dois veículos do mesmo tipo na
 mesma rua são indistinguíveis, limitação já declarada em `context/05` §3.3.
+
+**A Central vale na bancada desde 2026-10-06.** P20 continua fora do caminho da
+decisão aqui: quem a aplica é o UNO, com a lista que o backend mantém nele. A
+cada leitura, o `LeitorPonte` compara a criticidade de cada tipo nas ocorrências
+abertas (`criticidade_por_tipo`) com a que a `ST` traz, e, se diferem, chama
+`PUT /autorizacoes` da ponte. Isso cobre abrir e encerrar ocorrência e também o
+reinício do UNO, que volta negando todos. A ponte continua sem saber que o
+backend existe.
 """
 
 from __future__ import annotations
 
 import asyncio
 import contextlib
+import time
 import uuid
 from collections import deque
 from collections.abc import Callable, Iterable, Sequence
@@ -56,6 +66,7 @@ from app.configuracao import CODIGO_BANCADA
 from app.models import LogPrioridade, MetricaLatencia, StatusExecucao
 from app.repositories import operacao
 from app.repositories.cadastro import buscar_semaforo_por_codigo
+from app.repositories.ocorrencia import criticidade_por_tipo
 from app.services.difusao import Difusor
 
 log = structlog.get_logger(__name__)
@@ -65,6 +76,11 @@ TAMANHO_MOTIVO: Final = 200
 
 #: Quantos `PREEMP_INI` lembrar para ligar a amostra de H3 que chega depois.
 INIS_LEMBRADOS: Final = 200
+
+#: Intervalo mínimo entre dois envios da lista da Central. A `ST` confirma a
+#: lista em ~50 ms; enquanto ela não confirma, reenviar a 5 Hz só repetiria a
+#: linha na serial.
+INTERVALO_REENVIO_S: Final = 1.0
 
 Ve = tuple[int, str]
 
@@ -200,6 +216,8 @@ class TradutorBancada:
             return self._fila_nova(ve, t)
         if evento.tipo == "DESCARTADO":
             return self._descartado(ve, t)
+        if evento.tipo == "SEM_OCORRENCIA":
+            return self._sem_ocorrencia(ve, t)
         if evento.tipo == "PREEMP_FIM":
             self._acabou_de_encerrar = True
             return self._fim(ve, t)
@@ -290,6 +308,14 @@ class TradutorBancada:
         else:
             motivo = f"Bancada: DESCARTADO — {veiculo} na RUA{rua} sem lugar na fila"
         return [*operacoes, self._inserir(t, StatusExecucao.FALHA, motivo, fim=t)]
+
+    def _sem_ocorrencia(self, ve: Ve, t: datetime) -> list[Operacao]:
+        rua, veiculo = ve
+        motivo = (
+            f"Bancada: SEM_OCORRENCIA — {veiculo} na RUA{rua} sem ocorrência ativa na "
+            "Central; não preempta (P20)"
+        )
+        return [self._inserir(t, StatusExecucao.FALHA, motivo, fim=t)]
 
     def _fim(self, ve: Ve, t: datetime) -> list[Operacao]:
         teto, self._teto = self._teto, False
@@ -404,9 +430,24 @@ class GravadorBancada:
             )
 
 
+@dataclass
+class CentralBancada:
+    """A lista da Central, no formato do campo `autorizacoes` da `ST`. Síncrona."""
+
+    fabrica: sessionmaker[Session]
+
+    def autorizacoes(self) -> dict[str, int]:
+        with self.fabrica() as sessao:
+            return {tipo.value: c for tipo, c in criticidade_por_tipo(sessao).items()}
+
+
 # ---------------------------------------------------------------------------
 # Leitura da ponte
 # ---------------------------------------------------------------------------
+
+
+#: Eventos do UNO que o dashboard destaca.
+_EVENTOS_DE_ALERTA: Final = frozenset({"TIMEOUT", "RECUSADO", "SEM_OCORRENCIA"})
 
 
 def texto_do_evento(evento: EventoBancada) -> str:
@@ -448,6 +489,7 @@ def estado_do_semaforo(telemetria: dict[str, Any]) -> dict[str, Any]:
         "regime": telemetria["regime"],
         "rua_ativa": telemetria["rua_ativa"],
         "rua_fila": telemetria["rua_fila"],
+        "autorizacoes": telemetria.get("autorizacoes"),
         "recebido_em": telemetria["recebida_em"],
     }
 
@@ -466,6 +508,9 @@ class LeitorPonte:
         gravador: `None` quando não há banco: o WebSocket continua funcionando.
         intervalo_s: Período da leitura.
         tradutor: Injetável nos testes.
+        central: De onde vem a lista da Central que o UNO precisa ter. `None`
+            quando não há banco: aí ninguém sincroniza, e o UNO fica com o que
+            tiver (ao ligar, nega todos).
     """
 
     cliente: httpx.AsyncClient
@@ -473,10 +518,13 @@ class LeitorPonte:
     gravador: GravadorBancada | None = None
     intervalo_s: float = 0.2
     tradutor: TradutorBancada = field(default_factory=TradutorBancada)
+    central: CentralBancada | None = None
     disponivel: bool = False
     ultimo_estado: dict[str, Any] | None = None
     ultima_leitura: datetime | None = None
     falhas_de_gravacao: int = 0
+    envios_de_autorizacao: int = 0
+    _ultimo_envio: float | None = None
     _marca_evento: datetime | None = None
     _marca_amostra: datetime | None = None
     _marcas_lidas: bool = False
@@ -530,7 +578,7 @@ class LeitorPonte:
             operacoes += self.tradutor.traduzir(evento)
             self.difusor.publicar_evento(
                 {
-                    "nivel": "WARNING" if evento.tipo in {"TIMEOUT", "RECUSADO"} else "INFO",
+                    "nivel": "WARNING" if evento.tipo in _EVENTOS_DE_ALERTA else "INFO",
                     "texto": texto_do_evento(evento),
                     "origem": "BANCADA",
                     "tipo": evento.tipo,
@@ -547,6 +595,8 @@ class LeitorPonte:
         await self._gravar(operacoes)
 
         telemetria = corpo.get("telemetria")
+        if telemetria is not None:
+            await self._sincronizar_central(telemetria)
         if telemetria is not None and telemetria["recebida_em"] != self._ultima_publicada:
             # Só a telemetria nova: republicar a mesma a 5 Hz não informa nada, e
             # o dashboard a veria como "atualizada agora" sem ser.
@@ -562,6 +612,28 @@ class LeitorPonte:
                     "priorizacoes_ativas": 1 if estado["em_preempcao"] else 0,
                 },
             )
+
+    async def _sincronizar_central(self, telemetria: dict[str, Any]) -> None:
+        """Manda ao UNO a lista da Central, se a da `ST` for outra.
+
+        Cobre abrir e encerrar ocorrência e o reinício do UNO, que volta negando
+        todos. Falhar aqui não derruba a leitura: a próxima tenta de novo.
+        """
+        if self.central is None:
+            return
+        desejada = await asyncio.to_thread(self.central.autorizacoes)
+        if telemetria.get("autorizacoes") == desejada:
+            return
+        agora = time.monotonic()
+        if self._ultimo_envio is not None and agora - self._ultimo_envio < INTERVALO_REENVIO_S:
+            return
+        self._ultimo_envio = agora
+        resposta = await self.cliente.put(
+            "/autorizacoes", json={"autorizacoes": desejada}, timeout=2.0
+        )
+        resposta.raise_for_status()
+        self.envios_de_autorizacao += 1
+        log.info("central_enviada_a_bancada", uno=telemetria.get("autorizacoes"), central=desejada)
 
     async def injetar(self, rua: int, veiculo: str) -> httpx.Response:
         """`POST /injecao` da ponte: a preempção manual da bancada."""
