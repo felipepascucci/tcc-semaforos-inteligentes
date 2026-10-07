@@ -668,8 +668,8 @@ laço asyncio, API FastAPI em `:8001`, relógio). O protocolo, o dublê e o
 `bridge.verificar` foram reescritos. **A parte de H3 entrou no mesmo dia**: o
 carimbo no primeiro byte (`Transporte.ler_linha` devolve `LinhaRecebida`), a
 segunda porta e o `latencia_bancada.csv`, testados sem hardware com `loop://` e
-portas roteirizadas. O CSV ainda não existe: ele só nasce de medição na
-bancada.
+portas roteirizadas. O CSV só nasce de medição na bancada: a rodada de
+2026-10-07 gravou as 100 amostras (`06` §6, item 7b).
 
 **Aceitação do firmware (5.3).** Com a placa gravada e **o backend parado**,
 subir `python -m bridge.main --porta COM3` e rodar o `python -m bridge.verificar`.

@@ -10,6 +10,12 @@ Escopo: completo, conforme `context/` (`context/08` §2).
 > previstos seguem como estão, e o **Bloco 10** — priorização aprendida entre
 > múltiplos VEs, pedido pelo orientador (P19) — é **acrescentado**. Faltam,
 > portanto, os Blocos 5, 6, 7, 10, 8 e 9 — nessa ordem de execução.
+>
+> **Estado em 2026-10-07.** Os Blocos 5, 6 e 7 estão na main (PRs #11 a #15 e
+> #17 a #20); do 5, falta só o item 5 do checklist da bancada, e do contrato de
+> hardware, as fotos e a versão do pacote `esp8266`. Do Bloco 10, as entregas
+> 10.1 a 10.5 estão na main (PR #16); faltam 10.6, 10.7 e 10.8. Depois, os
+> Blocos 8 e 9.
 
 ---
 
@@ -334,21 +340,26 @@ a menos que `--repetir MOTIVO` autorize.
 |---|---|
 | 5.1 | `bridge/protocolo.py` — ✅ **refeito em 2026-10-05**: `ST` e `EV` de `context/05` §4.2, a linha `<RUA>,<VEICULO>` do receptor e da injeção, a linha `Tag … lida` do emissor. Saiu a tradução `Comando` → linha |
 | 5.2 | `adapters/hardware/simulado.py` — ✅ **refeito em 2026-10-05** com a regra de `context/05` §3: 2 fases, verde exclusivo, fila por tipo, transição segura, teto de 30 s. 44 testes, Hypothesis para I1–I5, verificação por mutação (4 sabotagens, todas pegas) |
-| 5.3 | Firmware UNO reescrito em `firmware/uno/`, conforme `context/05` §3 e §4: decisão local preservada, transição segura, **zero `delay()`** no `loop()`, **zero `String`**, `ST` a 2 Hz e a cada mudança de estado, eventos antes do LCD — ✅ **escrito e compilado em 2026-10-05** (27% da flash, 41% da RAM). O núcleo roda no PC contra o dublê, linha por linha, em cenários fixos e 200 sequências aleatórias; 9 sabotagens, todas pegas (`context/05` §3.7). **Falta** a aceitação na placa: `bridge.verificar` com 16 de 16 |
+| 5.3 | Firmware UNO reescrito em `firmware/uno/`, conforme `context/05` §3 e §4: decisão local preservada, transição segura, **zero `delay()`** no `loop()`, **zero `String`**, `ST` a 2 Hz e a cada mudança de estado, eventos antes do LCD — ✅ **escrito e compilado em 2026-10-05** (27% da flash, 41% da RAM). O núcleo roda no PC contra o dublê, linha por linha, em cenários fixos e 200 sequências aleatórias; 9 sabotagens, todas pegas (`context/05` §3.7). ✅ **Aceito na placa em 2026-10-06**, gravado com `bridge.gravar_uno`: `bridge.verificar` 20 de 20, já com a Central (ver 5.9) |
 | 5.4 | ~~**P8**~~ ✅ **2026-10-05** — boot normal com o RC522 no D3 (questionário, 3.3) |
 | 5.5 | ~~**P9**~~ ✅ **2026-10-05** — não se aplica: o LCD está no UNO, de 5 V |
 | 5.6 | Sketches dos NodeMCUs (emissor e receptor) versionados **como estão** em `firmware/nodemcu/`, com cabeçalho documentando o MAC do receptor, o tipo do veículo e o mapa UID → rua — ✅ **2026-10-05**, com teste que confere o corpo idêntico ao original e o cabeçalho de acordo com o código |
-| 5.7 | `bridge/` — ✅ **em parte, 2026-10-05**: só escuta a 9600, `/estado` com histórico, `/health`, `POST /injecao` e `/injecao/bruta`, `bridge.verificar` reescrito (**16 de 16 contra o dublê**), `.env.example` sem Wi-Fi, `parametros.hardware.yaml` com 2 fases. ✅ **H3 também, 2026-10-05**: carimbo no primeiro byte, `--porta-veiculo` e o casamento detecção → decisão que grava `analysis/data/latencia_bancada.csv` (`context/05` §6). O CSV só nasce de medição na bancada |
+| 5.7 | `bridge/` — ✅ **em parte, 2026-10-05**: só escuta a 9600, `/estado` com histórico, `/health`, `POST /injecao` e `/injecao/bruta`, `bridge.verificar` reescrito (**16 de 16 contra o dublê**), `.env.example` sem Wi-Fi, `parametros.hardware.yaml` com 2 fases. ✅ **H3 também, 2026-10-05**: carimbo no primeiro byte, `--porta-veiculo` e o casamento detecção → decisão que grava `analysis/data/latencia_bancada.csv` (`context/05` §6). O CSV só nasce de medição na bancada. ✅ **Na bancada, 2026-10-07:** `deteccoes_bancada.csv` (RNF05), as 100 amostras de H3 e, com `--telemetria`, `telemetria_bancada.csv` (checklist); resultados por `analysis.resumo_bancada` e `analysis.checklist_bancada` |
 | 5.8 | ✅ UIDs lidos (identificam ruas, `context/05` §1). ✅ **2026-10-05:** seeds com as 2 fases de `PROTO_CRUZ_01` e os dispositivos `EMISSOR_VE_01`, `RECEPTOR_CRUZ_01` e `CTRL_PROTO_01`; migration de dados para bancos já semeados (`context/03` §5) |
-| 5.9 | **P20 na bancada** — ~~não se aplica desde 2026-10-05~~ 🛠️ **implementada em 2026-10-06, esperando a placa** ("caminho A", `context/09`): o receptor passa do RX (0) para o A0 (`SoftwareSerial`), a ponte manda ao UNO a lista da Central (`AUT,<VEICULO>,<0..3>`, `PUT /autorizacoes`), o backend a mantém sincronizada pela `ST`, o UNO liga negando todos e decide pela criticidade. Firmware, dublê, protocolo, ponte, backend, painel e `bridge.verificar` mudaram juntos; **20 de 20 contra o dublê e 20 de 20 na placa** (2026-10-06, gravada com `bridge.gravar_uno`: primeiro verde aos 1.125 ms, 55 transições sem violação de I1 a I4, zero linha inválida). A aceitação rodou com o receptor desligado. **Com o carrinho, na mesma noite:** pelo A0, 7 passagens sem ocorrência → 7 `SEM_OCORRENCIA` (LCD `SEM OCORRENCIA`); com a ambulância em serviço → `PREEMP_INI`, verde exclusivo, 9 s, inclusive chegando com o S4 no amarelo. Falta o checklist completo de `context/06` §6 (100 passagens, H3, soak) |
+| 5.9 | **P20 na bancada** — ~~não se aplica desde 2026-10-05~~ ✅ **implementada em 2026-10-06 e aceita na placa** ("caminho A", `context/09`): o receptor passa do RX (0) para o A0 (`SoftwareSerial`), a ponte manda ao UNO a lista da Central (`AUT,<VEICULO>,<0..3>`, `PUT /autorizacoes`), o backend a mantém sincronizada pela `ST`, o UNO liga negando todos e decide pela criticidade. Firmware, dublê, protocolo, ponte, backend, painel e `bridge.verificar` mudaram juntos; **20 de 20 contra o dublê e 20 de 20 na placa** (2026-10-06, gravada com `bridge.gravar_uno`: primeiro verde aos 1.125 ms, 55 transições sem violação de I1 a I4, zero linha inválida). A aceitação rodou com o receptor desligado. **Com o carrinho, na mesma noite:** pelo A0, 7 passagens sem ocorrência → 7 `SEM_OCORRENCIA` (LCD `SEM OCORRENCIA`); com a ambulância em serviço → `PREEMP_INI`, verde exclusivo, 9 s, inclusive chegando com o S4 no amarelo. ✅ **Checklist de `context/06` §6 em 2026-10-07:** 100 passagens (RNF05 100 de 100; H3 p95 31,6 ms), 33 min de operação contínua e os demais itens; **falta só o item 5** (tag fora das 4 ruas) |
+| 5.10 | `bridge/demo.py` — o roteiro guiado da demonstração (`context/05` §7). ✅ **2026-10-07:** 18 de 18 contra o dublê e **19 de 19 na placa**, no ensaio |
 
 > **A bancada chegou em 2026-10-06.** A primeira captura, com o firmware que já
 > estava na placa e o receptor ainda no RX (0), mostrou a cadeia física inteira
 > funcionando (preempção, renovação, fila, descarte e teto corretos) e dois
-> `RECUSADO` a investigar nas 100 passagens (`context/09`). Ficam, nesta ordem:
-> mover o fio para o A0, gravar o firmware, `bridge.verificar` na placa,
-> as 100 passagens (RNF05 e H3), o checklist de `context/06` §6 e o ensaio da
-> demonstração.
+> `RECUSADO` a investigar nas 100 passagens (`context/09`). A causa foi achada
+> (lixo de boot do ESP grudado na linha) e corrigida no firmware.
+>
+> **Estado em 2026-10-07: feito na bancada**, nesta ordem: o fio no A0, o firmware
+> gravado, `bridge.verificar` 20 de 20, as 100 passagens (RNF05 e H3), o
+> checklist de `context/06` §6 e o ensaio da demonstração. Falta o item 5 do
+> checklist, e do contrato de hardware (§15), as fotos e a versão do pacote
+> `esp8266`.
 
 **Pronto quando:**
 - o carrinho passa pela tag → o UNO inicia a preempção em < 3 s (RF02) e chega ao verde exclusivo pelo amarelo e pelo all-red;
@@ -367,7 +378,9 @@ Todas as rotas do `context/01` §7, schemas Pydantic v2, WebSocket com throttle 
 
 **P20 (2026-09-29) acrescenta:** `POST /ocorrencias`, `POST /ocorrencias/{id}/encerramento` e `GET /ocorrencias?ativas=true`; e o serviço de `/deteccoes` passa a chamar `core/autorizacao.autorizar()` com o que buscou no banco, responder `acao = "SEM_OCORRENCIA"` (HTTP 200) à tag reconhecida sem ocorrência e gravar `deteccao.autorizado` e `fk_ocorrencia`. A tabela, o ORM e o repositório (`abrir_ocorrencia`, `encerrar_ocorrencia`, `ocorrencia_ativa_do_veiculo`) já existem desde a P20.
 
-**Estado em 2026-10-05: implementado, esperando o teste da equipe.** Sete
+**Estado em 2026-10-07: na main (PR #14)**, e exercitado na bancada pelo
+checklist de `context/06` §6 (itens 8, 9 e 15). Em 2026-10-05 estava
+implementado, esperando o teste da equipe. Sete
 decisões tomadas antes do código, registradas em `context/09`: o backend lê
 `GET /estado` da ponte a 5 Hz; `/deteccoes` fica como contrato do V2I com rede,
 e a bancada entra pela leitura da ponte; a aproximação vai em `motivo`;
@@ -398,7 +411,10 @@ pedido de simulação executado pelo atendente com o SUMO e transmissão ao vivo
 
 React + Vite + TS + Tailwind. Mapa Leaflet, painel de semáforos em tempo real, tela de logs com filtro, painel de métricas com Recharts, login simples. Vitest nos componentes de estado. **Painel "Central" (P20):** abrir ocorrência escolhendo veículo e criticidade, encerrar, e ver quem está em serviço — é a central de despacho simulada.
 
-**Estado em 2026-10-05: implementado, esperando o teste da equipe.** Quatro
+**Estado em 2026-10-07: na main (PR #15)**, com a revisão pedida no primeiro
+teste da equipe (fim da tabela abaixo); o painel da Central foi usado na
+bancada, no checklist e no ensaio da demonstração. Em 2026-10-05 estava
+implementado, esperando o teste da equipe. Quatro
 decisões tomadas antes do código, registradas em `context/09`: login com PyJWT e
 a credencial do operador no ambiente; o token protege só as escritas do
 operador; HTTPS pelo nginx com certificado autoassinado; o frontend no compose
@@ -535,17 +551,18 @@ desempate determinístico.
 |---|---|
 | Fim do Bloco 2 | O núcleo do TCC existe e é seguro — invariantes verificados por property-based testing |
 | Fim do Bloco 4 | ✅ **2026-08-26.** H1 se sustenta em `moderado` (31,7%) e **não** em `intenso` (18,1%); H2 tem custo medido mas **sem** mitigação (P16 e P17). Zero gridlock, RNF01 com folga de três ordens de grandeza. O marco cumpriu seu papel: os problemas apareceram com margem — e **P16 foi corrigida em 2026-08-31** (`intenso` 31,2%), com quase três meses de folga, que é exatamente o que antecipar o piloto comprou |
-| Fim do Bloco 5 | O protótipo físico funciona fim-a-fim, com transição segura, fim da emergência por duração e teto, e H3 medida |
-| **Entrega 10.1** | Sabe-se **quantos eventos de conflito entre VEs existem por execução** — é o que define se há dado suficiente para treinar, e nenhuma decisão de modelagem é tomada antes disso |
+| Fim do Bloco 5 | ✅ **2026-10-07, menos o item 5 do checklist.** O protótipo físico funciona fim-a-fim, com transição segura, fim da emergência por duração e teto, e H3 medida: p95 31,6 ms em 100 passagens, RNF05 100 de 100, 33 min sem reinício |
+| **Entrega 10.1** | ✅ **2026-09-10, remedida em 2026-10-05.** Sabe-se **quantos eventos de conflito entre VEs existem por execução** — é o que define se há dado suficiente para treinar, e nenhuma decisão de modelagem é tomada antes disso |
 | Fim do Bloco 10 | Existe uma política aprendida, exportada como dado e comparada estatisticamente contra o desempate determinístico. Veredito favorável **ou** nulo, ambos reportáveis |
 | Fim do Bloco 8 | Os dados do capítulo 5 existem e são reprodutíveis |
 
 ## Pendências que continuam abertas
 
-> **Atualizado em 2026-10-01.** P11, P15, P16, P18 e P20 estão **fechadas**.
-> **P3 foi revogada:** a banca espera aprendizado de máquina, o que abriu **P19**
-> e o Bloco 10. **P17 foi calibrada e congelada.** Bloqueia o Bloco 8 só o
-> Bloco 10.
+> **Atualizado em 2026-10-07.** P8, P9, P11, P15, P16, P18 e P20 estão
+> **fechadas**. **P3 foi revogada:** a banca espera aprendizado de máquina, o que
+> abriu **P19** e o Bloco 10. **P17 foi calibrada e congelada.** Bloqueia o
+> Bloco 8 só o Bloco 10 (10.6 e 10.7). Da bancada, faltam o item 5 do checklist,
+> as fotos e a versão do pacote `esp8266`.
 
 - ~~**P16** — H1 abaixo da meta em `intenso`.~~ ✅ **Resolvida em 2026-08-31**
   corrigindo o mecanismo, sem tocar em H1: 18,1% → **31,2%**, paradas do VE
@@ -555,14 +572,16 @@ desempate determinístico.
   onde: um modelo para decidir **qual VE é priorizado** quando há mais de uma
   emergência simultânea — hoje o desempate determinístico de E8. Revoga a decisão
   P3. **Nada sai do escopo em troca** (decisão da equipe, 2026-09-10). O desenho
-  do modelo ainda não está definido, e a primeira entrega do bloco é medir
-  quantos conflitos existem por execução, porque é isso que define o que é
-  treinável. Ver Bloco 10 acima e P19 em `context/09`.
+  foi decidido em 2026-09-10, e as entregas 10.1 a 10.5 estão na main (PR #16,
+  2026-10-06): o modelo está treinado e os pesos estão em
+  `backend/config/politica_desempate.yaml`. Faltam a inferência em `core/`
+  (10.6), o braço `PREEMPCAO_ML` (10.7) e a análise de H4 (10.8). Ver Bloco 10
+  acima, P19 em `context/09` e `context/10`.
 - ~~**P18**~~ ✅ **Resolvida em 2026-09-10.** Sem teto numérico: o custo
   transversal é tratado qualitativamente, e o objetivo geral foi reescrito de
   "sem degradar de forma inaceitável" para "quantificar o custo que essa
   priorização impõe". Nada muda no código.
-- **P17** — ✅ **decidida em 2026-10-01**; a execução **bloqueia o Bloco 8**. E7 e
+- **P17** — ✅ **decidida em 2026-10-01**. E7 e
   H2 ficam. H2 = mitigação de ≥ 15% do **acréscimo**, em `moderado` e `intenso`,
   sobre a espera média transversal da hora. **Calibrada e congelada em
   2026-10-01:** `K = 1,0`, `n = 3`, pontuação +6,2% (abaixo da meta; nenhuma
@@ -582,8 +601,10 @@ desempate determinístico.
   rotulada como estimativa preliminar, e o capítulo 5 passa a vir só de
   `analysis/gerar_resultados_tcc.py`. A migração não depende do Bloco 8 e pode ser
   feita já; o conteúdo final depende.
-- **H3** — ✅ **n redefinido em 2026-10-06: 100 passagens, critério no p95**
-  (decisão do grupo; `context/09`). O registro abaixo é o de 2026-08-31.
+- **H3** — ✅ **medida em 2026-10-07: p95 31,6 ms em 100 passagens**, ACEITA
+  (`analysis/data/resumo_bancada_2026-10-07.md`, `context/07` T6). n redefinido
+  em 2026-10-06: 100 passagens, critério no p95 (decisão do grupo;
+  `context/09`). O registro abaixo é o de 2026-08-31.
   **n definido em 2026-08-31: 5 repetições de bancada.** A evidência só
   existe no protótipo (na simulação `t_atuacao` é o mesmo passo de `t_decisao`).
   Com n = 5 o p95 não é estimável: reportar mín/mediana/máx com o n declarado e

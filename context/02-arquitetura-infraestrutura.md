@@ -83,14 +83,15 @@ Não introduzir dependência fora desta lista sem registrar em `09-pendencias-e-
 > núcleo do firmware no PC contra o dublê (`05` §3.7). Sem ele, esse teste é
 > pulado; sem o `arduino-cli`, o de compilação para a placa.
 
-**Sobre `libsumo`:** é ~10x mais rápido que `traci` porque roda no mesmo processo, mas não permite múltiplos clientes nem GUI. Estratégia: usar `traci` no desenvolvimento (com `sumo-gui`, para gravar vídeo da demonstração) e `libsumo` nas 50 execuções em lote. A camada de adaptador deve abstrair os dois atrás da mesma interface.
+**Sobre `libsumo`:** é ~10x mais rápido que `traci` porque roda no mesmo processo, mas não permite múltiplos clientes nem GUI. Estratégia original: usar `traci` no desenvolvimento (com `sumo-gui`, para gravar vídeo da demonstração) e `libsumo` nas execuções em lote. A camada de adaptador deve abstrair os dois atrás da mesma interface. **Revista em P15 (2026-10-01): o lote também roda com `traci`**, com processos em paralelo.
 
 > **Implementado em `backend/adapters/sumo/cliente.py`** (Bloco 3), com uma
 > ressalva descoberta ao exercitá-lo: o **instalador Windows do SUMO não traz o
 > módulo Python do `libsumo`** — só os bindings Java/C#/C++. O módulo vem do pip,
 > o que esbarra na regra de não instalar cliente do SUMO por lá. Registrado como
-> **P15**, para decidir antes do Bloco 8; o caminho `traci` funciona hoje e
-> paraleliza por processo.
+> **P15**, **fechada em 2026-10-01**: o lote do Bloco 8 roda com `traci` e
+> `--paralelo 6` (~6 h para as 600, medido no piloto), e o `libsumo` não é
+> instalado pelo pip. `--libsumo` continua implementado, sem ser o padrão.
 >
 > **`sumolib`** também é usado (leitura do `.net.xml` em `adapters/sumo/topologia.py`
 > e `sim/rede/detectores.py`). Vem de `%SUMO_HOME%/tools`, como o `traci`, então

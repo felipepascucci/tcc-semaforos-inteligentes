@@ -196,14 +196,16 @@ make demo         # o corredor verde na sumo-gui
 | `--modo` | `FIXO` (baseline, sem intervenção), `PREEMPCAO`, `PREEMPCAO_COMPENSADA` |
 | `--seed` | escolhe o arquivo de rotas — **o mesmo nos três modos** (pareamento) |
 | `--gui` | roda na `sumo-gui`, para ver o corredor e gravar a demonstração |
-| `--libsumo` | ~10x mais rápido, sem GUI — o modo do lote do Bloco 8 |
+| `--libsumo` | ~10x mais rápido, sem GUI — implementado, mas **não** é o modo do lote (P15) |
 | `--exemplar` | persiste transições no banco e latências detalhadas (decisão P5) |
 | `--sem-banco` | não grava em `execucao_simulacao` |
 | `--saida-detalhada` | grava também `queue.xml` — 77 MB por execução, para depurar |
 
-`--libsumo` ainda **não funciona nesta instalação**: o instalador Windows do SUMO
-não traz o módulo Python do `libsumo`, só os bindings Java/C#/C++. É a pendência
-**P15**, para decidir antes do Bloco 8; o erro explica as alternativas.
+`--libsumo` **não funciona nesta instalação**: o instalador Windows do SUMO não
+traz o módulo Python do `libsumo`, só os bindings Java/C#/C++. **P15, fechada em
+2026-10-01:** o lote do Bloco 8 roda com `traci` e processos em paralelo (~6 h
+para as 600, medido no piloto), e o `libsumo` não é instalado pelo pip. A opção
+continua no adaptador para o caso de a máquina de execução mudar.
 
 ### Ver o corredor verde
 
@@ -314,7 +316,18 @@ porque o `host-gateway` não alcança o 127.0.0.1 do host.
 .venv\Scripts\python.exe -m bridge.main --porta COM5
 .venv\Scripts\python.exe -m bridge.main --simulado  # sem bancada: dublê do UNO
 # Medição de H3: o NodeMCU do veículo no USB do notebook (context/05 §4.3)
-.venv\Scripts\python.exe -m bridge.main --porta COM3 --porta-veiculo COM4
+.venv\Scripts\python.exe -m bridge.main --porta COM3 --porta-veiculo COM5
+# Checklist da bancada: grava cada linha do USB do UNO (context/06 §6)
+.venv\Scripts\python.exe -m bridge.main --porta COM3 --porta-veiculo COM5 --telemetria
+```
+
+O que a bancada grava fica em `analysis/data/`: `deteccoes_bancada.csv` (RNF05),
+`latencia_bancada.csv` (H3) e, com `--telemetria`, `telemetria_bancada.csv`. Os
+resultados saem só desses arquivos:
+
+```powershell
+.venv\Scripts\python.exe -m analysis.resumo_bancada --sessao <sessão>      # RNF05 e H3
+.venv\Scripts\python.exe -m analysis.checklist_bancada --todas --banco     # itens de 06 §6
 ```
 
 Precisa do extra `hardware` (`pip install -e ".[dev,hardware]"`). A bancada fala
@@ -331,6 +344,14 @@ compose no ar, o backend leva a ele, em até ~1 s, quem tem ocorrência aberta. 
 "AMBULANCIA"}`) faz o VE "chegar" pela injeção da ponte, e a decisão do UNO
 aparece em `/api/v1/logs/prioridade` — `SEM_OCORRENCIA` se a ambulância não
 estiver em serviço na aba Central.
+
+Para apresentar, o roteiro guiado da demonstração (`context/05` §7), com a ponte
+no ar, o compose no ar e o dashboard aberto:
+
+```powershell
+.venv\Scripts\python.exe -m bridge.demo                 # pede a senha do operador
+.venv\Scripts\python.exe -m bridge.demo --sem-carrinho  # plano B: a ponte injeta a ambulância
+```
 
 ### Simulação ao vivo e pedidos pela API
 
@@ -431,10 +452,17 @@ silenciosamente.
 
 1. **P6** — os números do capítulo 5 ainda não vêm de execução real. Maior risco
    acadêmico. **Aberta.**
-2. **P4 / P11 / P12** — correções e registros pendentes no texto do TCC.
-   **Abertas.**
-3. **P8 / P9** — verificações de bancada (GPIO 0 no RST do RC522, LCD I2C em
-   5 V — aguardando peças). **Abertas, resolver no Bloco 5.**
+2. **P4 / P12** — correções e registros pendentes no texto do TCC. **Abertas.**
+3. **P11** — fechada em 2026-10-01 (o método foi aprovado), mas a redação da
+   metodologia depende das referências que o orientador ficou de devolver.
+4. **P19 / Bloco 10** — o modelo está treinado (10.5); faltam a inferência em
+   `core/` (10.6), o braço `PREEMPCAO_ML` (10.7) e a análise de H4 (10.8). Bloqueia
+   o Bloco 8.
+
+**Fechadas em 2026-10-05:** P8 (boot normal com o RC522 no D3) e P9 (não se
+aplica: o LCD está no UNO, de 5 V). **Bancada, 2026-10-07:** checklist de
+`context/06` §6 feito, menos o item 5 (falta uma tag fora das 4 ruas); faltam as
+fotos e a versão do pacote `esp8266` (`docs/contrato-hardware-software.md` §15).
 
 **Decidida em 2026-09-29:** P20 — a preempção exige tag reconhecida **e**
 ocorrência ativa aberta pela central de despacho (simulada), e a criticidade da
