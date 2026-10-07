@@ -17,6 +17,13 @@ de decisão da mesma rua** carimbado depois dela, seja ele qual for. Se for
 estaria errado: a detecção que vira `FILA` seria casada com a saída da fila,
 segundos depois, e a latência sairia inflada por um tempo que não é do sistema.
 
+**Todo desfecho vai para um segundo CSV** (`deteccoes_bancada.csv`), desde
+2026-10-07: cada leitura que o emissor imprimiu, com o evento de decisão que
+ela teve ou `SEM_DECISAO`. É o dado do RNF05 (`context/06` §6, item 4), cujo
+denominador são as leituras impressas e cujo numerador são as que viraram
+evento de decisão com a rua certa — o casamento já é por rua, então todo
+desfecho que não é `SEM_DECISAO` chegou com a rua certa.
+
 **O casamento é pelos carimbos, não pela ordem de leitura.** As duas portas são
 lidas em paralelo, e a linha do emissor (~36 caracteres) termina de chegar
 depois do começo da decisão do UNO, se a latência for curta. Então qualquer um
@@ -43,6 +50,9 @@ RAIZ: Final = Path(__file__).resolve().parents[1]
 #: Onde as amostras de H3 vivem (`context/05` §6).
 CSV_PADRAO: Final = RAIZ / "analysis" / "data" / "latencia_bancada.csv"
 
+#: Onde vive cada desfecho de detecção, amostra de H3 ou não — o dado do RNF05.
+CSV_DESFECHOS_PADRAO: Final = RAIZ / "analysis" / "data" / "deteccoes_bancada.csv"
+
 #: Por quanto tempo uma detecção espera a decisão do UNO, e uma decisão espera a
 #: detecção que a causou. É o limite do RF02 (3 s): a janela só existe para não
 #: guardar as pendências para sempre, e precisa ser **folgada**. Uma janela
@@ -62,6 +72,21 @@ COLUNAS: Final = (
     "uno_ms",
     "bytes_em_espera_deteccao",
     "bytes_em_espera_atuacao",
+    "versao_codigo",
+)
+
+#: Uma linha por leitura do emissor. `t_decisao`, `latencia_ms`, `veiculo` e
+#: `uno_ms` ficam vazios quando o desfecho é `SEM_DECISAO`.
+COLUNAS_DESFECHOS: Final = (
+    "sessao",
+    "t_deteccao",
+    "rua",
+    "uid",
+    "desfecho",
+    "t_decisao",
+    "latencia_ms",
+    "veiculo",
+    "uno_ms",
     "versao_codigo",
 )
 
@@ -215,26 +240,71 @@ class GravadorCsv:
     versao_codigo: str = field(default_factory=versao_do_codigo)
 
     def gravar(self, amostra: AmostraH3) -> None:
-        novo = not self.caminho.exists() or self.caminho.stat().st_size == 0
-        self.caminho.parent.mkdir(parents=True, exist_ok=True)
-        with self.caminho.open("a", newline="", encoding="utf-8") as arquivo:
-            escritor = csv.writer(arquivo)
-            if novo:
-                escritor.writerow(COLUNAS)
-            evento = amostra.decisao.evento
-            assert evento.veiculo is not None
-            escritor.writerow(
-                (
-                    self.sessao.isoformat(),
-                    amostra.deteccao.t.isoformat(),
-                    amostra.decisao.t.isoformat(),
-                    f"{amostra.latencia_total_ms:.3f}",
-                    amostra.deteccao.rua,
-                    amostra.deteccao.leitura.uid,
-                    evento.veiculo.value,
-                    evento.t_dispositivo_ms,
-                    amostra.deteccao.bytes_em_espera,
-                    amostra.decisao.bytes_em_espera,
-                    self.versao_codigo,
-                )
-            )
+        evento = amostra.decisao.evento
+        assert evento.veiculo is not None
+        _acrescentar(
+            self.caminho,
+            COLUNAS,
+            (
+                self.sessao.isoformat(),
+                amostra.deteccao.t.isoformat(),
+                amostra.decisao.t.isoformat(),
+                f"{amostra.latencia_total_ms:.3f}",
+                amostra.deteccao.rua,
+                amostra.deteccao.leitura.uid,
+                evento.veiculo.value,
+                evento.t_dispositivo_ms,
+                amostra.deteccao.bytes_em_espera,
+                amostra.decisao.bytes_em_espera,
+                self.versao_codigo,
+            ),
+        )
+
+
+@dataclass
+class GravadorDesfechos:
+    """Acrescenta cada desfecho de detecção a um CSV — o dado do RNF05.
+
+    Mesmas regras do `GravadorCsv`: sessões acumuladas no mesmo arquivo, e o
+    arquivo fechado a cada linha.
+
+    Args:
+        caminho: O CSV. Na bancada, `CSV_DESFECHOS_PADRAO`.
+        sessao: Identifica a execução da ponte; a mesma do `GravadorCsv`.
+        versao_codigo: Versão do código que mediu.
+    """
+
+    caminho: Path
+    sessao: datetime
+    versao_codigo: str = field(default_factory=versao_do_codigo)
+
+    def gravar(self, desfecho: Desfecho) -> None:
+        deteccao, decisao = desfecho.deteccao, desfecho.decisao
+        veiculo = decisao.evento.veiculo if decisao is not None else None
+        _acrescentar(
+            self.caminho,
+            COLUNAS_DESFECHOS,
+            (
+                self.sessao.isoformat(),
+                deteccao.t.isoformat(),
+                deteccao.rua,
+                deteccao.leitura.uid,
+                desfecho.tipo,
+                "" if decisao is None else decisao.t.isoformat(),
+                "" if decisao is None else f"{(decisao.t - deteccao.t).total_seconds() * 1000:.3f}",
+                "" if veiculo is None else veiculo.value,
+                "" if decisao is None else decisao.evento.t_dispositivo_ms,
+                self.versao_codigo,
+            ),
+        )
+
+
+def _acrescentar(caminho: Path, colunas: tuple[str, ...], linha: tuple[object, ...]) -> None:
+    """Acrescenta uma linha ao CSV, com o cabeçalho se o arquivo for novo."""
+    novo = not caminho.exists() or caminho.stat().st_size == 0
+    caminho.parent.mkdir(parents=True, exist_ok=True)
+    with caminho.open("a", newline="", encoding="utf-8") as arquivo:
+        escritor = csv.writer(arquivo)
+        if novo:
+            escritor.writerow(colunas)
+        escritor.writerow(linha)

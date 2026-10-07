@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 from adapters.hardware.simulado import TransporteSimulado
-from bridge.latencia import JANELA_S, GravadorCsv
+from bridge.latencia import JANELA_S, GravadorCsv, GravadorDesfechos
 from bridge.ponte import Ponte
 from bridge.protocolo import NENHUMA_AUTORIZACAO, Autorizacao, Deteccao, Regime, TipoEvento
 from bridge.tests.conftest import (
@@ -232,11 +232,23 @@ def _ev(texto: str, t: float, em_espera: int = 0) -> LinhaRecebida:
     return LinhaRecebida(f"{texto}\r\n".encode(), t, em_espera)
 
 
+def _desfechos_gravados(csv_h3: Path) -> list[tuple[str, str]]:
+    """(rua, desfecho) de cada linha do CSV de desfechos ao lado de `csv_h3`."""
+    with _csv_desfechos(csv_h3).open(encoding="utf-8", newline="") as arquivo:
+        return [(linha["rua"], linha["desfecho"]) for linha in csv.DictReader(arquivo)]
+
+
+def _csv_desfechos(csv_h3: Path) -> Path:
+    return csv_h3.with_name("deteccoes_bancada.csv")
+
+
 @asynccontextmanager
 async def _medindo(csv: Path) -> AsyncIterator[tuple[Ponte, PortaRoteirizada, PortaRoteirizada]]:
     uno, emissor = PortaRoteirizada(), PortaRoteirizada()
-    gravador = GravadorCsv(csv, sessao=datetime.now(UTC), versao_codigo="teste")
-    ponte = Ponte(uno, transporte_veiculo=emissor, gravador=gravador)
+    sessao = datetime.now(UTC)
+    gravador = GravadorCsv(csv, sessao=sessao, versao_codigo="teste")
+    desfechos = GravadorDesfechos(_csv_desfechos(csv), sessao=sessao, versao_codigo="teste")
+    ponte = Ponte(uno, transporte_veiculo=emissor, gravador=gravador, gravador_desfechos=desfechos)
     tarefa = asyncio.create_task(ponte.rodar())
     try:
         await ate(lambda: ponte.emissor_conectado)
@@ -265,6 +277,7 @@ async def test_tag_lida_e_preemp_ini_viram_uma_linha_do_csv(tmp_path: Path) -> N
     assert float(linhas[0]["latencia_total_ms"]) == pytest.approx(45.0, abs=0.002)
     assert (linhas[0]["rua"], linhas[0]["uid"], linhas[0]["uno_ms"]) == ("3", "B7EF8FA0", "142350")
     assert linhas[0]["bytes_em_espera_atuacao"] == "1"
+    assert _desfechos_gravados(csv_h3) == [("3", "PREEMP_INI")]
 
 
 async def test_decisao_que_chega_antes_da_linha_do_emissor_tambem_casa(tmp_path: Path) -> None:
@@ -293,17 +306,33 @@ async def test_deteccao_que_vira_fila_ou_renovado_nao_vai_para_o_csv(tmp_path: P
     assert ponte.deteccoes_sem_amostra == {"FILA": 1, "RENOVADO": 1}
     assert ponte.amostras_h3 == []
     assert not csv_h3.exists()
+    # Para o RNF05 as duas contam: chegaram ao UNO com a rua certa.
+    assert _desfechos_gravados(csv_h3) == [("1", "FILA"), ("4", "RENOVADO")]
 
 
 async def test_deteccao_que_nao_chega_ao_uno_expira_sem_amostra(tmp_path: Path) -> None:
+    csv_h3 = tmp_path / "h3.csv"
     t = time.perf_counter()
-    async with _medindo(tmp_path / "h3.csv") as (ponte, uno, emissor):
+    async with _medindo(csv_h3) as (ponte, uno, emissor):
         emissor.entregar(_tag(3, t))
         await asyncio.sleep(0.05)
         # A telemetria segue chegando; passada a janela, a detecção é encerrada.
         uno.entregar(_ev("ST,4000,GGRR,C,0,0,000", t + JANELA_S + 0.5))
         await ate(lambda: ponte.deteccoes_sem_amostra == {"SEM_DECISAO": 1})
     assert ponte.amostras_h3 == []
+    assert _desfechos_gravados(csv_h3) == [("3", "SEM_DECISAO")]
+
+
+async def test_linha_recusada_pelo_uno_e_falha_do_rnf05(tmp_path: Path) -> None:
+    """`RECUSADO` não traz rua: a leitura fica sem decisão e conta como falha."""
+    csv_h3 = tmp_path / "h3.csv"
+    t = time.perf_counter()
+    async with _medindo(csv_h3) as (ponte, uno, emissor):
+        emissor.entregar(_tag(2, t))
+        uno.entregar(_ev("EV,30,RECUSADO", t + 0.030))
+        uno.entregar(_ev("ST,4000,GGRR,C,0,0,000", t + JANELA_S + 0.5))
+        await ate(lambda: ponte.deteccoes_sem_amostra == {"SEM_DECISAO": 1})
+    assert _desfechos_gravados(csv_h3) == [("2", "SEM_DECISAO")]
 
 
 async def test_porta_do_emissor_ausente_nao_atrapalha_a_escuta_do_uno() -> None:

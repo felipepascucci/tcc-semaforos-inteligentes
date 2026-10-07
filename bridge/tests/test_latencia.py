@@ -15,12 +15,14 @@ from hypothesis import strategies as st
 
 from bridge.latencia import (
     COLUNAS,
+    COLUNAS_DESFECHOS,
     JANELA_S,
     AmostraH3,
     CasadorH3,
     DecisaoCarimbada,
     Desfecho,
     GravadorCsv,
+    GravadorDesfechos,
     LeituraCarimbada,
 )
 from bridge.protocolo import EVENTOS_DE_DECISAO, Evento, LeituraVeiculo, TipoEvento
@@ -228,3 +230,30 @@ def test_gravador_escreve_o_cabecalho_uma_vez_e_acrescenta(tmp_path: Path) -> No
         "versao_codigo": "abc1234",
     }
     assert linhas[2][COLUNAS.index("sessao")] != linhas[1][COLUNAS.index("sessao")]
+
+
+def test_gravador_de_desfechos_grava_a_decisao_e_a_falta_dela(tmp_path: Path) -> None:
+    """Cada leitura do emissor vira uma linha, atendida ou não: o dado do RNF05."""
+    caminho = tmp_path / "deteccoes_bancada.csv"
+    gravador = GravadorDesfechos(caminho, sessao=T0, versao_codigo="abc1234")
+    gravador.gravar(Desfecho(_tag(0, 3), _ev(30.5, TipoEvento.RENOVADO, 3, uno_ms=900)))
+    gravador.gravar(Desfecho(_tag(20_000, 1), None))
+
+    with caminho.open(encoding="utf-8", newline="") as arquivo:
+        linhas = list(csv.reader(arquivo))
+    assert tuple(linhas[0]) == COLUNAS_DESFECHOS
+    atendida, perdida = (dict(zip(COLUNAS_DESFECHOS, linha, strict=True)) for linha in linhas[1:])
+    assert atendida == {
+        "sessao": T0.isoformat(),
+        "t_deteccao": T0.isoformat(),
+        "rua": "3",
+        "uid": "B7EF8FA0",
+        "desfecho": "RENOVADO",
+        "t_decisao": _t(30.5).isoformat(),
+        "latencia_ms": "30.500",
+        "veiculo": "AMBULANCIA",
+        "uno_ms": "900",
+        "versao_codigo": "abc1234",
+    }
+    assert (perdida["rua"], perdida["desfecho"]) == ("1", "SEM_DECISAO")
+    assert perdida["t_decisao"] == perdida["latencia_ms"] == perdida["uno_ms"] == ""
