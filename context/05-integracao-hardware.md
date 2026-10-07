@@ -637,6 +637,12 @@ Processo Python no notebook. Responsabilidades:
   bytes_em_espera_deteccao, bytes_em_espera_atuacao, versao_codigo`. A ponte
   **recusa** `--porta-veiculo` com `--simulado`: nenhum número do dublê chega
   ao CSV.
+- **Checklist da bancada** (desde 2026-10-07): com `--telemetria`, cada linha do
+  USB do UNO, a que ele escreve e a que a ponte escreve nele, vai crua e
+  carimbada para `analysis/data/telemetria_bancada.csv` (`bridge/registro.py`),
+  com a mesma `sessao` dos CSV de H3. O carimbo da linha do UNO é o mesmo
+  `recebido_em` que o backend grava. `python -m analysis.checklist_bancada` tira
+  dali os itens de `06` §6. Recusada com `--simulado`.
 - **Injeção de teste** (`POST /injecao` com `rua` e `veiculo`): escreve no RX do
   UNO, pelo USB, a mesma linha que o receptor escreveria e devolve a decisão do
   UNO, com o `millis()` dela. Desde 2026-10-06 funciona **com a bancada

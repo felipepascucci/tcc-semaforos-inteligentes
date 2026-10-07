@@ -22,6 +22,14 @@ ou não, uma de `analysis/data/deteccoes_bancada.csv` (RNF05). O resumo das duas
 sai de `python -m analysis.resumo_bancada`. **Não há como medir H3 com o dublê**: a
 combinação `--simulado --porta-veiculo` é recusada, para que nenhum número
 simulado chegue ao CSV.
+
+Com `--telemetria`, cada linha do USB do UNO, nos dois sentidos, vira uma linha
+de `analysis/data/telemetria_bancada.csv`: é o dado do checklist da bancada
+(`context/06` §6), lido por `python -m analysis.checklist_bancada`. Também é
+recusada com `--simulado`::
+
+    python -m bridge.main --porta COM3 --telemetria
+    python -m bridge.main --porta COM3 --porta-veiculo COM5 --telemetria
 """
 
 from __future__ import annotations
@@ -39,6 +47,7 @@ from bridge.api import criar_app
 from bridge.latencia import CSV_DESFECHOS_PADRAO, CSV_PADRAO, GravadorCsv, GravadorDesfechos
 from bridge.ponte import Ponte
 from bridge.protocolo import BAUD
+from bridge.registro import CSV_TELEMETRIA_PADRAO, GravadorTelemetria
 from bridge.serial_client import TransporteSerial
 from bridge.transporte import Transporte
 
@@ -76,11 +85,22 @@ def _argumentos(argv: Sequence[str] | None) -> argparse.Namespace:
         help="onde gravar cada desfecho de detecção, o dado do RNF05 "
         "(padrão: analysis/data/deteccoes_bancada.csv)",
     )
+    parser.add_argument(
+        "--telemetria",
+        nargs="?",
+        type=Path,
+        const=CSV_TELEMETRIA_PADRAO,
+        default=None,
+        help="grava cada linha do USB do UNO, o dado do checklist "
+        "(sem valor: analysis/data/telemetria_bancada.csv)",
+    )
     parser.add_argument("--host", default=os.getenv("BRIDGE_HOST", "127.0.0.1"))
     parser.add_argument("--porta-http", type=int, default=int(os.getenv("BRIDGE_PORT", "8001")))
     args = parser.parse_args(argv)
     if args.simulado and args.porta_veiculo is not None:
         parser.error("H3 se mede na bancada: --porta-veiculo não combina com --simulado")
+    if args.simulado and args.telemetria is not None:
+        parser.error("o checklist é da bancada: --telemetria não combina com --simulado")
     return args
 
 
@@ -101,6 +121,8 @@ def main(argv: Sequence[str] | None = None) -> None:
             print(f"AVISO: baud {args.baud}, mas a bancada fala a {BAUD}. SERIAL_BAUDRATE do .env?")
         transporte, nome = TransporteSerial(args.porta, args.baud), args.porta
 
+    # Uma sessão por execução da ponte, a mesma em todos os CSV que ela gravar.
+    sessao = datetime.now(UTC)
     veiculo: Transporte | None = None
     gravador: GravadorCsv | None = None
     gravador_desfechos: GravadorDesfechos | None = None
@@ -108,7 +130,6 @@ def main(argv: Sequence[str] | None = None) -> None:
         # O emissor imprime a 9600 (veiculo_ambulancia.ino), qualquer que seja o
         # baud do UNO.
         veiculo = TransporteSerial(args.porta_veiculo, BAUD)
-        sessao = datetime.now(UTC)
         gravador = GravadorCsv(args.csv_h3, sessao=sessao)
         gravador_desfechos = GravadorDesfechos(
             args.csv_deteccoes, sessao=sessao, versao_codigo=gravador.versao_codigo
@@ -117,11 +138,18 @@ def main(argv: Sequence[str] | None = None) -> None:
         print(f"  amostras de H3 em {args.csv_h3}")
         print(f"  desfechos de cada leitura em {args.csv_deteccoes}")
 
+    registro: GravadorTelemetria | None = None
+    if args.telemetria is not None:
+        registro = GravadorTelemetria(args.telemetria, sessao=sessao)
+        print(f"Gravando a telemetria do UNO: sessão {sessao.isoformat()}")
+        print(f"  cada linha do USB em {args.telemetria}")
+
     ponte = Ponte(
         transporte,
         transporte_veiculo=veiculo,
         gravador=gravador,
         gravador_desfechos=gravador_desfechos,
+        registro=registro,
     )
     uvicorn.run(criar_app(ponte, nome), host=args.host, port=args.porta_http)
 

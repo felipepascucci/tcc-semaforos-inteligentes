@@ -186,23 +186,23 @@ ver a nota abaixo da tabela.
 
 | # | Verificação | OK |
 | --- | --- | --- |
-| 1 | Ciclo alterna os **2 eixos** (ciclo de 12 s) por 5 min sem travar; liga em all-red | ☐ |
-| 2 | Nunca há verde nos dois eixos ao mesmo tempo; em emergência só a aproximação do VE fica verde — 5 min de observação e a telemetria do mesmo período | ☐ |
-| 3 | Toda transição verde→vermelho passa por amarelo, e há all-red antes de todo verde novo, **inclusive na entrada e na saída da emergência** | ☐ |
+| 1 | Ciclo alterna os **2 eixos** (ciclo de 12 s) por 5 min sem travar; liga em all-red. **2026-10-07, Felipe, sessão `17:44:10Z`** (`analysis/data/checklist_bancada_2026-10-07.md`): primeiro verde aos 1.125 ms, depois do all-red; 157 ciclos puros, de 12.000 ou 12.001 ms, exceto um de 12.032 ms (o do `SEM_OCORRENCIA` do 5b, provavelmente o aviso no LCD por I2C segurando o `loop()`); 1.140 s contínuos de ciclo | ☑ |
+| 2 | Nunca há verde nos dois eixos ao mesmo tempo; em emergência só a aproximação do VE fica verde — 5 min de observação e a telemetria do mesmo período. **2026-10-07, Felipe, sessão `17:44:10Z`:** 0 de 4.948 `ST` com verde nos dois eixos, nenhum verde novo fora da aproximação do VE, verde exclusivo nas 5 emergências atendidas até o fim; observação do Felipe nos 6 min de ciclo puro | ☑ |
+| 3 | Toda transição verde→vermelho passa por amarelo, e há all-red antes de todo verde novo, **inclusive na entrada e na saída da emergência**. **2026-10-07, sessão `17:44:10Z`:** 972 mudanças de luz, 4 entradas e 3 saídas de emergência (a quarta foi cortada pelo item 14), 0 violações de I2, I3 ou I4 | ☑ |
 | 4 | 100 passagens sobre as tags das ruas: em ≥ 95 a linha chega ao UNO com a rua certa, ou seja, há um evento de decisão com a rua da tag — RNF05. Um `RECUSADO` conta como falha (a linha chegou corrompida). **Medido na mesma rodada do 7b, com o emissor no USB do notebook** (decisão de 2026-10-06): o denominador são as leituras que o emissor imprimiu, e o resultado é declarado nessa condição, que alimenta o emissor melhor que a bateria de 9 V da demonstração. Cada leitura vira uma linha de `analysis/data/deteccoes_bancada.csv`; a taxa sai de `python -m analysis.resumo_bancada`. **2026-10-07: 100 de 100** (25 por rua), todas `PREEMP_INI`; duas linhas do emissor que chegaram ilegíveis ao notebook ficaram fora do denominador e foram repostas (`09`, 2026-10-07) | ☑ |
-| 5 | Tag fora das 4 ruas não gera envio nem mexe no semáforo | ☐ |
-| 5b | **Tag sem ocorrência** (volta em 2026-10-06): sem ocorrência aberta para a ambulância na Central, a passagem gera `SEM_OCORRENCIA`, não mexe no semáforo, e o LCD mostra `SEM OCORRENCIA` por 3 s; abrindo a ocorrência, a passagem seguinte preempta | ☐ |
-| 6 | LCD mostra o VE e a rua em < 1 s após a leitura | ☐ |
+| 5 | Tag fora das 4 ruas não gera envio nem mexe no semáforo. **Pendente:** falta uma tag fora do mapa (2026-10-07) | ☐ |
+| 5b | **Tag sem ocorrência** (volta em 2026-10-06): sem ocorrência aberta para a ambulância na Central, a passagem gera `SEM_OCORRENCIA`, não mexe no semáforo, e o LCD mostra `SEM OCORRENCIA` por 3 s; abrindo a ocorrência, a passagem seguinte preempta. **2026-10-07, Felipe, sessão `17:44:10Z`:** `SEM_OCORRENCIA` com a ambulância em `0` e o semáforo como estava; reaberta com criticidade 2, a passagem seguinte deu `PREEMP_INI`. LCD `SEM OCORRENCIA` por ~3 s (observação do Felipe) | ☑ |
+| 6 | LCD mostra o VE e a rua em < 1 s após a leitura. **2026-10-07, Felipe:** observação, sem atraso perceptível nas passagens do 5b e do 10; sem medida instrumentada | ☑ |
 | 7 | Preempção iniciada (`PREEMP_INI`) em < 3 s da leitura da tag — RF02. **2026-10-07:** nas 100 passagens do 7b, máximo de 46,3 ms | ☑ |
 | 7b | **H3** — p95 de `latencia_total_ms` < 200 ms em **100 passagens** (as do item 4), com o emissor no USB do notebook e a ambulância em serviço na Central; mín/mediana/máx registrados. `python -m bridge.main --porta COM3 --porta-veiculo <COM do emissor>` (COM5 no notebook do Felipe, CP2102); cada passagem atendida vira uma linha de `analysis/data/latencia_bancada.csv` (`05` §6); n, mín, mediana, p95 e máx saem de `python -m analysis.resumo_bancada`. **2026-10-07: p95 31,6 ms** (n = 100; sem as 2 de carimbo atrasado, n = 98 e p95 33,0 ms), `analysis/data/resumo_bancada_2026-10-07.md` | ☑ |
-| 8 | Dashboard mostra o evento em tempo real | ☐ |
-| 9 | Log gravado no PostgreSQL com `id_correlacao` completo | ☐ |
-| 10 | Com a bancada montada, a injeção pela ponte mostra a regra de prioridade pela criticidade: o VE mais crítico interrompe o outro pelo amarelo e all-red, o interrompido vai para a fila (LCD `Fila:…`) e é atendido depois | ☐ |
-| 11 | Renovações sucessivas param no teto de 30 s (`EV,TIMEOUT`) e o ciclo volta pelo eixo oposto | ☐ |
-| 12 | Operação contínua de 30 min sem travamento ou reboot | ☐ |
-| 13 | Nenhum LED com brilho anômalo ou aquecimento perceptível | ☐ |
-| 14 | Ponte encerrada no meio de uma emergência → o semáforo segue, e o carrinho continua preemptando com a última lista da Central | ☐ |
-| 15 | Ponte reiniciada (o UNO reinicia junto) → o UNO volta negando todos, e com o backend no ar a lista da Central volta em até ~1 s | ☐ |
+| 8 | Dashboard mostra o evento em tempo real. **2026-10-07, Felipe:** observação, o ciclo ao vivo e o `PREEMP_INI` do 5b na hora | ☑ |
+| 9 | Log gravado no PostgreSQL com `id_correlacao` completo. **2026-10-07, sessão `17:44:10Z`** (`--banco`): os 14 eventos de decisão com exatamente uma linha em `log_prioridade` no mesmo carimbo, todas com `id_correlacao`; os 6 `PREEMP_INI` fechados; as 2 amostras de H3 em `metrica_latencia` com o mesmo `id_correlacao` do log | ☑ |
+| 10 | Com a bancada montada, a injeção pela ponte mostra a regra de prioridade pela criticidade: o VE mais crítico interrompe o outro pelo amarelo e all-red, o interrompido vai para a fila (LCD `Fila:…`) e é atendido depois. **2026-10-07, Felipe, sessão `17:44:10Z`:** ambulância (2) pelo carrinho na Rua 3, bombeiro (1) injetado na Rua 1 3 s depois: `PREEMP_INI` dele e `FILA` dela no mesmo `millis()`, e ela atendida no `PREEMP_FIM` dele. LCD `Fila:AMBU na R3` (observação do Felipe) | ☑ |
+| 11 | Renovações sucessivas param no teto de 30 s (`EV,TIMEOUT`) e o ciclo volta pelo eixo oposto. **2026-10-07, sessão `17:44:10Z`:** ambulância injetada na Rua 4 com 6 renovações; `TIMEOUT` 30.000 ms depois do `PREEMP_INI`, e o ciclo voltou por `GGRR` | ☑ |
+| 12 | Operação contínua de 30 min sem travamento ou reboot. **2026-10-07, sessão `17:44:10Z`:** 33,1 min da primeira à última `ST`, nenhum reinício do UNO, nenhuma linha ilegível, nenhuma reconexão; maior intervalo entre duas `ST` de 1,12 s, que é o `lcd.init()` do boot (depois dele, 0,53 s) | ☑ |
+| 13 | Nenhum LED com brilho anômalo ou aquecimento perceptível. **2026-10-07, Felipe:** observação durante os 33 min do item 12 | ☑ |
+| 14 | Ponte encerrada no meio de uma emergência → o semáforo segue, e o carrinho continua preemptando com a última lista da Central. **2026-10-07, Felipe:** ponte encerrada 2 s depois do `PREEMP_INI` na Rua 2 (última `ST` `RGRR`, regime `E`, sessão `17:44:10Z`); com ela fechada, o verde terminou, o ciclo voltou, e o carrinho na Rua 4 preemptou (observação do Felipe) | ☑ |
+| 15 | Ponte reiniciada (o UNO reinicia junto) → o UNO volta negando todos, e com o backend no ar a lista da Central volta em até ~1 s. **2026-10-07, 4 aberturas da porta** (a do item 12 e três sessões de 20 s): primeira `ST` sempre `000`; a lista inteira na `ST` 1,17 a 1,20 s depois do `BOOT`. O tempo é o do `lcd.init()`: a ponte escreve a lista 0,11 a 0,23 s depois do `BOOT`, e o UNO a aplica no `millis()` 1.125 | ☑ |
 
 > **O que saiu em 2026-10-05:** o 5 antigo (tag não cadastrada → negação) e o 5b
 > (P20, sem ocorrência), porque o UNO não consulta cadastro nem ocorrência; o 10
@@ -212,6 +212,52 @@ ver a nota abaixo da tabela.
 > **O que voltou e entrou em 2026-10-06:** o 5b, reescrito, porque a Central
 > passou a valer na bancada (`05` §3.3); o 15, porque a lista da Central vive na
 > RAM do UNO e se perde a cada reinício. O 10 deixou de pedir o fio solto.
+
+**Como o checklist é registrado (desde 2026-10-07).** A ponte sobe com
+`--telemetria` (`python -m bridge.main --porta COM3 --porta-veiculo COM5
+--telemetria`) e grava cada linha do USB do UNO, nos dois sentidos, crua e
+carimbada, em `analysis/data/telemetria_bancada.csv`. `python -m
+analysis.checklist_bancada --banco` tira dela, por sessão da ponte, o veredito dos
+itens que o dado julga. Os critérios abaixo foram declarados **antes** da
+medição; as durações são do `millis()` do UNO, com a folga de 60 ms de
+`bridge.verificar`:
+
+- **1** — depois de cada `BOOT`, a primeira `ST` é `RRRR` e o primeiro verde é o
+  do eixo principal, com all-red de pelo menos 1 s. Todo ciclo puro (só regime
+  `C` entre duas aberturas do eixo principal) dura 12 s, e há um trecho contínuo
+  desses ciclos de pelo menos 5 min.
+- **2** — nenhuma `ST` com verde nos dois eixos; em regime `E`, nenhum verde acende
+  fora da aproximação da rua ativa; todo VE atendido até o `PREEMP_FIM` chega ao
+  verde exclusivo.
+- **3** — nenhum achado de `bridge.verificar.violacoes` (I2, I3, I4) na sessão
+  inteira, com pelo menos uma entrada e uma saída de emergência.
+- **5b** — regime, rua ativa e fila iguais antes e depois do `SEM_OCORRENCIA`; se
+  em ciclo, o ciclo que o contém dura 12 s. A primeira decisão do tipo depois de
+  a lista do UNO lhe dar ocorrência é `PREEMP_INI`. O LCD é observação.
+- **9** — todo evento de decisão da sessão tem exatamente uma linha em
+  `log_prioridade` com o mesmo carimbo, e todas têm `id_correlacao`; toda amostra
+  de H3 em `metrica_latencia` está ligada a uma linha com o mesmo `id_correlacao`.
+- **10** — em toda interrupção, quem interrompe tem criticidade estritamente mais
+  alta (número menor) que o interrompido, e este é atendido no `PREEMP_FIM` do
+  outro. O `Fila:…` do LCD é observação.
+- **11** — `TIMEOUT` a 30 s do `PREEMP_INI` que abriu a emergência, e o primeiro
+  verde depois é do eixo oposto ao do último VE, em ciclo.
+- **12** — pelo menos 30 min da primeira à última `ST`, nenhum reinício do UNO no
+  meio, e nenhum intervalo entre duas `ST` maior que 2 s, o silêncio a partir do
+  qual a ponte dá o UNO por calado.
+- **15** — a cada abertura da porta, a primeira `ST` traz `000`, e a lista da
+  Central, **inteira** como a ponte a escreveu no primeiro envio depois do
+  `BOOT`, chega à `ST` em até **2 s** do `BOOT`. É a leitura de "~1 s":
+  enquanto a ponte esteve fora, o backend a procura só a cada 1 s.
+
+"Não atende" quer dizer que o dado mostra uma falha. Sessão curta demais para
+o item, sem falha (as sessões de 20 s do item 15, para os itens 1 e 12), sai
+"sem veredito" (ajuste de 2026-10-07, depois da rodada; `09`).
+- **14** — o dado mostra só que a sessão terminou em emergência; o resto é
+  observação, como 5, 6, 8 e 13, registrados com data e executor.
+
+O item 5 espera uma tag fora do mapa das 4 ruas, que a bancada não tem
+(2026-10-07; o Felipe vai providenciar).
 
 Item 12 é o que pega: sketches com `String` travam depois de ~20 min. Rodar esse teste **antes** do dia da apresentação, não no dia.
 
