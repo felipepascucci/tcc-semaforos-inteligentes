@@ -12,7 +12,8 @@ Duas escritas no UNO, pelo USB (decisão de 2026-10-06):
   cada tipo. O backend a chama quando a lista que a `ST` traz difere da dele;
   na bancada sem backend, o roteiro de aceitação a chama direto.
 * `POST /injecao` — de teste: faz o papel do receptor. É o que o roteiro de
-  aceitação (`bridge/verificar.py`) e o passo 4 da demonstração usam.
+  aceitação (`bridge/verificar.py`) e o passo 5 da demonstração (`bridge/demo.py`)
+  usam.
 """
 
 from __future__ import annotations

@@ -46,6 +46,10 @@ R: Bibliotecas `MFRC522`, `LiquidCrystal_I2C`, `ESP8266WiFi.h` e `espnow.h`. Pac
 de placas: "Arduino AVR Boards" para o UNO e "NodeMCU 1.0 (ESP-12E Module)" para o
 ESP8266. *(Versões e autores não informados.)*
 
+*Completado pelo Felipe em 2026-10-07:* `MFRC522` 1.4.12 (GithubCommunity),
+`LiquidCrystal I2C` 1.1.2 (Frank de Brabander) e o pacote `esp8266` da ESP8266
+Community, sem o número de versão.
+
 ## 2. Arduino UNO e semáforos
 
 **2.1** A ligação está igual a esta tabela? Se não, o que muda?

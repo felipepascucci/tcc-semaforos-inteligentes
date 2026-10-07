@@ -696,8 +696,30 @@ emergência nova com a antiga.
 
 ## 7. Modo de demonstração
 
-Roteiro em `bridge/demo.py` (ainda a escrever), com o dashboard aberto e o
-backend no ar:
+Roteiro em `bridge/demo.py` (2026-10-07), com o dashboard aberto e o backend
+no ar:
+
+```powershell
+python -m bridge.main --porta COM3      # terminal 1 (--telemetria, se quiser o registro)
+python -m bridge.demo                   # terminal 2; pede a senha do operador
+```
+
+O roteiro diz ao apresentador o que fazer, espera o evento chegar pela ponte e
+narra as luzes ao vivo. A Central entra pela API do backend (`POST
+/ocorrencias` e o encerramento, com o token do operador), e quem leva a lista ao
+UNO é o backend, como na operação normal: o roteiro só confere na `ST` que ela
+chegou. Ele começa encerrando as ocorrências abertas (passo 1) e, no fim,
+encerra as que a demonstração abriu. Opções: `--central-pela-api` (o passo 3
+sem o dashboard), `--sem-carrinho` (a ponte injeta a ambulância no lugar do
+carrinho; plano B, e o passo 6 é pulado), `--passos 45` (só alguns passos) e
+`--sem-pausa`. **Não é medição:** as conferências dizem ao apresentador que o
+passo saiu como devia, e nenhum número dali vai para o texto.
+
+Validado contra o dublê em 2026-10-07, com um backend falso que só sincroniza a
+Central (para não gravar evento simulado no banco da bancada): **18 de 18**, em
+~4 min, e o passo 6 com a ponte derrubada de fora. **Ensaiado na placa no
+mesmo dia: 19 de 19**, com a ocorrência do passo 3 aberta pelo dashboard e a
+ponte encerrada com Ctrl+C no passo 6.
 
 1. **Ciclo normal** — os dois eixos se alternando (12 s), ao vivo no dashboard.
    Ninguém em serviço na Central.
@@ -720,6 +742,8 @@ backend no ar:
 6. **Autonomia do cruzamento** — encerrar a ponte. O semáforo continua, e o
    carrinho continua preemptando com a última lista; só o dashboard e a Central
    param de alcançar o UNO. O cruzamento não depende do notebook para decidir.
+   Sem a ponte ninguém no notebook lê o UNO (abrir a porta o reiniciaria), então
+   o roteiro pergunta ao apresentador o que ele viu.
 
 **O que continua fora do roteiro, por consequência da arquitetura:**
 
