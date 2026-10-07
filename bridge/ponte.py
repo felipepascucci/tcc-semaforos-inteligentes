@@ -26,6 +26,10 @@ também a serial do NodeMCU emissor, casa cada `Tag … lida -> Enviando RUAn` c
 a decisão do UNO para ela (`bridge/latencia.py`) e entrega as amostras ao
 gravador do CSV. Todo desfecho, amostra ou não, vai para o gravador de
 desfechos: é o dado do RNF05.
+
+**Checklist da bancada** (`context/06` §6). Com `registro`, cada linha que o UNO
+escreve e cada linha que a ponte escreve nele vão, cruas e carimbadas, para o
+CSV da telemetria (`bridge/registro.py`).
 """
 
 from __future__ import annotations
@@ -62,6 +66,7 @@ from bridge.protocolo import (
     interpretar,
     interpretar_leitura_veiculo,
 )
+from bridge.registro import Direcao, GravadorTelemetria
 from bridge.transporte import ConexaoPerdidaError, LinhaRecebida, Transporte
 
 log = structlog.get_logger(__name__)
@@ -137,6 +142,8 @@ class Ponte:
         gravador: Onde as amostras de H3 vão parar; só com `transporte_veiculo`.
         gravador_desfechos: Onde todo desfecho de detecção vai parar (RNF05);
             só com `transporte_veiculo`.
+        registro: Onde cada linha do USB do UNO vai parar, nos dois sentidos
+            (checklist da bancada).
     """
 
     def __init__(
@@ -149,6 +156,7 @@ class Ponte:
         transporte_veiculo: Transporte | None = None,
         gravador: GravadorCsv | None = None,
         gravador_desfechos: GravadorDesfechos | None = None,
+        registro: GravadorTelemetria | None = None,
     ) -> None:
         if (gravador is not None or gravador_desfechos is not None) and transporte_veiculo is None:
             raise ValueError("os gravadores da medição exigem a porta do emissor")
@@ -156,6 +164,7 @@ class Ponte:
         self.transporte_veiculo = transporte_veiculo
         self.gravador = gravador
         self.gravador_desfechos = gravador_desfechos
+        self.registro = registro
         self.relogio = relogio or Relogio()
         self._timeout_decisao_s = timeout_decisao_s
         self._espera_reconexao_s = espera_reconexao_s
@@ -270,6 +279,7 @@ class Ponte:
         while True:
             linha = await self.transporte.ler_linha()
             chegada = self.relogio.em(linha.t_chegada)
+            self._registrar(chegada, Direcao.UNO, linha.dados, linha.bytes_em_espera)
             try:
                 resposta = interpretar(linha.dados)
             except LinhaInvalidaError as erro:
@@ -285,6 +295,17 @@ class Ponte:
                 # As linhas do UNO chegam em ordem, e a `ST` sai a 2 Hz: cada uma
                 # é a deixa para fechar o que passou da janela.
                 self._concluir(self._casador.expirar(chegada))
+
+    def _registrar(
+        self, t: datetime, direcao: Direcao, dados: bytes, bytes_em_espera: int = 0
+    ) -> None:
+        if self.registro is None:
+            return
+        try:
+            self.registro.gravar(t, direcao, dados, bytes_em_espera)
+        except OSError as erro:
+            # Perder o arquivo não pode derrubar a escuta.
+            log.error("csv_telemetria_nao_gravado", erro=str(erro))
 
     def _despachar(self, resposta: Resposta, chegada: datetime) -> None:
         if isinstance(resposta, Telemetria):
@@ -394,6 +415,7 @@ class Ponte:
         async with self._trava_escrita:
             t_envio = self.relogio.agora()
             await self.transporte.escrever(linha)
+        self._registrar(t_envio, Direcao.PONTE, linha)
         return t_envio
 
     async def autorizar(self, autorizacoes: Sequence[Autorizacao]) -> datetime:

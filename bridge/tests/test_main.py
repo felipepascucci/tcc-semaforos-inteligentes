@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from bridge.latencia import CSV_DESFECHOS_PADRAO, CSV_PADRAO
 from bridge.main import _argumentos
+from bridge.registro import CSV_TELEMETRIA_PADRAO
 
 
 def test_sem_porta_veiculo_nao_ha_medicao() -> None:
@@ -29,4 +32,20 @@ def test_h3_nao_se_mede_com_o_duble(capsys: pytest.CaptureFixture[str]) -> None:
     """Nenhum número simulado pode chegar a `latencia_bancada.csv`."""
     with pytest.raises(SystemExit):
         _argumentos(["--simulado", "--porta-veiculo", "COM4"])
+    assert "bancada" in capsys.readouterr().err
+
+
+def test_sem_telemetria_nao_ha_registro() -> None:
+    assert _argumentos([]).telemetria is None
+
+
+def test_telemetria_sem_valor_vai_para_o_csv_padrao() -> None:
+    assert _argumentos(["--telemetria"]).telemetria == CSV_TELEMETRIA_PADRAO
+    assert _argumentos(["--telemetria", "x.csv"]).telemetria == Path("x.csv")
+
+
+def test_checklist_nao_se_grava_com_o_duble(capsys: pytest.CaptureFixture[str]) -> None:
+    """Nenhuma telemetria do dublê pode chegar a `telemetria_bancada.csv`."""
+    with pytest.raises(SystemExit):
+        _argumentos(["--simulado", "--telemetria"])
     assert "bancada" in capsys.readouterr().err

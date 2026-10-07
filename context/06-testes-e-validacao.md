@@ -213,6 +213,47 @@ ver a nota abaixo da tabela.
 > passou a valer na bancada (`05` §3.3); o 15, porque a lista da Central vive na
 > RAM do UNO e se perde a cada reinício. O 10 deixou de pedir o fio solto.
 
+**Como o checklist é registrado (desde 2026-10-07).** A ponte sobe com
+`--telemetria` (`python -m bridge.main --porta COM3 --porta-veiculo COM5
+--telemetria`) e grava cada linha do USB do UNO, nos dois sentidos, crua e
+carimbada, em `analysis/data/telemetria_bancada.csv`. `python -m
+analysis.checklist_bancada --banco` tira dela, por sessão da ponte, o veredito dos
+itens que o dado julga. Os critérios abaixo foram declarados **antes** da
+medição; as durações são do `millis()` do UNO, com a folga de 60 ms de
+`bridge.verificar`:
+
+- **1** — depois de cada `BOOT`, a primeira `ST` é `RRRR` e o primeiro verde é o
+  do eixo principal, com all-red de pelo menos 1 s. Todo ciclo puro (só regime
+  `C` entre duas aberturas do eixo principal) dura 12 s, e há um trecho contínuo
+  desses ciclos de pelo menos 5 min.
+- **2** — nenhuma `ST` com verde nos dois eixos; em regime `E`, nenhum verde acende
+  fora da aproximação da rua ativa; todo VE atendido até o `PREEMP_FIM` chega ao
+  verde exclusivo.
+- **3** — nenhum achado de `bridge.verificar.violacoes` (I2, I3, I4) na sessão
+  inteira, com pelo menos uma entrada e uma saída de emergência.
+- **5b** — regime, rua ativa e fila iguais antes e depois do `SEM_OCORRENCIA`; se
+  em ciclo, o ciclo que o contém dura 12 s. A primeira decisão do tipo depois de
+  a lista do UNO lhe dar ocorrência é `PREEMP_INI`. O LCD é observação.
+- **9** — todo evento de decisão da sessão tem exatamente uma linha em
+  `log_prioridade` com o mesmo carimbo, e todas têm `id_correlacao`; toda amostra
+  de H3 em `metrica_latencia` está ligada a uma linha com o mesmo `id_correlacao`.
+- **10** — em toda interrupção, quem interrompe tem criticidade estritamente mais
+  alta (número menor) que o interrompido, e este é atendido no `PREEMP_FIM` do
+  outro. O `Fila:…` do LCD é observação.
+- **11** — `TIMEOUT` a 30 s do `PREEMP_INI` que abriu a emergência, e o primeiro
+  verde depois é do eixo oposto ao do último VE, em ciclo.
+- **12** — pelo menos 30 min da primeira à última `ST`, nenhum reinício do UNO no
+  meio, e nenhum intervalo entre duas `ST` maior que 2 s, o silêncio a partir do
+  qual a ponte dá o UNO por calado.
+- **15** — a cada abertura da porta, a primeira `ST` traz `000`, e a lista da
+  Central chega à `ST` em até **2 s** do `BOOT`. É a leitura de "~1 s": enquanto
+  a ponte esteve fora, o backend a procura só a cada 1 s.
+- **14** — o dado mostra só que a sessão terminou em emergência; o resto é
+  observação, como 5, 6, 8 e 13, registrados com data e executor.
+
+O item 5 espera uma tag fora do mapa das 4 ruas, que a bancada não tem
+(2026-10-07; o Felipe vai providenciar).
+
 Item 12 é o que pega: sketches com `String` travam depois de ~20 min. Rodar esse teste **antes** do dia da apresentação, não no dia.
 
 > **Decidido pelo grupo em 2026-10-06: 100 passagens.** O item 7b mede H3 nas
