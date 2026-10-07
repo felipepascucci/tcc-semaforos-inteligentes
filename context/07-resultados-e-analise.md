@@ -141,7 +141,7 @@ Todos devem ser zero. Se não forem, isso é o achado mais importante do trabalh
 | H1 | Redução ≥ 25% em `moderado` e `intenso` (decisão P1) | — | ACEITA / REJEITADA / PARCIAL |
 | H1 (exploratório) | Cenário `leve` — sem meta, apenas medido e discutido | — | n/a |
 | H2 | Mitigação **≥ 15% do acréscimo** de espera transversal causado pela preempção, `(preempcao − compensada) / (preempcao − fixo)`, sobre a espera média da hora, em `moderado` e `intenso` (P17, 2026-10-01) | — | ACEITA / REJEITADA |
-| H3 | Latência **fim-a-fim** < 200 ms no **p95** de 100 passagens de bancada, com mín/mediana/máx e o n (decisão de 2026-10-06; antes, o máximo de 5 repetições) | — | — |
+| H3 | Latência **fim-a-fim** < 200 ms no **p95** de 100 passagens de bancada, com mín/mediana/máx e o n (decisão de 2026-10-06; antes, o máximo de 5 repetições) | **p95 31,6 ms**, n = 100, mín 0,1 / mediana 24,9 / máx 46,3 ms, com o emissor no USB (2026-10-07). Sensibilidade sem as 2 amostras de carimbo atrasado: n = 98, p95 33,0 ms. Fonte: `analysis/data/resumo_bancada_2026-10-07.md` | ACEITA |
 | RNF01 | Latência de **decisão** < 100 ms (p95) | — | — |
 | H4 | `PREEMPCAO_ML` reduz o tempo do VE mais prejudicado em relação a `PREEMPCAO`, nos cenários com múltiplos VEs — **direcional, sem meta percentual** (P19); n de disputas de mesmo nível declarado (P20, §3.3.1) | — | FAVORÁVEL / NULO |
 
