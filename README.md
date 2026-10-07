@@ -413,6 +413,7 @@ o sistema, o arquivo correspondente muda **no mesmo commit** (context/08 §4.7).
 | `07-resultados-e-analise.md` | Pipeline estatístico, tabelas e figuras do TCC |
 | `08-roadmap-e-convencoes.md` | Planejar a próxima entrega, padrões de código, artefatos acadêmicos |
 | `09-pendencias-e-decisoes.md` | **Sempre.** Contradições ainda não resolvidas — não decida sozinho |
+| `10-aprendizado-de-maquina.md` | IA e o modelo de ML de P19: onde atuam, como foram treinados e avaliados, estado do Bloco 10, perguntas da banca |
 
 ## Estado do documento
 

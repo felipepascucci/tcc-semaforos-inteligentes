@@ -984,6 +984,10 @@ critério numérico.
 
 ## P19 — Modelo de ML para priorizar entre múltiplos VEs · `DECISÃO DO GRUPO — DEFINE UM BLOCO NOVO`
 
+> **Explicação consolidada em `10-aprendizado-de-maquina.md`** (onde há IA, como
+> o modelo foi treinado e avaliado, estado do Bloco 10). Esta seção continua
+> sendo o registro das decisões; o `10` só as explica.
+
 Aberta em 2026-09-10, pela resposta do orientador a P3. **Revoga a decisão P3 de
 2026-08-24**, que reservava a palavra "IA" à caracterização de agente e punha
 aprendizado de máquina explicitamente fora de escopo.

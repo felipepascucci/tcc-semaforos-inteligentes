@@ -299,7 +299,8 @@ Se dois VEs demandam fases conflitantes no mesmo TLS, **um espera**. Nunca conce
 > então a decisão é a mesma de antes, e nenhum número medido muda.
 
 > **E8 é o ponto onde entra o aprendizado de máquina** (pendência **P19**, aberta
-> em 2026-09-10 por decisão do orientador). O desempate acima é lexicográfico e
+> em 2026-09-10 por decisão do orientador; explicação consolidada em
+> `10-aprendizado-de-maquina.md`). O desempate acima é lexicográfico e
 > **míope**: decide um cruzamento por vez, sem pesar a consequência sequencial —
 > priorizar o VE A agora pode custar mais ao VE B adiante. A ordem por tipo é
 > convenção declarada, não otimização.
