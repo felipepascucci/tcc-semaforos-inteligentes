@@ -305,8 +305,11 @@ Se dois VEs demandam fases conflitantes no mesmo TLS, **um espera**. Nunca conce
 > ```
 > score = w · (x_A − x_B)      escolhe A se score > 0, senão B
 >
-> x = (eta_s, velocidade_ms, fila_no_acesso, cruzamentos_restantes)
+> x = (eta_s, velocidade_ms, fila_por_faixa, cruzamentos_restantes)
 > ```
+>
+> *A fila entra **por faixa** desde a entrega 10.5 (2026-10-06): é a que o VE tem
+> à frente e a que E3 usa. O desenho de 2026-09-10 dizia `fila_no_acesso`.*
 >
 > **`tipo` saiu do vetor em 2026-09-29 (P20).** Sob o rótulo minimax em tempo, o
 > peso de `tipo` não carregaria relevância — o tempo não sabe que a ambulância
@@ -354,6 +357,14 @@ que força uma escolha em cada ramo; a política aprendida (10.6) vai entrar pel
 mesmo ponto. Os atributos que o modelo vê saem de `core/priorizacao/atributos.py`,
 a mesma função na rotulagem e na inferência, para que o modelo não seja treinado
 sobre uma coisa e consultado sobre outra.
+
+**Os pesos (entrega 10.5, 2026-10-06)** ficam em
+`backend/config/politica_desempate.yaml`, gerado por
+`python -m analysis.treino_politica` e conferido por teste contra os rótulos
+versionados. Os pesos já estão nas unidades originais dos atributos, e a
+inferência da 10.6 é `score = Σ pesos[a] · (x_A[a] − x_B[a])`: escolhe A se
+`score > 0`, senão B. O arquivo é lido em `adapters/`, como `parametros.yaml`, e
+o `core/` recebe só os números.
 
 **Observação dos conflitos (entrega 10.1, 2026-09-10).** E8 passou a ser
 observável de fora, sem deixar de ser a mesma regra. `MotorDecisao` aceita um

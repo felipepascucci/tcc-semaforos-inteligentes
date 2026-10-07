@@ -1249,6 +1249,101 @@ python -m sim.controlador.rotulagem --seeds 201..250 --paralelo 6 \
 python -m analysis.resumo_rotulos --dados analysis/data/bloco10_rotulos
 ```
 
+#### Entrega 10.5, 2026-10-06 · ✅ **TREINADA E EXPORTADA** — pesos em `backend/config/politica_desempate.yaml`
+
+Treino em `analysis/treino_politica.py`, com as decisões da tabela do fim (fila
+por faixa; cada exemplo pesa a margem do minimax; L2 com λ escolhido na
+validação e modelo final só no treino; numpy e scipy, sem dependência nova).
+Regressão logística par a par **sem intercepto**, ajustada por L-BFGS a partir
+de zero, sobre as diferenças divididas pelo RMS do treino, sem centralizar.
+Dados em `analysis/data/bloco10_treino/` (`selecao_lambda.csv`,
+`avaliacao.csv`, `relatorio.md`). O treino é determinístico: duas execuções
+deram arquivos idênticos byte a byte.
+
+**Antes de treinar, o que o conjunto mostrou** (só nas seeds de treino; seção
+inicial de `relatorio.md`):
+
+1. **Em 517 de 517 exemplos, o VE mais prejudicado no ramo vencedor é o A**, o
+   do corredor. Na prática, o minimax deste cenário pergunta o que minimiza o
+   tempo do VE do corredor, que tem a viagem mais longa.
+2. **`cruzamentos_restantes` de A é sempre maior que o de B** (por 2 a 4, em
+   517 de 517). É por esse atributo que o modelo sem intercepto consegue
+   preferir o corredor, sem perder a antissimetria. Ele funciona, aqui, como um
+   indicador de corredor.
+3. **A diferença de fila por faixa é zero em 122 exemplos.** A escolha entre
+   fila somada e por faixa foi feita por argumento, antes do treino (tabela do
+   fim), e o peso aprendido para a fila saiu praticamente nulo.
+
+**Seleção de λ** (grade declarada antes: 0, 10⁻⁴, 10⁻³, 10⁻², 10⁻¹, 1).
+Venceu **λ = 0,01**, com perda ponderada de 0,5118 na validação, contra 0,5187
+sem regularização. Até 0,01 o acerto na validação não muda (66,7%). Com 0,1 e
+1 a perda volta a subir.
+
+**Pesos**, nas unidades originais:
+
+| Atributo (diferença A − B) | Peso | Peso sobre o atributo escalado |
+| --- | ---: | ---: |
+| `eta_s` | −0,0397 por s | −1,40 |
+| `velocidade_ms` | −0,153 por m/s | −1,10 |
+| `fila_por_faixa` | +0,0007 por veículo | +0,002 |
+| `cruzamentos_restantes` | +0,523 por cruzamento | +1,83 |
+
+**O que o modelo aprendeu:** dar o verde ao VE com mais rota pela frente (o do
+corredor), a menos que o outro esteja bem mais perto. A fila tem peso
+praticamente nulo. Ele escolhe B em só 30 dos 517 exemplos de treino e 6 dos
+135 de validação, contra 141 e 49 rótulos B.
+
+**Avaliação pela régua do rótulo.** O custo de uma escolha errada é a margem do
+minimax daquela disputa.
+
+| Política | Treino: acerto | Treino: custo médio | Validação: acerto | Validação: custo médio |
+| --- | ---: | ---: | ---: | ---: |
+| Modelo | 72,3% | 3,26 s | 66,7% | **4,30 s** |
+| E8 como rodou (por **tipo**) | 66,0% | 5,12 s | 60,7% | 7,19 s |
+| Menor ETA | 48,9% | 8,48 s | 56,3% | 6,43 s |
+| Sempre A (corredor) | 72,7% | 3,29 s | 63,7% | 4,83 s |
+
+Por cruzamento, na validação: no **CRUZ_08** o modelo custa 0,53 s, contra
+7,61 s do E8 e 7,25 s do menor ETA. No **CRUZ_02** o modelo custa 6,82 s,
+contra 6,90 s do E8 e **5,88 s do menor ETA**: ali o modelo não é melhor que a
+heurística.
+
+**Como ler estes números — e o que eles não são:**
+
+- **Não são resultado de H4.** Descrevem o modelo nas seeds de treino e
+  validação. H4 é testada no Bloco 8, com o braço `PREEMPCAO_ML` rodando nas
+  seeds 1..50 do cenário de avaliação.
+- **O E8 "como rodou" não é o E8 do Bloco 8.** No `treino_multiplas` os dois
+  VEs de cada par são de **tipos diferentes** (decisão da 10.2), e o E8 decidiu
+  pela ordem de tipo em 517 de 517 exemplos de treino. No `multiplas_emergencias` os pares
+  são do **mesmo tipo**, e o E8 decide pelo **menor ETA**. Por isso a tabela traz
+  as duas referências. A mais próxima do E8 contra o qual H4 será testada é a do
+  menor ETA.
+- **O ganho se concentra no segundo encontro (CRUZ_08).** No primeiro (CRUZ_02),
+  o modelo empata com o E8 e perde para o menor ETA na validação. É um resultado
+  a declarar, não a esconder: o modelo aprendeu sobretudo "o corredor primeiro",
+  e isso vale mais no segundo encontro, quando o VE da transversal já está perto
+  do fim da rota.
+- **O modelo fica perto de "sempre A".** Os atributos acrescentam pouco ao
+  indicador de corredor: na validação, 4,30 s contra 4,83 s. Num cenário cujos
+  pares tivessem outra geometria, a regra aprendida seria a mesma em forma
+  (mais rota restante pesa a favor), mas não haveria garantia de que o peso se
+  transfira.
+
+**Reprodutibilidade amarrada por teste.** `politica_desempate.yaml` guarda o
+`sha256` de `rotulos.csv`, o λ, a grade, as seeds e a escala. O teste
+`test_pesos_versionados_saem_do_treino_sobre_os_rotulos_versionados` refaz o
+treino a partir dos rótulos versionados e confere os pesos do arquivo. O arquivo
+não guarda versão do código: um commit não consegue conter o próprio hash, e o
+teste é a garantia mais forte.
+
+**Como reproduzir:**
+
+```bash
+pip install -e ".[dev,analysis]"
+python -m analysis.treino_politica --relatorio analysis/data/bloco10_treino/relatorio.md
+```
+
 Toda disputa é entre **dois** VEs, sempre no cruzamento **CRUZ_02**, que é onde a
 rota do corredor cruza a transversal. A ausência de dispersão entre seeds é
 esperada e não é defeito: as partidas de VE não dependem da seed, só o tráfego de
@@ -1500,7 +1595,9 @@ entrega **10.1** agora tem número, e as três consequências são estas:
    *quantas* seeds importa mais do que *quais*.
 3. **Regularização e número de atributos.** Com poucas dezenas de eventos por
    conjunto, ~~cinco~~ quatro atributos (P20) ainda são muitos. A decisão fica para depois da 10.2, com
-   o volume do cenário novo na mão.
+   o volume do cenário novo na mão. **Decidida em 2026-10-06 (10.5):** quatro
+   atributos, com a fila por faixa, e L2 com λ escolhido na validação (λ = 0,01).
+   Com 517 exemplos para 4 pesos, o efeito da regularização foi pequeno.
 
 > **A dependência que se podia afirmar antes de medir se confirmou:** o volume
 > ficou abaixo dos ~100 eventos por conjunto de treino. O desenho não muda, mas
@@ -1568,6 +1665,8 @@ aprendizado de máquina é **acrescentado** — ver **Bloco 10** em
 > A ferramenta é o menor problema: treino offline (provavelmente scikit-learn,
 > dependência **só de treino**, a registrar como exceção ao `02` §2) e política
 > exportada como dado, com inferência em Python puro dentro de `core/`.
+> *(Na 10.5, em 2026-10-06, o treino foi feito com numpy e scipy, que já estão
+> na stack de análise, e o scikit-learn não entrou.)*
 
 ---
 
@@ -1677,7 +1776,8 @@ com a criticidade na frente e **nenhuma outra mudança**.
 2. **Guarda de oscilação — regra, já decidida em P19.** Dentro do mesmo nível, a
    preempção em curso vence.
 3. **Modelo**, sobre `(eta_s, velocidade_ms, fila_no_acesso,
-   cruzamentos_restantes)` — **quatro** atributos; `tipo` saiu.
+   cruzamentos_restantes)` — **quatro** atributos; `tipo` saiu. *(A fila entra
+   por faixa desde a 10.5, `fila_por_faixa`.)*
 
 **Por que a criticidade pode passar por cima da preempção em curso sem gerar
 oscilação:** A só toma o verde de B se `crit(A) < crit(B)`, e então B nunca o
@@ -1787,6 +1887,11 @@ diferenças) foram verificados.
 
 | Data | Item | Decisão | Justificativa |
 | --- | --- | --- | --- |
+| 2026-10-06 | **Entrega 10.5: fila por faixa no modelo** (P19) | O atributo de fila é `fila_por_faixa`, de `AtributosVE`. `x = (eta_s, velocidade_ms, fila_por_faixa, cruzamentos_restantes)`. | Escolhida pela equipe contra "somada" e "escolher na validação". É a fila que o VE tem à frente, e a mesma que E3 usa (P16). A somada mistura fila com número de faixas (2 no corredor, 1 na transversal). Decidida por argumento, sem gastar a validação numa diferença que o treino mostrava desprezível. |
+| 2026-10-06 | **Entrega 10.5: cada exemplo pesa a margem do minimax; desequilíbrio A/B não tratado** (P19) | Perda logística ponderada pelo valor absoluto de `minimax_se_A − minimax_se_B`, em segundos. Sem pesos por classe e sem espelhamento. | Escolhida pela equipe contra "nenhum tratamento" e "pesos por classe". Alinha o treino à régua de H4 (segundos do pior VE), e não à taxa de acerto. O A vence em 73% porque é o VE do corredor e o mais prejudicado: é sinal, não defeito da amostra. Pesos por classe otimizariam acurácia balanceada, que não é o critério. Espelhar não muda o modelo sem intercepto (há teste). |
+| 2026-10-06 | **Entrega 10.5: L2 com λ escolhido na validação, modelo final só no treino** (P19) | Atributos divididos pelo RMS do treino, **sem centralizar**. Grade `0, 1e-4, 1e-3, 1e-2, 1e-1, 1`, declarada antes. Vence a menor perda ponderada na validação; no empate, o maior λ. O modelo final é o ajustado no treino. | Escolhida pela equipe contra "reajustar em treino+validação" e "sem regularização". Dá à validação o papel declarado em `cenarios.yaml` e a mantém como número fora da amostra. Centralizar criaria um intercepto escondido. Resultado: λ = 0,01. |
+| 2026-10-06 | **Entrega 10.5: numpy e scipy no treino, sem scikit-learn** (P19) | Regressão logística por L-BFGS do `scipy.optimize`, com perda e gradiente em numpy, conferidos por diferença finita. O extra `analysis` passa a ser necessário para os testes de `analysis/` (eles se pulam sem ele, como o `ziglang`). | Escolhida pela equipe contra "scikit-learn só de treino", que P19 previa como exceção ao `02` §2, e contra "Python puro". numpy e scipy já estão na stack de análise, então não há dependência nova nem exceção a registrar. |
+| 2026-10-06 | **Entrega 10.5: pesos em `backend/config/politica_desempate.yaml`** (P19) | YAML gerado por `python -m analysis.treino_politica`, ao lado de `parametros.yaml`, com os pesos já nas unidades originais, a ordem dos atributos, λ, grade, seeds, escala e o `sha256` de `rotulos.csv`. Um teste refaz o treino e confere os pesos. A 10.6 lê o arquivo em `adapters/`, fora do `core/`. | Escolhida pela equipe contra JSON e contra `analysis/data/`. É o mesmo formato e o mesmo lugar do resto da configuração do motor. Com a escala embutida, a inferência é um produto escalar. O arquivo não guarda versão do código, porque um commit não pode conter o próprio hash; quem amarra pesos, código e dados é o teste. |
 | 2026-10-05 | **Entrega 10.4: bifurcação por reexecução, e não por `saveState`/`loadState`** (P19) | Cada ramo sobe um SUMO novo com a mesma seed e reexecuta do zero, com o mesmo código da trajetória principal, até o passo em que a disputa abre; só ali instala a escolha forçada. Cada rótulo carrega `replay_fiel`: os dois ramos reencontraram a disputa no mesmo passo, com os mesmos VEs e os mesmos ETAs da principal, sem tolerância. Implementado em `sim/controlador/rotulagem.py`. | Escolhida pela equipe contra "manter o estado salvo e medir o desvio". **Medido antes:** com `loadState` no mesmo processo, carregar o mesmo arquivo duas vezes deu trajetórias diferentes; com processo novo, `--save-state.rng` e `--save-state.precision 17`, ainda houve desvio de 0,1 a 0,3 s nas chegadas (seed 900), porque o SUMO grava o estado do modelo de troca de faixa (`lcState2`) arredondado. A reexecução é exata por construção, e o código ficou mais simples. Custo: ~3,5 h de máquina para 50 seeds, uma vez. |
 | 2026-10-05 | **Entrega 10.4: o que decide depois da escolha forçada** | O ramo força **só a disputa bifurcada**, enquanto os dois VEs a disputarem; daí em diante, inclusive num segundo encontro, decide o E8 determinístico. | Escolhida pela equipe contra "o mesmo VE vence as seguintes". O rótulo responde "qual escolha é melhor agora, se o resto seguir a regra atual", que é a pergunta de H4 (substituir o E8 numa decisão), e cada disputa da principal vira um exemplo independente. |
 | 2026-10-05 | **Entrega 10.4: empates e horizonte** | Minimax igual nos dois ramos (arredondado ao passo de 0,1 s) vira `EMPATE`: fora do treino, contado. Cada ramo roda até os dois VEs chegarem, com teto de 900 s; ramo no teto, com colisão, teleporte ou violação, ou com reexecução infiel, descarta a disputa (`DESCARTADA`, com o motivo). | Escolhidas pela equipe. Empate não ensina nada e não tem rótulo a inventar; o número de empates vai para o texto, porque diz quanto da decisão é irrelevante para o pior VE. O teto não mexe no rótulo: o corredor leva ~250 s, e P19 recusou rótulo estimado. |

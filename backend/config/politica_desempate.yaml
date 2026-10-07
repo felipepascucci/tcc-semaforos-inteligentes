@@ -1,0 +1,44 @@
+# Política de desempate de P19 (E8, entre VEs de mesmo nível de criticidade).
+# GERADO por `python -m analysis.treino_politica` — não editar à mão. O teste
+# analysis/tests/test_treino_politica.py refaz o treino a partir dos rótulos
+# versionados e confere estes pesos.
+#
+# score = soma(pesos[a] * (x_A[a] - x_B[a])); escolhe A se score > 0, senão B.
+# Pesos nas unidades originais (s, m/s, veículos por faixa, cruzamentos).
+modelo: regressao_logistica_par_a_par
+regra: escolhe A se soma(pesos[a] * (x_A[a] - x_B[a])) > 0, senao B
+atributos:
+- eta_s
+- velocidade_ms
+- fila_por_faixa
+- cruzamentos_restantes
+pesos:
+  eta_s: -0.039694392251311515
+  velocidade_ms: -0.15288561685447893
+  fila_por_faixa: 0.0006814369912334538
+  cruzamentos_restantes: 0.5229315696311612
+treino:
+  rotulos: analysis/data/bloco10_rotulos/rotulos.csv
+  sha256_rotulos: b65441a3d495fa3c5c0a7db8024f98e05abbb1ad1decfc26f04c728747106e6d
+  seeds_treino:
+  - 201
+  - 240
+  seeds_validacao:
+  - 241
+  - 250
+  exemplos_treino: 517
+  exemplos_validacao: 135
+  ponderacao: margem do minimax entre as escolhas, em s
+  grade_lambda:
+  - 0.0
+  - 0.0001
+  - 0.001
+  - 0.01
+  - 0.1
+  - 1.0
+  lambda: 0.01
+  escala_rms:
+    eta_s: 35.357050256040075
+    velocidade_ms: 7.172560753214243
+    fila_por_faixa: 2.6999355246976138
+    cruzamentos_restantes: 3.492739083528755
