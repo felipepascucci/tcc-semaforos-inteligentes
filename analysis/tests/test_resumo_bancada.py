@@ -9,7 +9,14 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from analysis.resumo_bancada import gerar_relatorio, ler_amostras, ler_leituras, main
+from analysis.resumo_bancada import (
+    BYTES_CARIMBO_ATRASADO,
+    AmostraH3,
+    gerar_relatorio,
+    ler_amostras,
+    ler_leituras,
+    main,
+)
 from bridge.latencia import (
     DecisaoCarimbada,
     Desfecho,
@@ -86,15 +93,34 @@ def test_h3_usa_o_posto_mais_proximo(tmp_path: Path) -> None:
     """Latências 1..100 ms: p95 é a 95ª medida, sem interpolação."""
     _medir(tmp_path, T0, [(TipoEvento.PREEMP_INI, float(ms)) for ms in range(1, 101)])
     relatorio = _relatorio(tmp_path, T0)
-    assert "| 100 | 1.0 ms | 50.0 ms | 50.5 ms | 95.0 ms | 99.0 ms | 100.0 ms |" in relatorio
-    assert "Critério (p95 < 200 ms): **atende**" in relatorio
+    assert (
+        "| Todas | 100 | 1.0 ms | 50.0 ms | 50.5 ms | 95.0 ms | 99.0 ms | 100.0 ms |" in relatorio
+    )
+    assert "Critério (p95 < 200 ms), sobre todas: **atende**" in relatorio
     assert "Atenção" not in relatorio
+    # Sem carimbo atrasado, não há linha de sensibilidade.
+    assert "Sem carimbo atrasado" not in relatorio
 
 
 def test_h3_reprovado_pela_cauda(tmp_path: Path) -> None:
     passagens = [(TipoEvento.PREEMP_INI, 40.0)] * 90 + [(TipoEvento.PREEMP_INI, 250.0)] * 10
     _medir(tmp_path, T0, passagens)
-    assert "Critério (p95 < 200 ms): **não atende**" in _relatorio(tmp_path, T0)
+    assert "Critério (p95 < 200 ms), sobre todas: **não atende**" in _relatorio(tmp_path, T0)
+
+
+def test_carimbo_atrasado_fica_no_resultado_e_ganha_linha_de_sensibilidade() -> None:
+    sessao = T0.isoformat()
+    amostras = [AmostraH3(sessao, 25.0, "abc1234", rua=1, bytes_em_espera_atuacao=6)] * 3
+    amostras += [
+        AmostraH3(sessao, 0.1, "abc1234", rua=4, bytes_em_espera_deteccao=35),
+        AmostraH3(sessao, 9.0, "abc1234", rua=2, bytes_em_espera_atuacao=BYTES_CARIMBO_ATRASADO),
+    ]
+    relatorio = gerar_relatorio((), amostras, [sessao])
+
+    assert "| Todas | 5 | 0.1 ms |" in relatorio
+    assert "| Sem carimbo atrasado | 3 | 25.0 ms |" in relatorio
+    assert "Carimbo atrasado (≥ 10 bytes já esperando na porta, em qualquer lado): 2" in relatorio
+    assert "0.1 ms na RUA4 (35/0 bytes)" in relatorio
 
 
 def test_sessoes_nao_se_misturam_e_a_padrao_e_a_ultima(tmp_path: Path) -> None:

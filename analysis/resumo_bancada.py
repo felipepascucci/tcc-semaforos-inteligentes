@@ -13,7 +13,9 @@ Lê os dois CSV que a ponte grava com `--porta-veiculo` (`bridge/latencia.py`):
   `SEM_DECISAO`: conta como falha, como o item 4 pede.
 * `latencia_bancada.csv` — uma linha por leitura que virou `PREEMP_INI`.
   **H3**: p95 de `latencia_total_ms` < 200 ms, com n, mín, mediana e máx, e
-  também média e p99 para a tabela de `context/07` §5.
+  também média e p99 para a tabela de `context/07` §5. Se alguma amostra tem o
+  carimbo atrasado (`BYTES_CARIMBO_ATRASADO`), ela fica no resultado e a tabela
+  ganha uma linha de sensibilidade sem ela.
 
 Percentis pelo posto mais próximo (`sim/controlador/coletor.py`): o valor
 informado é uma medição que aconteceu, como o `percentile_disc` do backend.
@@ -45,6 +47,13 @@ TAXA_MINIMA_RNF05 = 0.95
 #: H3: o p95 da latência fim a fim fica abaixo disto (`context/07` §6).
 LIMIAR_H3_MS = 200.0
 
+#: Bytes já esperando na porta, em qualquer dos dois lados, a partir dos quais o
+#: carimbo do primeiro byte está atrasado. A 9600 baud cada byte leva ~1,04 ms:
+#: 10 bytes são ~10 ms, perto de metade da latência típica. A amostra continua
+#: no resultado; o resumo só acrescenta a linha de sensibilidade sem ela
+#: (decisão de 2026-10-07, `context/09`).
+BYTES_CARIMBO_ATRASADO = 10
+
 SEM_DECISAO = "SEM_DECISAO"
 PREEMP_INI = "PREEMP_INI"
 
@@ -71,6 +80,17 @@ class AmostraH3:
     sessao: str
     latencia_total_ms: float
     versao_codigo: str
+    rua: int = 0
+    bytes_em_espera_deteccao: int = 0
+    bytes_em_espera_atuacao: int = 0
+
+    @property
+    def carimbo_atrasado(self) -> bool:
+        """Se a ponte leu um dos dois lados tarde, com a linha já na porta."""
+        return (
+            max(self.bytes_em_espera_deteccao, self.bytes_em_espera_atuacao)
+            >= BYTES_CARIMBO_ATRASADO
+        )
 
 
 def _linhas(caminho: Path) -> list[dict[str, str]]:
@@ -100,6 +120,9 @@ def ler_amostras(caminho: Path) -> tuple[AmostraH3, ...]:
             sessao=linha["sessao"],
             latencia_total_ms=float(linha["latencia_total_ms"]),
             versao_codigo=linha["versao_codigo"],
+            rua=int(linha["rua"]),
+            bytes_em_espera_deteccao=int(linha["bytes_em_espera_deteccao"]),
+            bytes_em_espera_atuacao=int(linha["bytes_em_espera_atuacao"]),
         )
         for linha in _linhas(caminho)
     )
@@ -157,21 +180,50 @@ def _secao_rnf05(leituras: Sequence[Leitura]) -> list[str]:
     return [*linhas, ""]
 
 
+def _linha_da_tabela(rotulo: str, valores: Sequence[float]) -> str:
+    if not valores:
+        return f"| {rotulo} | 0 | — | — | — | — | — | — |"
+    return (
+        f"| {rotulo} | {len(valores)} | {_ms(min(valores))} | {_ms(percentil(valores, 50))} | "
+        f"{_ms(statistics.fmean(valores))} | {_ms(percentil(valores, 95))} | "
+        f"{_ms(percentil(valores, 99))} | {_ms(max(valores))} |"
+    )
+
+
 def _secao_h3(amostras: Sequence[AmostraH3], preemp_ini_nas_leituras: int) -> list[str]:
     linhas = ["## H3 — latência fim a fim (leitura da tag → PREEMP_INI)", ""]
     if not amostras:
         return [*linhas, "Nenhuma amostra de H3 nas sessões escolhidas.", ""]
     valores = [amostra.latencia_total_ms for amostra in amostras]
     p95 = percentil(valores, 95)
+    atrasadas = [amostra for amostra in amostras if amostra.carimbo_atrasado]
     linhas += [
-        "| n | Mín | Mediana | Média | p95 | p99 | Máx |",
-        "|---|---|---|---|---|---|---|",
-        f"| {len(valores)} | {_ms(min(valores))} | {_ms(percentil(valores, 50))} | "
-        f"{_ms(statistics.fmean(valores))} | {_ms(p95)} | {_ms(percentil(valores, 99))} | "
-        f"{_ms(max(valores))} |",
-        "",
-        f"Critério (p95 < {LIMIAR_H3_MS:.0f} ms): {_veredito(p95 < LIMIAR_H3_MS)}.",
+        "| Amostras | n | Mín | Mediana | Média | p95 | p99 | Máx |",
+        "|---|---|---|---|---|---|---|---|",
+        _linha_da_tabela("Todas", valores),
     ]
+    if atrasadas:
+        linhas.append(
+            _linha_da_tabela(
+                "Sem carimbo atrasado",
+                [amostra.latencia_total_ms for amostra in amostras if not amostra.carimbo_atrasado],
+            )
+        )
+    linhas += [
+        "",
+        f"Critério (p95 < {LIMIAR_H3_MS:.0f} ms), sobre todas: {_veredito(p95 < LIMIAR_H3_MS)}.",
+    ]
+    if atrasadas:
+        linhas.append(
+            f"Carimbo atrasado (≥ {BYTES_CARIMBO_ATRASADO} bytes já esperando na porta, em "
+            f"qualquer lado): {len(atrasadas)} — "
+            + ", ".join(
+                f"{_ms(a.latencia_total_ms)} na RUA{a.rua} "
+                f"({a.bytes_em_espera_deteccao}/{a.bytes_em_espera_atuacao} bytes)"
+                for a in atrasadas
+            )
+            + ". Ficam no resultado; a segunda linha da tabela é só a sensibilidade."
+        )
     if preemp_ini_nas_leituras != len(amostras):
         linhas.append(
             f"**Atenção:** {preemp_ini_nas_leituras} leituras com desfecho PREEMP_INI em "
