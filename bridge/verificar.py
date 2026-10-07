@@ -38,6 +38,8 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
+from adapters.terminal import saida_utf8
+
 # Perfil da bancada (parametros.hardware.yaml) — o que o roteiro espera ver.
 VERDE_MS, VERDE_MIN_MS, AMARELO_MS, ALL_RED_MS = 3000, 3000, 2000, 1000
 CICLO_MS = 2 * (VERDE_MS + AMARELO_MS + ALL_RED_MS)
@@ -657,6 +659,7 @@ class Roteiro:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    saida_utf8()
     parser = argparse.ArgumentParser(prog="python -m bridge.verificar", description=__doc__)
     parser.add_argument("--url", default="http://127.0.0.1:8001")
     args = parser.parse_args(argv)

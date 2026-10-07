@@ -24,6 +24,7 @@ import argparse
 from collections.abc import Sequence
 from pathlib import Path
 
+from adapters.terminal import saida_utf8
 from sim.calibracao import cenarios as calibracao
 from sim.demanda.fluxos import CorrenteDeTrafego, correntes_do_cenario
 
@@ -121,6 +122,7 @@ def gerar(nome_cenario: str, destino: Path | None = None) -> Path:
 
 
 def main(argumentos: list[str] | None = None) -> int:
+    saida_utf8()
     analisador = argparse.ArgumentParser(description="Gera os arquivos de fluxo (entrega 3.3).")
     analisador.add_argument("--cenario", choices=CENARIOS_COM_ARQUIVO, default=None)
     opcoes = analisador.parse_args(argumentos)

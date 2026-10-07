@@ -40,6 +40,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+from adapters.terminal import saida_utf8
 from sim.calibracao import cenarios as calibracao
 from sim.calibracao.fluxo_saturacao import APROXIMACOES
 from sim.controlador import executor
@@ -232,6 +233,7 @@ def calibracao_de_faixas() -> dict[str, tuple[str, ...]]:
 
 
 def main(argumentos: list[str] | None = None) -> int:
+    saida_utf8()
     analisador = argparse.ArgumentParser(description="Valida a malha (entrega 3.4).")
     analisador.add_argument("--cenario", default="leve")
     analisador.add_argument("--todos", action="store_true", help="valida os quatro cenários")

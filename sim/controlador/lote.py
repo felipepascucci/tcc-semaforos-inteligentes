@@ -72,6 +72,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from adapters.configuracao import carregar as carregar_parametros
+from adapters.terminal import saida_utf8
 from sim.controlador import executor
 from sim.controlador.coletor import (
     ARQUIVO_CONFLITOS,
@@ -809,6 +810,7 @@ def _relatorio(resumo: ResumoDoLote) -> str:
 
 
 def main(argumentos: Sequence[str] | None = None) -> int:
+    saida_utf8()
     analisador = argparse.ArgumentParser(
         description="Roda a matriz experimental em lote (context/04 §7)."
     )

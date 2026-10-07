@@ -681,6 +681,7 @@ backend/
 │   └── comandos.py             # tipos de comando abstratos
 ├── adapters/
 │   ├── configuracao.py         # lê parametros*.yaml e politica_desempate.yaml
+│   ├── terminal.py             # saída dos `python -m` em UTF-8
 │   ├── sumo/
 │   └── hardware/
 ├── config/

@@ -34,6 +34,7 @@ from pathlib import Path
 from typing import Any
 
 from adapters.sumo.adaptador import PARAMETRO_CRITICIDADE
+from adapters.terminal import saida_utf8
 from core.modelos import Criticidade
 from sim.calibracao import cenarios as calibracao
 from sim.demanda.fluxos import rotas_de_emergencia
@@ -399,6 +400,7 @@ def garantir(nome_cenario: str, seed: int) -> Path:
 
 
 def main(argumentos: list[str] | None = None) -> int:
+    saida_utf8()
     analisador = argparse.ArgumentParser(
         description="Materializa as rotas de um ponto experimental (entrega 3.3)."
     )

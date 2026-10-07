@@ -30,6 +30,7 @@ from typing import Any, Final
 
 import yaml
 
+from adapters.terminal import saida_utf8
 from sim.rede.georreferencia import REDE, Georreferencia
 from sim.rede.georreferencia import carregar as carregar_georreferencia
 
@@ -155,6 +156,7 @@ def serializar(dados: dict[str, Any]) -> str:
 
 
 def main() -> int:
+    saida_utf8()
     DESTINO.parent.mkdir(parents=True, exist_ok=True)
     with DESTINO.open("w", encoding="utf-8", newline="\n") as arquivo:
         arquivo.write(serializar(exportar()))

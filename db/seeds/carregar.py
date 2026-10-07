@@ -25,6 +25,7 @@ from typing import Any
 import yaml
 from sqlalchemy.orm import Session
 
+from adapters.terminal import saida_utf8
 from app.models import DispositivoIot, FaseSemaforo, Semaforo, TagRfid, VeiculoEmergencia
 from app.repositories.sessao import criar_engine, criar_fabrica_sessao, sessao_de
 
@@ -219,6 +220,7 @@ def resumo(sessao: Session) -> dict[str, int]:
 
 
 def main() -> int:
+    saida_utf8()
     analisador = argparse.ArgumentParser(description="Carrega os seeds do banco.")
     analisador.add_argument(
         "--resumo", action="store_true", help="não altera nada; só conta o que já existe"

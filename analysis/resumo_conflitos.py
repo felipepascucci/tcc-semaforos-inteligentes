@@ -26,6 +26,8 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+from adapters.terminal import saida_utf8
+
 RAIZ = Path(__file__).resolve().parents[1]
 DADOS = RAIZ / "analysis" / "data"
 
@@ -303,6 +305,7 @@ def _veredito(decidiveis: int) -> str:
 
 def main(argv: Sequence[str] | None = None) -> int:
     """Ponto de entrada: `python -m analysis.resumo_conflitos`."""
+    saida_utf8()
     analisador = argparse.ArgumentParser(description=__doc__)
     analisador.add_argument("--dados", type=Path, default=DADOS)
     analisador.add_argument("--saida", type=Path, default=None)

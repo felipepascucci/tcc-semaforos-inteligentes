@@ -27,6 +27,7 @@ import sys
 import tempfile
 from pathlib import Path
 
+from adapters.terminal import saida_utf8
 from sim.ambiente import executavel
 from sim.rede.detectores import gerar_detectores
 
@@ -178,6 +179,7 @@ def _corpo(rede: Path) -> str:
 
 
 def main(argumentos: list[str] | None = None) -> int:
+    saida_utf8()
     analisador = argparse.ArgumentParser(description="Constrói a malha SUMO (entrega 3.1).")
     analisador.add_argument(
         "--permitir-avisos",

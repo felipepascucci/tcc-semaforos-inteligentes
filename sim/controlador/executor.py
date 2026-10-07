@@ -42,6 +42,7 @@ from adapters.configuracao import snapshot as snapshot_parametros
 from adapters.sumo import topologia as topologia_sumo
 from adapters.sumo.adaptador import AdaptadorSumo
 from adapters.sumo.cliente import abrir_cliente
+from adapters.terminal import saida_utf8
 from core.modelos import EstadoMalha
 from core.parametros import Parametros
 from core.priorizacao.conflito import EventoConflito
@@ -664,6 +665,7 @@ def _resumo(resultado: ResultadoExecucao) -> str:
 
 
 def main(argumentos: Sequence[str] | None = None) -> int:
+    saida_utf8()
     analisador = argparse.ArgumentParser(description="Roda uma execução de simulação (3.7).")
     analisador.add_argument("--cenario", required=True)
     analisador.add_argument("--modo", required=True, choices=MODOS)

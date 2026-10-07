@@ -26,6 +26,8 @@ from pathlib import Path
 
 import yaml
 
+from adapters.terminal import saida_utf8
+
 RAIZ = Path(__file__).resolve().parents[1]
 DADOS = RAIZ / "analysis" / "data" / "bloco10_rotulos"
 CENARIOS_YAML = RAIZ / "sim" / "config" / "cenarios.yaml"
@@ -186,6 +188,7 @@ def gerar_relatorio(rotulos: Sequence[Rotulo], divisao: dict[str, tuple[int, int
 
 def main(argv: Sequence[str] | None = None) -> int:
     """Ponto de entrada: `python -m analysis.resumo_rotulos`."""
+    saida_utf8()
     analisador = argparse.ArgumentParser(description=__doc__)
     analisador.add_argument("--dados", type=Path, default=DADOS)
     analisador.add_argument("--saida", type=Path, default=None)

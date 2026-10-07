@@ -38,6 +38,8 @@ from typing import Any
 
 import yaml
 
+from adapters.terminal import saida_utf8
+
 RAIZ = Path(__file__).resolve().parents[2]
 CENARIOS_YAML = RAIZ / "sim" / "config" / "cenarios.yaml"
 MEDICAO_CSV = RAIZ / "analysis" / "data" / "fluxo_saturacao.csv"
@@ -421,6 +423,7 @@ def calibrar() -> tuple[list[LinhaCenario], list[str]]:
 
 
 def main(argumentos: list[str] | None = None) -> int:
+    saida_utf8()
     analisador = argparse.ArgumentParser(
         description="Deriva o grau de saturação dos cenários (entrega 3.0, P11)."
     )

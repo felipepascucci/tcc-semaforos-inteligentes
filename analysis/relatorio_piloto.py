@@ -35,11 +35,12 @@ from __future__ import annotations
 import argparse
 import csv
 import statistics
-import sys
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
+
+from adapters.terminal import saida_utf8
 
 RAIZ = Path(__file__).resolve().parents[1]
 DADOS = RAIZ / "analysis" / "data"
@@ -851,12 +852,10 @@ def _pendencias(
 
 
 def main(argumentos: Sequence[str] | None = None) -> int:
-    # O console do Windows abre em cp1252, e o relatório tem "≥", "δ" e travessão.
-    # Sem isto, o `print` estoura com UnicodeEncodeError DEPOIS de o arquivo já
-    # ter sido escrito — o pior dos dois mundos: código de saída 1 sobre um
-    # relatório correto. O arquivo continua em UTF-8; só a cópia na tela degrada.
-    if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(errors="replace")
+    # O relatório tem "≥", "δ" e travessão. Sem isto, com a saída redirecionada
+    # no Windows (cp1252), o `print` estoura com UnicodeEncodeError DEPOIS de o
+    # arquivo já ter sido escrito: código de saída 1 sobre um relatório correto.
+    saida_utf8()
 
     analisador = argparse.ArgumentParser(description="Gera o relatório do piloto (Bloco 4).")
     analisador.add_argument("--dados", type=Path, default=DADOS)

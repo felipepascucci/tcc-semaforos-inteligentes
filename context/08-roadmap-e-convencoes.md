@@ -46,6 +46,7 @@ Unidade no nome do parâmetro (`_m`, `_ms`, `_s`) evita a classe de bug mais car
 
 - `dataclass(frozen=True)` para todo objeto de estado. Estado imutável elimina uma classe inteira de bug de concorrência entre o loop de simulação e o broadcast do WebSocket.
 - Exceções de domínio próprias em `core/excecoes.py` (`PreempcaoInvalidaError`, `FaseInexistenteError`, `InvarianteVioladoError`).
+- Todo `python -m` do projeto chama `adapters.terminal.saida_utf8()` na primeira linha do `main()`. No Windows, com a saída redirecionada ou em pipe, o Python escreve em cp1252, que não tem `≥`, `→`, `λ` nem `δ`, e o programa cai com `UnicodeEncodeError` (achado de 2026-10-07 no `--help` de `bridge.demo`, `analysis.resumo_bancada` e `analysis.treino_politica`). `tests/cli/test_saida_utf8.py` confere a chamada em todo módulo com `__main__` de `analysis/`, `bridge/`, `sim/` e `db/`, e roda cada `--help` com a saída capturada em cp1252.
 
 ### Nomenclatura
 

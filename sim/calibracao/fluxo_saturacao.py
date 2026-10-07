@@ -44,6 +44,7 @@ from typing import Any
 
 import yaml
 
+from adapters.terminal import saida_utf8
 from sim.ambiente import executavel, registrar_ferramentas
 
 RAIZ = Path(__file__).resolve().parents[2]
@@ -475,6 +476,7 @@ def gravar_csv(medicoes: Sequence[MedicaoDeFaixa], seed: int, destino: Path = SA
 
 
 def main(argumentos: list[str] | None = None) -> int:
+    saida_utf8()
     analisador = argparse.ArgumentParser(
         description="Mede o fluxo de saturação da malha (entrega 3.0, P11)."
     )

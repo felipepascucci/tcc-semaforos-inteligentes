@@ -43,6 +43,7 @@ from pathlib import Path
 import uvicorn
 from dotenv import load_dotenv
 
+from adapters.terminal import saida_utf8
 from bridge.api import criar_app
 from bridge.latencia import CSV_DESFECHOS_PADRAO, CSV_PADRAO, GravadorCsv, GravadorDesfechos
 from bridge.ponte import Ponte
@@ -105,6 +106,7 @@ def _argumentos(argv: Sequence[str] | None) -> argparse.Namespace:
 
 
 def main(argv: Sequence[str] | None = None) -> None:
+    saida_utf8()
     load_dotenv()
     args = _argumentos(argv)
 
