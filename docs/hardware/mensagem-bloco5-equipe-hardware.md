@@ -1,12 +1,10 @@
 # Bloco 5 — firmware novo do UNO: o que precisamos de vocês
 
 Oi, pessoal! O programa novo do Arduino UNO está pronto, na pasta
-`firmware/uno/semaforo/` da branch `feat/bloco5-camada-iot`. Ele mantém o que o
-sketch de vocês já fazia: a mesma linha vinda do NodeMCU (`RUA3,AMBULANCIA`), as
-mesmas prioridades (ambulância > bombeiro > polícia), os mesmos tempos de verde
-do VE (9, 8 e 7 s), a fila de um lugar e as mesmas mensagens no LCD. Os dois
-NodeMCUs **não mudam**: só foram copiados para `firmware/nodemcu/`, com um
-comentário no topo.
+`firmware/uno/semaforo/`. Ele mantém o que o sketch de vocês já fazia: a mesma
+linha vinda do NodeMCU (`RUA3,AMBULANCIA`), os mesmos tempos de verde do VE (9, 8
+e 7 s), a fila de um lugar e as mesmas mensagens no LCD. Os dois NodeMCUs **não
+mudam**: só foram copiados para `firmware/nodemcu/`, com um comentário no topo.
 
 O que mudou foi a segurança das trocas de luz. No sketch antigo, a emergência
 apagava um verde e acendia outro no mesmo instante, sem amarelo e sem todos
@@ -14,10 +12,10 @@ vermelhos no meio. Agora toda troca passa por verde mínimo de 3 s, amarelo de
 2 s e 1 s com tudo vermelho. Isso não está em discussão, é a regra de segurança
 do trabalho.
 
-## 1. Confirmem estas 7 mudanças de comportamento
+## 1. Confirmem estas mudanças de comportamento
 
 Respondam "ok" ou "não" em cada uma. Se alguma não fizer sentido para vocês, a
-gente ajusta antes de gravar.
+gente conversa.
 
 1. **Tempos do ciclo:** verde 3 s e amarelo 2 s. No sketch estavam invertidos
    (verde 2 s, amarelo 5 s).
@@ -34,29 +32,35 @@ gente ajusta antes de gravar.
    disso a fila é descartada e o ciclo volta.
 7. **Quem perde o lugar na fila aparece no log como DESCARTADO.** Antes sumia sem
    registro. No LCD nada muda.
+8. **A Central decide quem pode passar** (novo, de 06/10). O UNO só abre o
+   corredor para um tipo de veículo que tenha uma ocorrência aberta na Central do
+   sistema. Sem ocorrência, o semáforo não muda, e o LCD mostra
+   `SEM OCORRENCIA` por 3 s. E quem passa na frente de quem deixou de ser o tipo
+   (ambulância > bombeiro > polícia): passa a ser a **gravidade da ocorrência**
+   (risco à vida > risco coletivo > urgência). O tipo continua definindo só o
+   tempo de verde (9, 8 e 7 s).
 
-## 2. Ainda falta de vocês
+## 2. Uma mudança de fio (06/10)
 
-- **Quem está com a bancada** e pode gravar o UNO.
+Para o UNO receber a lista da Central pelo USB, **o fio do TX do NodeMCU
+receptor saiu do pino RX (0) do UNO e foi para o pino A0**. Nenhum outro fio
+muda, e nenhum NodeMCU precisa ser regravado. De quebra, o UNO agora pode ser
+gravado sem soltar fio nenhum.
+
+Se vocês tiverem um motivo para não usar o A0 (outro uso planejado para ele,
+por exemplo), avisem.
+
+## 3. Ainda falta de vocês
+
 - **Fotos da bancada**, de perto, dando para ver em que pino entra cada fio: a
   bancada inteira de cima, as ligações no UNO e o NodeMCU com o RC522.
 - **Versões** da biblioteca `MFRC522` e do pacote de placas `esp8266` (aparecem
   no Gerenciador de Bibliotecas e no Gerenciador de Placas da IDE).
 
-## 3. Quando forem gravar o UNO
+## 4. A bancada está com o Felipe
 
-1. Na Arduino IDE, instalem a biblioteca **"LiquidCrystal I2C" de Frank de
-   Brabander** (talvez já esteja instalada).
-2. Abram `firmware/uno/semaforo/semaforo.ino`. Os arquivos `controlador.h` e
-   `controlador.cpp` abrem junto, em abas; é para ser assim.
-3. **Soltem o fio do TX do NodeMCU do pino RX (0) do UNO**, gravem, e deixem o
-   fio solto para o teste abaixo.
-4. Com o UNO no USB, rodem no notebook (o Felipe ajuda):
-   `python -m bridge.main --porta COM3` e, noutro terminal, logo em seguida,
-   `python -m bridge.verificar`. Leva uns 3 minutos e precisa dar **16 de 16**.
-5. Recoloquem o fio do NodeMCU no RX e passem o carrinho pela tag: o semáforo
-   da rua tem que ir a verde passando por amarelo e por todos vermelhos.
-
-Depois disso falta só medir a latência (H3): o NodeMCU do carrinho fica no USB do
-notebook, sem a bateria, e passamos o carrinho pela tag algumas vezes. Combinamos
-quando a bancada estiver com alguém.
+A bancada chegou com o Felipe em 06/10, e ele grava e testa o UNO: o roteiro
+automático de aceitação, as 100 passagens do carrinho pela tag (que medem a
+leitura e a latência, H3), a operação de 30 minutos e o ensaio da
+demonstração. Vocês não precisam gravar nada. Se quiserem acompanhar algum
+desses testes, combinem com ele.

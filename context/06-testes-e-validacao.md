@@ -30,7 +30,7 @@ Cada RF/RNF vira pelo menos um teste automatizado. Esta tabela é a rastreabilid
 | RF06 | Posição do VE é publicada a ≥ 1 Hz | Intervalo entre eventos ≤ 1 s. **No dashboard:** a posição recebida vai para o mapa, e a que para de chegar sai dele em 5 s | `test_ws.py` + `frontend/src/stream/*.test.ts(x)` |
 | RF07 | Mudança de rota do VE recalcula os TLS-alvo | Novo conjunto de TLS após reroute | `test_recalculo.py` |
 | RNF01 | p95 de `latencia_decisao_ms` < 100 ms em 10.000 chamadas | Percentil, não média. **Latência de decisão** — só `motor.avaliar()`, sem I/O (decisão P2) | `test_desempenho.py` |
-| H3 | `latencia_total_ms` (t_deteccao→t_atuacao) < 200 ms em **5 repetições de bancada** | **Latência fim-a-fim**: da leitura da tag no veículo ao `PREEMP_INI` do UNO, os dois carimbados no relógio do notebook pela ponte (`05` §4.3). Inclui ESP-NOW, a serial e a decisão do UNO. Com n = 5 o p95 **não é estimável**: reportar mín/mediana/máx com o n declarado e verificar o limiar sobre o **máximo observado** (decisão de 2026-08-31) | `test_e2e_preempcao.py` + checklist HW |
+| H3 | p95 de `latencia_total_ms` (t_deteccao→t_atuacao) < 200 ms em **100 passagens de bancada** | **Latência fim-a-fim**: da leitura da tag no veículo ao `PREEMP_INI` do UNO, os dois carimbados no relógio do notebook pela ponte (`05` §4.3). Inclui ESP-NOW, a serial e a decisão do UNO. **n = 100 desde 2026-10-06** (decisão do grupo): as mesmas passagens do RNF05, com p95 estimável; mín, mediana e máx reportados ao lado, com o n. Antes eram 5 repetições, com o limiar verificado sobre o máximo (decisão de 2026-08-31, superada) | `test_e2e_preempcao.py` + checklist HW |
 | RNF02 | Sistema opera 60 min contínuos sem vazamento de memória | RSS estável ± 10% | `test_soak.py` |
 | RNF03 | Motor processa malha de 32 TLS mantendo p95 < 100 ms | Escala linear ou melhor | `test_desempenho.py` |
 | RNF04 | POST sem `X-Device-Token` válido → 401; UID não cadastrado → 403 | Códigos corretos. Vale para a API; na bancada nenhum dispositivo chama a API, e a ausência de criptografia no ESP-NOW é limitação declarada (`02` §6) | `backend/tests/api/test_seguranca.py` |
@@ -189,28 +189,38 @@ ver a nota abaixo da tabela.
 | 1 | Ciclo alterna os **2 eixos** (ciclo de 12 s) por 5 min sem travar; liga em all-red | ☐ |
 | 2 | Nunca há verde nos dois eixos ao mesmo tempo; em emergência só a aproximação do VE fica verde — 5 min de observação e a telemetria do mesmo período | ☐ |
 | 3 | Toda transição verde→vermelho passa por amarelo, e há all-red antes de todo verde novo, **inclusive na entrada e na saída da emergência** | ☐ |
-| 4 | 100 passagens sobre as tags das ruas: em ≥ 95 a linha chega ao UNO com a rua certa, ou seja, há um evento de decisão com a rua da tag — RNF05 | ☐ |
+| 4 | 100 passagens sobre as tags das ruas: em ≥ 95 a linha chega ao UNO com a rua certa, ou seja, há um evento de decisão com a rua da tag — RNF05. Um `RECUSADO` conta como falha (a linha chegou corrompida) | ☐ |
 | 5 | Tag fora das 4 ruas não gera envio nem mexe no semáforo | ☐ |
+| 5b | **Tag sem ocorrência** (volta em 2026-10-06): sem ocorrência aberta para a ambulância na Central, a passagem gera `SEM_OCORRENCIA`, não mexe no semáforo, e o LCD mostra `SEM OCORRENCIA` por 3 s; abrindo a ocorrência, a passagem seguinte preempta | ☐ |
 | 6 | LCD mostra o VE e a rua em < 1 s após a leitura | ☐ |
 | 7 | Preempção iniciada (`PREEMP_INI`) em < 3 s da leitura da tag — RF02 | ☐ |
-| 7b | **H3** — `latencia_total_ms` < 200 ms em **5 repetições**, com o emissor no USB do notebook, mín/mediana/máx registrados. `python -m bridge.main --porta COM3 --porta-veiculo COM4`; cada passagem atendida vira uma linha de `analysis/data/latencia_bancada.csv` (`05` §6) | ☐ |
+| 7b | **H3** — p95 de `latencia_total_ms` < 200 ms em **100 passagens** (as do item 4), com o emissor no USB do notebook e a ambulância em serviço na Central; mín/mediana/máx registrados. `python -m bridge.main --porta COM3 --porta-veiculo COM4`; cada passagem atendida vira uma linha de `analysis/data/latencia_bancada.csv` (`05` §6) | ☐ |
 | 8 | Dashboard mostra o evento em tempo real | ☐ |
 | 9 | Log gravado no PostgreSQL com `id_correlacao` completo | ☐ |
-| 10 | Com o fio do RX solto, a injeção pela ponte mostra a regra de prioridade: ambulância interrompe bombeiro pelo amarelo e all-red, o bombeiro vai para a fila (LCD `Fila:BOMB na R1`) e é atendido depois | ☐ |
+| 10 | Com a bancada montada, a injeção pela ponte mostra a regra de prioridade pela criticidade: o VE mais crítico interrompe o outro pelo amarelo e all-red, o interrompido vai para a fila (LCD `Fila:…`) e é atendido depois | ☐ |
 | 11 | Renovações sucessivas param no teto de 30 s (`EV,TIMEOUT`) e o ciclo volta pelo eixo oposto | ☐ |
 | 12 | Operação contínua de 30 min sem travamento ou reboot | ☐ |
 | 13 | Nenhum LED com brilho anômalo ou aquecimento perceptível | ☐ |
-| 14 | Ponte encerrada no meio de uma emergência → o semáforo segue, e o carrinho continua preemptando | ☐ |
+| 14 | Ponte encerrada no meio de uma emergência → o semáforo segue, e o carrinho continua preemptando com a última lista da Central | ☐ |
+| 15 | Ponte reiniciada (o UNO reinicia junto) → o UNO volta negando todos, e com o backend no ar a lista da Central volta em até ~1 s | ☐ |
 
 > **O que saiu em 2026-10-05:** o 5 antigo (tag não cadastrada → negação) e o 5b
 > (P20, sem ocorrência), porque o UNO não consulta cadastro nem ocorrência; o 10
 > antigo (USB desconectado → watchdog), porque o UNO não depende do notebook e o
 > USB é a alimentação dele; o 11 antigo (queda do Wi-Fi), porque não há Wi-Fi.
+>
+> **O que voltou e entrou em 2026-10-06:** o 5b, reescrito, porque a Central
+> passou a valer na bancada (`05` §3.3); o 15, porque a lista da Central vive na
+> RAM do UNO e se perde a cada reinício. O 10 deixou de pedir o fio solto.
 
 Item 12 é o que pega: sketches com `String` travam depois de ~20 min. Rodar esse teste **antes** do dia da apresentação, não no dia.
 
+> **Decidido pelo grupo em 2026-10-06: 100 passagens.** O item 7b mede H3 nas
+> mesmas 100 passagens do item 4, com p95 estimável. O registro abaixo é o
+> histórico da questão.
+>
 > **Observação sobre o n de H3 (2026-08-31), a decidir no Bloco 5.** O item 7b
-> pede 5 repetições, e 5 amostras não sustentam um percentil — o "p95" de cinco
+> pedia 5 repetições, e 5 amostras não sustentam um percentil — o "p95" de cinco
 > valores é o máximo com nome de percentil. Mas o **item 4 já exige 100
 > aproximações de tag** para o RNF05. Se o firmware carimbar `t_deteccao` e
 > `t_atuacao` nessas mesmas 100 leituras, H3 ganha um **p95 de verdade sem uma

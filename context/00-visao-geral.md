@@ -67,7 +67,7 @@ O **motor de decisão** (`backend/core/priorizacao/`) é o objeto do experimento
 | --- | --- | --- |
 | H1 | A fusão radar + V2I reduz em **no mínimo 25%** o tempo total de travessia do VE, em cenários de saturação **moderada a intensa**, em relação à temporização estática | Comparação pareada por seed, baseline vs. proposto. O cenário `leve` é medido e discutido, mas **sem meta numérica** |
 | H2 | É possível mitigar em **no mínimo 15%** o impacto negativo nas vias transversais com compensação dinâmica de ciclo pós-evento | Três braços: baseline / preempção sem compensação / preempção com compensação. Mitigação = fração do **acréscimo** de espera transversal causado pela preempção, em `moderado` e `intenso` (P17) |
-| H3 | A infraestrutura em borda sustenta latência operacional **fim-a-fim inferior a 200 ms** | Da **leitura da tag no veículo** até o **UNO decidir atuar** (`PREEMP_INI`), os dois instantes carimbados no relógio do notebook, medida no **protótipo**, com **5 repetições** roteirizadas no checklist (`05` §4.3, decisão de 2026-10-05) |
+| H3 | A infraestrutura em borda sustenta latência operacional **fim-a-fim inferior a 200 ms** | Da **leitura da tag no veículo** até o **UNO decidir atuar** (`PREEMP_INI`), os dois instantes carimbados no relógio do notebook, medida no **protótipo**, em **100 passagens** (as do RNF05), critério sobre o **p95** (`05` §4.3; n decidido pelo grupo em 2026-10-06) |
 | **H4** | Uma política aprendida para escolher entre VEs em conflito **reduz o tempo de travessia do VE mais prejudicado**, em cenários com múltiplos VEs, em relação ao desempate determinístico de E8 | Braço `PREEMPCAO_ML` contra `PREEMPCAO`, pareado por seed, nos cenários com múltiplos VEs. Mesmo rigor de H1: Wilcoxon pareado, Cliff's δ e IC 95% por bootstrap |
 
 > **H4 formulada em 2026-09-10, antes de qualquer treino** (P19). O critério de
@@ -114,11 +114,11 @@ O **motor de decisão** (`backend/core/priorizacao/`) é o objeto do experimento
 >   única leitura sob a qual H2 pode ser rejeitada. **O denominador foi fixado em
 >   2026-10-01 (P17):** os 15% incidem sobre o *acréscimo* de espera transversal
 >   que a preempção causou, em `moderado` e `intenso`.
-> - **A evidência de H3 vem do protótipo, com 5 repetições.** Na simulação
->   `t_atuacao` é o mesmo passo de `t_decisao` — não há atuação física a
->   cronometrar —, então o número de H3 só existe na bancada. Com **n = 5 o p95
->   não é estimável**: reportar mín/mediana/máx com o n declarado, e verificar os
->   200 ms sobre o máximo observado.
+> - **A evidência de H3 vem do protótipo, com 100 passagens** (decisão do grupo
+>   de 2026-10-06; antes eram 5 repetições). Na simulação `t_atuacao` é o mesmo
+>   passo de `t_decisao` — não há atuação física a cronometrar —, então o número
+>   de H3 só existe na bancada. Com n = 100 o p95 é estimável: os 200 ms são
+>   verificados sobre ele, e mín/mediana/máx vão ao lado, com o n.
 > - **A meta de H1 no cenário `intenso` não foi atingida no piloto** (18,1% contra
 >   25%). A equipe decidiu **corrigir o mecanismo antes de mexer na hipótese**;
 >   reformular H1 é contingência, e passa pelo orientador. Ver P16.

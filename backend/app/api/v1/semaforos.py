@@ -1,11 +1,11 @@
 """`/semaforos` — cadastro, estado ao vivo e preempção manual (`context/01` §7).
 
 **Só a bancada tem atuador ligado ao backend**, e só pela injeção da ponte
-(`POST /injecao`), que exige o fio do NodeMCU solto do RX (`context/05` §6). Por
-isso:
+(`POST /injecao`), pelo USB (`context/05` §6). Por isso:
 
 * `POST /semaforos/PROTO_CRUZ_01/preempcao` escreve no RX do UNO a mesma linha
-  que o receptor escreveria, e devolve a decisão do UNO;
+  que o receptor escreveria, e devolve a decisão do UNO. Desde 2026-10-06 ela
+  passa pela Central: tipo sem ocorrência aberta volta `SEM_OCORRENCIA`;
 * nos cruzamentos da simulação, o motor roda no processo do executor, e a API
   não tem como comandá-lo: 409;
 * `DELETE .../preempcao` é sempre 409. O UNO não aceita cancelamento: a

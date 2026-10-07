@@ -10,9 +10,11 @@ Roda no host, fora do compose, porque precisa da porta USB (`context/02` §3)::
     python -m bridge.main --porta COM3 --porta-veiculo COM4
     python -m bridge.main --porta-veiculo  # COM do .env (SERIAL_PORT_VEICULO)
 
-A ponte só escuta o UNO (`context/05` §6). A API fica em
-`http://127.0.0.1:8001` (`/health`, `/estado`, `/injecao`, documentação em
-`/docs`). A injeção só chega ao UNO com o fio do NodeMCU solto do RX.
+A ponte escuta o UNO e escreve nele só a lista da Central e a injeção de teste
+(`context/05` §6). A API fica em `http://127.0.0.1:8001` (`/health`, `/estado`,
+`/autorizacoes`, `/injecao`, documentação em `/docs`). Abrir a porta reinicia o
+UNO, que volta **negando todos** até receber a lista: com o backend no ar, ele a
+reenvia sozinho em até ~1 s.
 
 Com `--porta-veiculo`, cada detecção que o UNO atende vira uma linha de
 `analysis/data/latencia_bancada.csv`. **Não há como medir H3 com o dublê**: a

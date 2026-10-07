@@ -35,7 +35,7 @@ const uint32_t VERDE_DO_TIPO_MS[4] = {0, 9000, 8000, 7000};
 const char* const NOME_DO_TIPO[4] = {"", "AMBULANCIA", "BOMBEIRO", "POLICIA"};
 const char* const CURTO_DO_TIPO[4] = {"", "AMBU", "BOMB", "POLI"};  // LCD do sketch
 const char LETRA_DA_COR[3] = {'R', 'Y', 'G'};
-const Ve NINGUEM = {0, NENHUM};
+const Ve NINGUEM = {0, NENHUM, SEM_OCORRENCIA};
 
 // Monta uma linha num buffer fixo, sem String nem sprintf.
 class Texto {
@@ -52,6 +52,12 @@ class Texto {
 
   Texto& texto(const char* s) {
     while (*s != '\0') letra(*s++);
+    return *this;
+  }
+
+  // Um texto fixo, escrito com FIXO("..."): no UNO ele está na flash.
+  Texto& fixo(const char* s) {
+    for (char c = LER_FIXO(s); c != '\0'; c = LER_FIXO(++s)) letra(c);
     return *this;
   }
 
@@ -104,9 +110,21 @@ bool igual(const char* a, uint8_t n, const char* b) {
 
 bool bit(uint8_t mascara, uint8_t i) { return ((mascara >> i) & 1) != 0; }
 
+void limpar(Entrada& e) {
+  e.n = 0;
+  e.estourou = false;
+  e.temVirgula = false;
+  e.byteInvalido = false;
+}
+
 }  // namespace
 
-Controlador::Controlador(Placa& placa) : placa_(placa) {}
+Controlador::Controlador(Placa& placa) : placa_(placa) {
+  usb_.linha = linhaUsb_;
+  usb_.capacidade = TAM_LINHA_USB;
+  receptor_.linha = linhaReceptor_;
+  receptor_.capacidade = TAM_LINHA_RECEPTOR;
+}
 
 void Controlador::iniciar(uint32_t agora) {
   t_ = agora;
@@ -130,14 +148,17 @@ void Controlador::iniciar(uint32_t agora) {
   faseCiclo_ = 0;
   atendido_ = NINGUEM;
   fila_ = NINGUEM;
+  for (uint8_t t = 0; t < 4; t++) criticidade_[t] = SEM_OCORRENCIA;  // nega todos
 
   proximaSt_ = agora;
   assinatura_[0] = '\0';
 
-  nLinha_ = 0;
-  estourou_ = false;
-  temVirgula_ = false;
-  byteInvalido_ = false;
+  limpar(usb_);
+  limpar(receptor_);
+  usb_.ultimoByte = agora;
+  receptor_.ultimoByte = agora;
+  semOcorrencia_ = NINGUEM;
+  tSemOcorrencia_ = agora;
 
   lcd1_[0] = '\0';
   lcd2_[0] = '\0';
@@ -145,7 +166,10 @@ void Controlador::iniciar(uint32_t agora) {
 
 void Controlador::boot(uint32_t agora) {
   iniciar(agora);
-  evento("BOOT", 0);
+  evento(FIXO("BOOT"), 0);
+  // Publica já o all-red: na placa, o lcd.init() bloqueia ~1,1 s logo depois
+  // do boot, e sem isto a primeira ST só sairia com o primeiro verde.
+  assentar();
 }
 
 // -- entrada ----------------------------------------------------------------
@@ -157,28 +181,42 @@ void Controlador::avancar(uint32_t agora) {
 
 void Controlador::receber(char c, uint32_t agora) {
   t_ = agora;
+  acumular(usb_, c, true);
+}
+
+void Controlador::receberDoReceptor(char c, uint32_t agora) {
+  t_ = agora;
+  acumular(receptor_, c, false);
+}
+
+// As duas entradas têm buffer próprio: os bytes delas chegam intercalados.
+void Controlador::acumular(Entrada& e, char c, bool doUsb) {
+  // Um pedaço de linha seguido de silêncio é ruído (o boot do ESP8266, um fio
+  // mexido): sai antes que grude na próxima linha de verdade.
+  if (e.n > 0 && t_ - e.ultimoByte > LINHA_PARADA_MS) limpar(e);
+  e.ultimoByte = t_;
   if (c == '\n') {
-    processarLinha();
+    processarLinha(e, doUsb);
     return;
   }
-  if (c == ',') temVirgula_ = true;
+  if (c == ',') e.temVirgula = true;
   const uint8_t b = static_cast<uint8_t>(c);
-  if (b == 0 || b >= 0x80) byteInvalido_ = true;  // o dublê exige ASCII
-  if (nLinha_ < TAM_LINHA) {
-    linha_[nLinha_++] = c;
+  if (b == 0 || b >= 0x80) e.byteInvalido = true;  // o dublê exige ASCII
+  if (e.n < e.capacidade) {
+    e.linha[e.n++] = c;
   } else {
-    estourou_ = true;
+    e.estourou = true;
   }
 }
 
-void Controlador::processarLinha() {
-  const bool virgula = temVirgula_;
-  const bool invalida = estourou_ || byteInvalido_;
-  const uint8_t n = nLinha_;
-  nLinha_ = 0;
-  temVirgula_ = false;
-  estourou_ = false;
-  byteInvalido_ = false;
+void Controlador::processarLinha(Entrada& e, bool doUsb) {
+  const bool virgula = e.temVirgula;
+  const bool invalida = e.estourou || e.byteInvalido;
+  const uint8_t n = e.n;
+  e.n = 0;
+  e.temVirgula = false;
+  e.estourou = false;
+  e.byteInvalido = false;
 
   // Sem vírgula: é o lixo que o ESP8266 imprime no próprio boot, a 74880 baud.
   // Ignorado em silêncio (05 §3.2).
@@ -187,33 +225,66 @@ void Controlador::processarLinha() {
   // O que venceu até agora vem antes da decisão, como no dublê. No laço do
   // UNO é nada: o loop() acabou de chamar avancar() com o mesmo instante.
   assentar();
+
+  // `AUT,…` só pelo USB (05 §4.1). Não gera evento: a lista nova aparece na ST.
+  const bool aut = n >= 4 && e.linha[0] == 'A' && e.linha[1] == 'U' && e.linha[2] == 'T' &&
+                   e.linha[3] == ',';
+  if (doUsb && aut) {
+    if (invalida || !autorizar(e, n)) evento(FIXO("RECUSADO"), 0);
+    assentar();
+    return;
+  }
+
   Ve ve = NINGUEM;
-  if (invalida || !interpretar(n, ve)) {
+  if (invalida || !interpretar(e, n, ve)) {
     // Com vírgula e conteúdo inválido: um texto corrompido não vira viatura.
-    evento("RECUSADO", 0);
+    evento(FIXO("RECUSADO"), 0);
     return;
   }
   decidir(ve);
   assentar();
 }
 
+// `AUT,<VEICULO>,<0..3>`, na forma exata, sem espaços. O '\r' do println sai.
+// Exatamente a regra de bridge.protocolo.interpretar_autorizacao.
+bool Controlador::autorizar(const Entrada& e, uint8_t n) {
+  if (n > 0 && e.linha[n - 1] == '\r') n--;
+  uint8_t k = 0;  // a segunda vírgula
+  for (uint8_t i = 4; i < n; i++) {
+    if (e.linha[i] == ',') {
+      if (k != 0) return false;  // campos a mais
+      k = i;
+    }
+  }
+  if (k == 0 || n != k + 2) return false;  // criticidade de um dígito
+  const char d = e.linha[k + 1];
+  if (d < '0' || d > static_cast<char>('0' + CRITICIDADE_MAXIMA)) return false;
+  for (uint8_t t = AMBULANCIA; t <= POLICIA; t++) {
+    if (igual(e.linha + 4, static_cast<uint8_t>(k - 4), NOME_DO_TIPO[t])) {
+      criticidade_[t] = static_cast<uint8_t>(d - '0');
+      return true;
+    }
+  }
+  return false;
+}
+
 // `<RUA>,<VEICULO>` — RUA1..RUA4 ou 1..4; AMBULANCIA, BOMBEIRO ou POLICIA.
 // Exatamente a regra de bridge.protocolo.interpretar_deteccao.
-bool Controlador::interpretar(uint8_t n, Ve& ve) const {
+bool Controlador::interpretar(const Entrada& e, uint8_t n, Ve& ve) const {
   uint8_t virgulas = 0;
   uint8_t k = 0;
   for (uint8_t i = 0; i < n; i++) {
-    if (linha_[i] == ',') {
+    if (e.linha[i] == ',') {
       virgulas++;
       k = i;
     }
   }
   if (virgulas != 1) return false;
 
-  const char* rua = linha_;
+  const char* rua = e.linha;
   uint8_t nRua = k;
   aparar(rua, nRua);
-  const char* tipo = linha_ + k + 1;
+  const char* tipo = e.linha + k + 1;
   uint8_t nTipo = static_cast<uint8_t>(n - k - 1);
   aparar(tipo, nTipo);
 
@@ -237,6 +308,7 @@ bool Controlador::interpretar(uint8_t n, Ve& ve) const {
     if (igual(tipo, nTipo, NOME_DO_TIPO[t])) {
       ve.rua = numero;
       ve.tipo = static_cast<Tipo>(t);
+      ve.criticidade = criticidade_[t];  // a de agora; o VE a leva consigo
       return true;
     }
   }
@@ -246,23 +318,31 @@ bool Controlador::interpretar(uint8_t n, Ve& ve) const {
 // -- decisão (05 §3.3) ------------------------------------------------------
 
 // A regra do sketch, com exatamente uma linha de decisão por detecção, escrita
-// antes de qualquer outra (05 §4.2).
+// antes de qualquer outra (05 §4.2). Desde 2026-10-06 quem interrompe quem é a
+// criticidade da ocorrência (menor é mais crítica), e só a ESTRITAMENTE mais
+// crítica passa à frente: no mesmo nível, fica quem chegou primeiro.
 void Controlador::decidir(Ve novo) {
-  if (atendido_.rua == 0) {
+  if (novo.criticidade == SEM_OCORRENCIA) {
+    // 0. o tipo não tem ocorrência ativa na Central (P20): não preempta.
+    evento(FIXO("SEM_OCORRENCIA"), &novo);
+    semOcorrencia_ = novo;
+    tSemOcorrencia_ = t_;
+  } else if (atendido_.rua == 0) {
     atender(novo);  // 1. sem emergência
   } else if (novo.rua == atendido_.rua && novo.tipo == atendido_.tipo) {
     // 2. o mesmo VE relendo a mesma rua: o verde recomeça a contar.
     if (estabelecido_) tInicioVerde_ = t_;
-    evento("RENOVADO", &novo);
-  } else if (novo.tipo < atendido_.tipo) {
-    // 3. prioridade maior: o atendido vai para a fila.
+    atendido_ = novo;  // a releitura traz a criticidade de agora
+    evento(FIXO("RENOVADO"), &novo);
+  } else if (novo.criticidade < atendido_.criticidade) {
+    // 3. mais crítico: o atendido vai para a fila.
     const Ve antigo = atendido_;
     atender(novo);
     enfileirar(antigo);
-  } else if (fila_.rua == 0 || novo.tipo < fila_.tipo) {
+  } else if (fila_.rua == 0 || novo.criticidade < fila_.criticidade) {
     enfileirar(novo);  // 4.
   } else {
-    evento("DESCARTADO", &novo);  // 5.
+    evento(FIXO("DESCARTADO"), &novo);  // 5.
   }
 }
 
@@ -270,8 +350,8 @@ void Controlador::decidir(Ve novo) {
 void Controlador::enfileirar(Ve ve) {
   const Ve deslocado = fila_;
   fila_ = ve;
-  evento("FILA", &ve);
-  if (deslocado.rua != 0) evento("DESCARTADO", &deslocado);
+  evento(FIXO("FILA"), &ve);
+  if (deslocado.rua != 0) evento(FIXO("DESCARTADO"), &deslocado);
 }
 
 void Controlador::atender(Ve ve) {
@@ -280,14 +360,14 @@ void Controlador::atender(Ve ve) {
     tInicioEmergencia_ = t_;
   }
   atendido_ = ve;
-  evento("PREEMP_INI", &ve);
+  evento(FIXO("PREEMP_INI"), &ve);
   mirar(static_cast<uint8_t>(1 << (ve.rua - 1)));
 }
 
 // O verde do VE acabou: atende a fila ou volta ao ciclo pelo eixo oposto.
 void Controlador::encerrarAtendimento() {
   const Ve atendido = atendido_;
-  evento("PREEMP_FIM", &atendido);
+  evento(FIXO("PREEMP_FIM"), &atendido);
   atendido_ = NINGUEM;
   if (fila_.rua != 0) {
     const Ve proximo = fila_;
@@ -300,8 +380,8 @@ void Controlador::encerrarAtendimento() {
 
 void Controlador::estourarTeto() {
   const Ve atendido = atendido_;
-  evento("TIMEOUT", 0);
-  evento("PREEMP_FIM", &atendido);
+  evento(FIXO("TIMEOUT"), 0);
+  evento(FIXO("PREEMP_FIM"), &atendido);
   atendido_ = NINGUEM;
   fila_ = NINGUEM;
   voltarAoCiclo(atendido);
@@ -336,7 +416,7 @@ bool Controlador::deveFechar(uint8_t i) const {
 void Controlador::assentar() {
   while (umPasso()) {
   }
-  char atual[8];
+  char atual[TAM_ASSINATURA];
   montarAssinatura(atual);
   const bool publicou = strcmp(atual, assinatura_) != 0;
   if (publicou) telemetria(false);  // a cada mudança de estado: nunca pulada
@@ -446,38 +526,43 @@ void Controlador::mudar(uint8_t i, Cor cor) {
 
 // -- saída (05 §4.2) --------------------------------------------------------
 
-// `EV,<ms>,<tipo>[,<rua>,<veiculo>]`. Nunca pulado: se o buffer de saída
-// estiver cheio, a escrita espera.
+// `EV,<ms>,<tipo>[,<rua>,<veiculo>]`, com `tipo` escrito com FIXO("..."). Nunca
+// pulado: se o buffer de saída estiver cheio, a escrita espera.
 void Controlador::evento(const char* tipo, const Ve* ve) {
   Texto linha;
-  linha.texto("EV,").numero(t_).letra(',').texto(tipo);
+  linha.fixo(FIXO("EV,")).numero(t_).letra(',').fixo(tipo);
   if (ve != 0) linha.letra(',').numero(ve->rua).letra(',').texto(NOME_DO_TIPO[ve->tipo]);
   placa_.escrever(linha.c_str());
 }
 
-// `ST,<ms>,<s1s2s3s4>,<C|E>,<rua_ativa>,<rua_fila>`. A periódica (`opcional`)
-// é pulada se não couber no buffer de saída (05 §3.5, item 7).
+// `ST,<ms>,<s1s2s3s4>,<C|E>,<rua_ativa>,<rua_fila>,<aut>`. A periódica
+// (`opcional`) é pulada se não couber no buffer de saída (05 §3.5, item 7).
 void Controlador::telemetria(bool opcional) {
-  char assinatura[8];
+  char assinatura[TAM_ASSINATURA];
   montarAssinatura(assinatura);
   Texto linha;
-  linha.texto("ST,").numero(t_).letra(',');
+  linha.fixo(FIXO("ST,")).numero(t_).letra(',');
   for (uint8_t i = 0; i < N_SEMAFOROS; i++) linha.letra(assinatura[i]);
   linha.letra(',').letra(assinatura[4]).letra(',').letra(assinatura[5]);
-  linha.letra(',').letra(assinatura[6]);
+  linha.letra(',').letra(assinatura[6]).letra(',');
+  linha.letra(assinatura[7]).letra(assinatura[8]).letra(assinatura[9]);
   if (opcional && placa_.espacoNaSaida() < linha.tamanho() + 2) return;  // + "\r\n"
   placa_.escrever(linha.c_str());
   memcpy(assinatura_, assinatura, sizeof assinatura_);
 }
 
-// O que a ST publica: luzes, regime, rua ativa e rua da fila. Muda a
+// O que a ST publica: luzes, regime, rua ativa, rua da fila e a lista da
+// Central (um dígito por tipo: ambulância, bombeiro, polícia). Muda a
 // assinatura, sai uma ST.
-void Controlador::montarAssinatura(char assinatura[8]) const {
+void Controlador::montarAssinatura(char assinatura[TAM_ASSINATURA]) const {
   for (uint8_t i = 0; i < N_SEMAFOROS; i++) assinatura[i] = LETRA_DA_COR[cor_[i]];
   assinatura[4] = emergencia_ ? 'E' : 'C';
   assinatura[5] = static_cast<char>('0' + atendido_.rua);
   assinatura[6] = static_cast<char>('0' + fila_.rua);
-  assinatura[7] = '\0';
+  for (uint8_t t = AMBULANCIA; t <= POLICIA; t++) {
+    assinatura[6 + t] = static_cast<char>('0' + criticidade_[t]);
+  }
+  assinatura[TAM_ASSINATURA - 1] = '\0';
 }
 
 // -- LCD (05 §3.6): as mensagens do sketch -----------------------------------
@@ -485,13 +570,17 @@ void Controlador::montarAssinatura(char assinatura[8]) const {
 bool Controlador::lcd(char linha1[17], char linha2[17]) {
   Texto a;
   Texto b;
-  if (!emergencia_) {
-    a.texto("Semaforo: Normal");
-    b.texto("Aguardando Sinal");
+  if (semOcorrencia_.rua != 0 && t_ - tSemOcorrencia_ < AVISO_LCD_MS) {
+    // O VE recusado por falta de ocorrência, por 3 s (decisão de 2026-10-06).
+    a.fixo(FIXO("SEM OCORRENCIA"));
+    b.texto(NOME_DO_TIPO[semOcorrencia_.tipo]).fixo(FIXO(" na R")).numero(semOcorrencia_.rua);
+  } else if (!emergencia_) {
+    a.fixo(FIXO("Semaforo: Normal"));
+    b.fixo(FIXO("Aguardando Sinal"));
   } else {
-    a.texto(NOME_DO_TIPO[atendido_.tipo]).texto(" na R").numero(atendido_.rua);
+    a.texto(NOME_DO_TIPO[atendido_.tipo]).fixo(FIXO(" na R")).numero(atendido_.rua);
     if (fila_.rua != 0) {
-      b.texto("Fila:").texto(CURTO_DO_TIPO[fila_.tipo]).texto(" na R").numero(fila_.rua);
+      b.fixo(FIXO("Fila:")).texto(CURTO_DO_TIPO[fila_.tipo]).fixo(FIXO(" na R")).numero(fila_.rua);
     }
   }
   a.copiar(linha1, 16);

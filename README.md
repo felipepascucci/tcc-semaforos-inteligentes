@@ -320,13 +320,17 @@ porque o `host-gateway` não alcança o 127.0.0.1 do host.
 Precisa do extra `hardware` (`pip install -e ".[dev,hardware]"`). A bancada fala
 a **9600 baud**: confira `SERIAL_BAUDRATE` no `.env`.
 
-Para conferir a ponte de ponta a ponta (~3 min), noutro terminal, logo depois de
-subi-la: `.venv\Scripts\python.exe -m bridge.verificar`. Na placa, com o fio do
-NodeMCU solto do RX do UNO.
+Para conferir a ponte de ponta a ponta (~4 min), noutro terminal, logo depois de
+subi-la: `.venv\Scripts\python.exe -m bridge.verificar`. **Com o backend
+parado**: o roteiro manda ao UNO a lista da Central ele mesmo, e o backend a
+trocaria pela do banco.
 
-Com a ponte e o compose no ar, `POST /api/v1/semaforos/PROTO_CRUZ_01/preempcao`
-(`{"rua": 3, "veiculo": "AMBULANCIA"}`) faz o VE "chegar" pela injeção da ponte
-(fio solto do RX), e a decisão do UNO aparece em `/api/v1/logs/prioridade`.
+O UNO liga **negando todos** (a Central vale na bancada desde 2026-10-06): com o
+compose no ar, o backend leva a ele, em até ~1 s, quem tem ocorrência aberta. Aí
+`POST /api/v1/semaforos/PROTO_CRUZ_01/preempcao` (`{"rua": 3, "veiculo":
+"AMBULANCIA"}`) faz o VE "chegar" pela injeção da ponte, e a decisão do UNO
+aparece em `/api/v1/logs/prioridade` — `SEM_OCORRENCIA` se a ambulância não
+estiver em serviço na aba Central.
 
 ### Simulação ao vivo e pedidos pela API
 
@@ -364,7 +368,11 @@ arduino-cli lib install "LiquidCrystal I2C"
 arduino-cli compile --fqbn arduino:avr:uno firmware/uno/semaforo
 ```
 
-Para gravar, solte o fio do NodeMCU do RX (pino 0) do UNO. Os testes de
+Para gravar: `.venv\Scripts\python.exe -m bridge.gravar_uno --porta COM3`, com a
+ponte fechada. Ele compila, grava em pedaços pequenos e relê a flash inteira.
+**Não use o `arduino-cli upload`**: na bancada ele grava errado 4 bytes de cada
+página e não percebe (`context/05` §3.7). Com o receptor no A0 (desde
+2026-10-06), não é preciso soltar fio nenhum. Os testes de
 `tests/firmware/` compilam o núcleo do firmware para o PC (pacote `ziglang`, do
 extra `dev`) e o comparam com o dublê.
 

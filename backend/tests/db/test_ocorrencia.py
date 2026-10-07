@@ -16,11 +16,12 @@ from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.models import Deteccao, Ocorrencia, TipoVeiculo, VeiculoEmergencia
+from app.models import Deteccao, Ocorrencia, StatusOperacao, TipoVeiculo, VeiculoEmergencia
 from app.repositories import operacao
 from app.repositories.ocorrencia import (
     OcorrenciaJaEncerradaError,
     abrir_ocorrencia,
+    criticidade_por_tipo,
     encerrar_ocorrencia,
     listar_ocorrencias_ativas,
     ocorrencia_ativa_do_veiculo,
@@ -123,6 +124,35 @@ def test_painel_lista_os_em_servico_do_mais_critico_para_o_menos(sessao: Session
         abrir_ocorrencia(sessao, fk_veiculo=veiculo.id_veiculo, criticidade=nivel)
 
     assert [o.criticidade for o in listar_ocorrencias_ativas(sessao)] == [1, 2, 3]
+
+
+def test_lista_da_bancada_e_a_mais_critica_de_cada_tipo(sessao: Session) -> None:
+    """Na bancada o VE é só o tipo: vale a ocorrência mais crítica (2026-10-06)."""
+    assert criticidade_por_tipo(sessao) == {
+        TipoVeiculo.AMBULANCIA: 0,
+        TipoVeiculo.BOMBEIRO: 0,
+        TipoVeiculo.POLICIA: 0,
+    }
+    bombeiros = [
+        VeiculoEmergencia(placa=f"TST0B2{indice}", tipo=TipoVeiculo.BOMBEIRO) for indice in range(2)
+    ]
+    inativa = VeiculoEmergencia(
+        placa="TST0P20", tipo=TipoVeiculo.POLICIA, status_operacional=StatusOperacao.INATIVO
+    )
+    sessao.add_all([*bombeiros, inativa])
+    sessao.flush()
+    abrir_ocorrencia(sessao, fk_veiculo=bombeiros[0].id_veiculo, criticidade=Criticidade.URGENCIA)
+    segunda = abrir_ocorrencia(
+        sessao, fk_veiculo=bombeiros[1].id_veiculo, criticidade=Criticidade.RISCO_COLETIVO
+    )
+    abrir_ocorrencia(sessao, fk_veiculo=inativa.id_veiculo, criticidade=Criticidade.RISCO_VIDA)
+
+    lista = criticidade_por_tipo(sessao)
+    assert lista[TipoVeiculo.BOMBEIRO] == 2
+    assert lista[TipoVeiculo.POLICIA] == 0  # veículo inativo não preempta
+
+    encerrar_ocorrencia(sessao, segunda.id_ocorrencia)
+    assert criticidade_por_tipo(sessao)[TipoVeiculo.BOMBEIRO] == 3
 
 
 def test_deteccao_de_tag_reconhecida_sem_ocorrencia_fica_registrada_como_nao_autorizada(

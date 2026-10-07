@@ -17,9 +17,12 @@ from datetime import datetime
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models import Ocorrencia
+from app.models import Ocorrencia, StatusOperacao, VeiculoEmergencia
 from core.autorizacao import OcorrenciaAtiva
-from core.modelos import Criticidade
+from core.modelos import Criticidade, TipoVeiculo
+
+#: "Sem ocorrência ativa" na lista da bancada: o VE do tipo não preempta.
+SEM_OCORRENCIA = 0
 
 
 class OcorrenciaJaEncerradaError(ValueError):
@@ -96,6 +99,28 @@ def ocorrencia_ativa_do_veiculo(sessao: Session, fk_veiculo: int) -> OcorrenciaA
         id_ocorrencia=ocorrencia.id_ocorrencia,
         criticidade=Criticidade(ocorrencia.criticidade),
     )
+
+
+def criticidade_por_tipo(sessao: Session) -> dict[TipoVeiculo, int]:
+    """A lista da Central para a bancada (decisão de 2026-10-06).
+
+    Na bancada a identidade do VE é só o tipo (`context/05` §3.3), então a
+    lista é por tipo: a criticidade **mais alta** (o menor número) entre as
+    ocorrências abertas de veículos ativos daquele tipo, e `SEM_OCORRENCIA`
+    quando não há nenhuma. Veículo inativo não conta, como em
+    `core.autorizacao.autorizar()`.
+    """
+    consulta = (
+        select(VeiculoEmergencia.tipo, func.min(Ocorrencia.criticidade))
+        .join(VeiculoEmergencia, VeiculoEmergencia.id_veiculo == Ocorrencia.fk_veiculo)
+        .where(
+            Ocorrencia.encerrada_em.is_(None),
+            VeiculoEmergencia.status_operacional == StatusOperacao.ATIVO,
+        )
+        .group_by(VeiculoEmergencia.tipo)
+    )
+    ativas = {tipo: int(criticidade) for tipo, criticidade in sessao.execute(consulta).tuples()}
+    return {tipo: ativas.get(tipo, SEM_OCORRENCIA) for tipo in TipoVeiculo}
 
 
 def listar_ocorrencias_ativas(sessao: Session) -> list[Ocorrencia]:

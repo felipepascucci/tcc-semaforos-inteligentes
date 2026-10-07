@@ -5,7 +5,8 @@
 // Mensagens: `estado_semaforo`, `posicao_ve`, `evento` e `metrica`, no
 // envelope {"tipo", "dados"}. Duas extensões do Bloco 6:
 //   * bancada (PROTO_CRUZ_01): `aproximacoes` ("RRGR", S1..S4), `regime`,
-//     `rua_ativa`, `rua_fila`; `fase` nula em emergência e no all-red;
+//     `rua_ativa`, `rua_fila`; `fase` nula em emergência e no all-red; e, desde
+//     2026-10-06, `autorizacoes`: a lista da Central que o UNO tem;
 //   * simulação: `posicao_ve` com o id do SUMO e lat/lon.
 
 import type { Sinal } from "../api/tipos";
@@ -25,6 +26,8 @@ export interface SemaforoAoVivo {
   /** Só na bancada: 1..4, ou 0 se nenhuma (o backend manda nula). */
   rua_ativa?: number;
   rua_fila?: number;
+  /** Só na bancada: a criticidade que o UNO tem para cada tipo; 0 é sem ocorrência. */
+  autorizacoes?: Record<string, number>;
   t_simulacao?: number;
   /** Relógio do navegador na chegada, em ms. */
   chegou_em: number;
@@ -117,6 +120,17 @@ function texto(valor: unknown): string | undefined {
   return typeof valor === "string" ? valor : undefined;
 }
 
+function autorizacoes(valor: unknown): Record<string, number> | undefined {
+  if (typeof valor !== "object" || valor === null) return undefined;
+  const lista: Record<string, number> = {};
+  for (const [tipo, criticidade] of Object.entries(valor)) {
+    const n = numero(criticidade);
+    if (n === undefined) return undefined;
+    lista[tipo] = n;
+  }
+  return lista;
+}
+
 function semaforo(dados: Dados, agora: number): SemaforoAoVivo | null {
   const id = texto(dados.id);
   const estado = texto(dados.estado);
@@ -133,6 +147,7 @@ function semaforo(dados: Dados, agora: number): SemaforoAoVivo | null {
       regime: texto(dados.regime),
       rua_ativa: numero(dados.rua_ativa) ?? 0,
       rua_fila: numero(dados.rua_fila) ?? 0,
+      autorizacoes: autorizacoes(dados.autorizacoes),
     }),
     t_simulacao: numero(dados.t_simulacao),
     chegou_em: agora,

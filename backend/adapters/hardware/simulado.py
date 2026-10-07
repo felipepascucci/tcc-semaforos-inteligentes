@@ -4,8 +4,14 @@
 módulo, e o roteiro de aceitação (`bridge/verificar.py`) passa igual contra os
 dois. Por isso a regra está escrita aqui por extenso, e não emprestada do motor:
 desde 2026-10-05 o UNO decide sozinho, com a regra que a equipe de hardware já
-tinha (prioridade por tipo, fila de um lugar, verde exclusivo), e essa regra não
-é a de `core/priorizacao/`.
+tinha (fila de um lugar, verde exclusivo), e essa regra não é a de
+`core/priorizacao/`.
+
+**A Central vale na bancada desde 2026-10-06** (`context/09`). O receptor passou
+para o A0, e o USB ficou livre para a ponte mandar `AUT,<VEICULO>,<0..3>`: a
+criticidade da ocorrência ativa de cada tipo. O UNO liga negando todos; VE de
+tipo sem ocorrência recebe `SEM_OCORRENCIA`; e quem interrompe quem é decidido
+pela **criticidade**, não mais pelo tipo. O tipo só fixa a duração do verde.
 
 Duas camadas:
 
@@ -46,11 +52,16 @@ import contextlib
 import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import Any, Final
 
 from bridge.protocolo import (
     EIXO_DE,
     N_SEMAFOROS,
+    SEM_OCORRENCIA,
+    TERMINADOR,
+    TIPOS_DA_BANCADA,
+    Autorizacoes,
     Cor,
     Deteccao,
     Evento,
@@ -58,7 +69,9 @@ from bridge.protocolo import (
     Regime,
     Telemetria,
     TipoEvento,
+    interpretar_autorizacao,
     interpretar_deteccao,
+    parece_autorizacao,
     parece_deteccao,
 )
 from bridge.transporte import ConexaoPerdidaError, LinhaRecebida
@@ -86,6 +99,26 @@ class ViolacaoDeSegurancaError(AssertionError):
     """A guarda de I1 barrou um verde. No dublê, é defeito do modelo."""
 
 
+class Entrada(StrEnum):
+    """Por onde a linha chega ao UNO (`context/05` §1, desde 2026-10-06)."""
+
+    #: O RX físico, ligado ao conversor USB: a ponte. Aceita `AUT` e detecção.
+    USB = "USB"
+    #: A serial por software no A0, ligada ao NodeMCU receptor: só detecção.
+    RECEPTOR = "RECEPTOR"
+
+
+#: O buffer de linha de cada entrada no firmware (`TAM_LINHA_USB` e
+#: `TAM_LINHA_RECEPTOR`). Linha maior que isso, sem contar o `\n`, é ruído:
+#: recusada se tiver vírgula, ignorada se não.
+TAMANHO_DA_LINHA: Final = {Entrada.USB: 72, Entrada.RECEPTOR: 32}
+
+#: Fio mudo por mais que isto no meio de uma linha: o pedaço é descartado
+#: (`LINHA_PARADA_MS` do firmware). Só aparece em `receber_bytes`, que é onde
+#: uma linha pode chegar em pedaços.
+LINHA_PARADA_MS: Final = 100
+
+
 @dataclass(frozen=True)
 class ConfigBancada:
     """Os números da bancada, de `parametros.hardware.yaml` (`context/05` §3).
@@ -96,8 +129,8 @@ class ConfigBancada:
         amarelo_s: Duração do amarelo (I2).
         all_red_s: Duração do all-red (I3).
         teto_s: Teto da emergência contínua (I6, redefinido em 2026-10-05).
-        prioridade: Tipos do mais ao menos prioritário.
-        verde_por_tipo_s: Verde do VE, por tipo.
+        verde_por_tipo_s: Verde do VE, por tipo. Desde 2026-10-06 o tipo só
+            fixa a duração; quem interrompe quem é a criticidade da ocorrência.
     """
 
     verde_s: float
@@ -105,7 +138,6 @@ class ConfigBancada:
     amarelo_s: float
     all_red_s: float
     teto_s: float
-    prioridade: tuple[TipoVeiculo, ...]
     verde_por_tipo_s: Mapping[TipoVeiculo, float]
 
     @classmethod
@@ -122,7 +154,6 @@ class ConfigBancada:
                 amarelo_s=float(dados["amarelo_s"]),
                 all_red_s=float(dados["all_red_s"]),
                 teto_s=float(dados["preempcao_timeout_s"]),
-                prioridade=tuple(TipoVeiculo(t) for t in dados["prioridade_tipo"]),
                 verde_por_tipo_s={
                     TipoVeiculo(t): float(s) for t, s in dados["verde_por_tipo_s"].items()
                 },
@@ -144,17 +175,13 @@ class ConfigBancada:
             raise ConfiguracaoInvalidaError("amarelo, all-red e verde mínimo precisam ser > 0")
         if self.verde_s < self.verde_min_s:
             raise ConfiguracaoInvalidaError("verde_s abaixo do verde mínimo violaria I4")
-        if set(self.verde_por_tipo_s) != set(self.prioridade):
+        if set(self.verde_por_tipo_s) != set(TipoVeiculo):
             raise ConfiguracaoInvalidaError("verde_por_tipo_s precisa cobrir todos os tipos")
         if min(self.verde_por_tipo_s.values()) < self.verde_min_s:
             raise ConfiguracaoInvalidaError("verde de VE abaixo do verde mínimo violaria I4")
         transicao = self.verde_min_s + self.amarelo_s + self.all_red_s
         if self.teto_s <= transicao + max(self.verde_por_tipo_s.values()):
             raise ConfiguracaoInvalidaError("o teto cortaria o verde de um VE recém-atendido")
-
-    def nivel(self, tipo: TipoVeiculo) -> int:
-        """Prioridade do tipo: 1 é a maior."""
-        return self.prioridade.index(tipo) + 1
 
 
 def config_da_bancada() -> ConfigBancada:
@@ -166,8 +193,19 @@ def config_da_bancada() -> ConfigBancada:
 
 @dataclass(frozen=True)
 class _Ve:
+    """Um VE na bancada. A identidade é (rua, tipo), `context/05` §3.3.
+
+    `criticidade` é a que o tipo tinha quando o VE foi lido: um VE já atendido
+    ou na fila não muda de lugar se a Central mudar depois (decisão de
+    2026-10-06).
+    """
+
     rua: int
     tipo: TipoVeiculo
+    criticidade: int
+
+    def mesmo_que(self, outro: _Ve) -> bool:
+        return (self.rua, self.tipo) == (outro.rua, outro.tipo)
 
 
 class UnoSimulado:
@@ -200,6 +238,13 @@ class UnoSimulado:
         self._atendido: _Ve | None = None
         self._fila: _Ve | None = None
         self._t_inicio_emergencia: float | None = None
+        # Liga negando todos (decisão de 2026-10-06): a lista vive na RAM, e a
+        # ponte a manda de novo a cada reinício.
+        self._autorizacoes: list[int] = [SEM_OCORRENCIA] * len(TIPOS_DA_BANCADA)
+        # O pedaço de linha de cada entrada em `receber_bytes`, e o instante do
+        # último byte dele.
+        self._parcial: dict[Entrada, bytearray] = {e: bytearray() for e in Entrada}
+        self._ultimo_byte_s: dict[Entrada, float] = dict.fromkeys(Entrada, t_s)
 
         self._ultima_publicada: tuple[object, ...] | None = None
         self._proxima_telemetria_s = t_s
@@ -221,6 +266,12 @@ class UnoSimulado:
         s1, s2, s3, s4 = self._cores
         return (s1, s2, s3, s4)
 
+    @property
+    def autorizacoes(self) -> Autorizacoes:
+        """A criticidade de cada tipo, na ordem de `TIPOS_DA_BANCADA`."""
+        a, b, c = self._autorizacoes
+        return (a, b, c)
+
     def telemetria(self) -> Telemetria:
         """A linha `ST` deste instante."""
         return Telemetria(
@@ -229,6 +280,7 @@ class UnoSimulado:
             self._regime,
             None if self._atendido is None else self._atendido.rua,
             None if self._fila is None else self._fila.rua,
+            self.autorizacoes,
         )
 
     # -- entrada ---------------------------------------------------------------
@@ -251,39 +303,91 @@ class UnoSimulado:
         self._assentar()
         return self._esvaziar()
 
-    def receber(self, linha: bytes, t_s: float) -> list[bytes]:
-        """Processa uma linha chegada ao RX em `t_s` (`context/05` §3.2).
+    def receber_bytes(
+        self, dados: bytes, t_s: float, entrada: Entrada = Entrada.USB
+    ) -> list[bytes]:
+        """Bytes chegando em `t_s`, não necessariamente uma linha inteira.
 
-        Linha sem vírgula é ignorada (lixo de boot do ESP8266); com vírgula e
-        conteúdo inválido, recebe `EV,RECUSADO`.
+        Cada fim de linha fecha uma linha, tratada como em `receber`. Um pedaço de
+        linha que fica mais de `LINHA_PARADA_MS` sem o próximo byte é
+        descartado: é o lixo do boot do ESP8266, que de outro modo grudaria na
+        linha seguinte (achado da bancada, 2026-10-06).
         """
         saida = self.avancar(t_s)
+        parcial = self._parcial[entrada]
+        parado_ms = round((t_s - self._ultimo_byte_s[entrada]) * 1000)
+        if parcial and parado_ms > LINHA_PARADA_MS:
+            parcial.clear()
+        if dados:
+            self._ultimo_byte_s[entrada] = t_s
+        for byte in dados:
+            parcial.append(byte)
+            if byte == TERMINADOR[0]:
+                linha = bytes(parcial)
+                parcial.clear()
+                saida += self.receber(linha, t_s, entrada)
+        return saida
+
+    def receber(self, linha: bytes, t_s: float, entrada: Entrada = Entrada.USB) -> list[bytes]:
+        """Processa uma linha chegada em `t_s` (`context/05` §3.2 e §4.1).
+
+        Pelo USB, `AUT,…` atualiza a lista da Central, sem evento: a mudança
+        aparece na `ST`. Qualquer outra linha, pelas duas entradas, é detecção:
+        sem vírgula é ignorada (lixo de boot do ESP8266); com vírgula e conteúdo
+        inválido, recebe `EV,RECUSADO` — inclusive um `AUT` vindo do receptor.
+        """
+        saida = self.avancar(t_s)
+        estourou = len(linha.removesuffix(b"\n")) > TAMANHO_DA_LINHA[entrada]
+        if entrada is Entrada.USB and parece_autorizacao(linha):
+            try:
+                if estourou:
+                    raise LinhaInvalidaError("linha maior que o buffer")
+                autorizacao = interpretar_autorizacao(linha)
+            except LinhaInvalidaError:
+                self._emitir(Evento(self.t_dispositivo_ms, TipoEvento.RECUSADO))
+                return saida + self._esvaziar()
+            indice = TIPOS_DA_BANCADA.index(autorizacao.veiculo)
+            self._autorizacoes[indice] = autorizacao.criticidade
+            self._assentar()
+            return saida + self._esvaziar()
         if not parece_deteccao(linha):
             return saida
         try:
+            if estourou:
+                raise LinhaInvalidaError("linha maior que o buffer")
             deteccao = interpretar_deteccao(linha)
         except LinhaInvalidaError:
             self._emitir(Evento(self.t_dispositivo_ms, TipoEvento.RECUSADO))
             return saida + self._esvaziar()
-        self._decidir(_Ve(deteccao.rua, deteccao.veiculo))
+        criticidade = self._autorizacoes[TIPOS_DA_BANCADA.index(deteccao.veiculo)]
+        self._decidir(_Ve(deteccao.rua, deteccao.veiculo, criticidade))
         self._assentar()
         return saida + self._esvaziar()
 
     # -- decisão (context/05 §3.3) --------------------------------------------
 
     def _decidir(self, novo: _Ve) -> None:
-        """A regra do sketch, com uma linha de decisão por detecção, antes de tudo."""
+        """Uma linha de decisão por detecção, antes de tudo.
+
+        A regra do sketch, com a criticidade no lugar da ordem por tipo
+        (decisão de 2026-10-06): menor é mais crítico, e só a **estritamente**
+        mais crítica interrompe ou toma o lugar na fila. No mesmo nível, quem
+        chegou primeiro fica, que é a guarda de oscilação do motor (P20).
+        """
         atendido = self._atendido
-        if atendido is None:
+        if novo.criticidade == SEM_OCORRENCIA:
+            self._evento(TipoEvento.SEM_OCORRENCIA, novo)
+        elif atendido is None:
             self._atender(novo)
-        elif novo == atendido:
+        elif novo.mesmo_que(atendido):
             if self._estabelecido:
                 self._fim_verde_s = self._t_s + self._c.verde_por_tipo_s[novo.tipo]
+            self._atendido = novo  # a releitura traz a criticidade de agora
             self._evento(TipoEvento.RENOVADO, novo)
-        elif self._c.nivel(novo.tipo) < self._c.nivel(atendido.tipo):
+        elif novo.criticidade < atendido.criticidade:
             self._atender(novo)
             self._enfileirar(atendido)
-        elif self._fila is None or self._c.nivel(novo.tipo) < self._c.nivel(self._fila.tipo):
+        elif self._fila is None or novo.criticidade < self._fila.criticidade:
             self._enfileirar(novo)
         else:
             self._evento(TipoEvento.DESCARTADO, novo)
@@ -467,7 +571,13 @@ class UnoSimulado:
 
 
 def _assinatura(telemetria: Telemetria) -> tuple[object, ...]:
-    return (telemetria.cores, telemetria.regime, telemetria.rua_ativa, telemetria.rua_fila)
+    return (
+        telemetria.cores,
+        telemetria.regime,
+        telemetria.rua_ativa,
+        telemetria.rua_fila,
+        telemetria.autorizacoes,
+    )
 
 
 def uno_da_bancada(t_s: float = 0.0) -> UnoSimulado:
@@ -482,10 +592,10 @@ class TransporteSimulado:
 
     * o cabo USB é a **alimentação** do UNO: `puxar_cabo()` corta a ligação e
       desliga a placa;
-    * abrir a porta **reinicia** a placa, como o DTR faz no UNO real;
-    * com o fio do NodeMCU no RX (`fio_do_nodemcu_no_rx=True`), o que a ponte
-      escreve **se perde**: o TX do NodeMCU prevalece sobre o do conversor USB.
-      O padrão é o fio solto, que é como se testa.
+    * abrir a porta **reinicia** a placa, como o DTR faz no UNO real, e a lista
+      de autorizações se perde;
+    * o que a ponte escreve chega ao RX pelo USB; o NodeMCU receptor, desde
+      2026-10-06, chega pelo A0 (`simular_receptor`).
 
     Args:
         fabrica: Cria o UNO no boot, a partir do instante do relógio.
@@ -493,7 +603,6 @@ class TransporteSimulado:
             ver a docstring do módulo.
         passo_s: De quanto em quanto tempo o relógio do UNO avança. Não afeta os
             instantes das transições, só quando elas são publicadas.
-        fio_do_nodemcu_no_rx: Se o fio do receptor está ligado ao RX do UNO.
     """
 
     def __init__(
@@ -502,12 +611,10 @@ class TransporteSimulado:
         *,
         latencia_s: float = LATENCIA_PADRAO_S,
         passo_s: float = 0.05,
-        fio_do_nodemcu_no_rx: bool = False,
     ) -> None:
         self._fabrica = fabrica
         self._latencia_s = latencia_s
         self._passo_s = passo_s
-        self.fio_do_nodemcu_no_rx = fio_do_nodemcu_no_rx
         self.uno: UnoSimulado | None = None
         self._fila: asyncio.Queue[LinhaRecebida | None] = asyncio.Queue()
         self._conectado = False
@@ -531,9 +638,7 @@ class TransporteSimulado:
     async def escrever(self, linha: bytes) -> None:
         if not self._conectado:
             raise ConexaoPerdidaError("porta simulada fechada")
-        if self.fio_do_nodemcu_no_rx:
-            return  # o NodeMCU domina o RX; a linha não chega ao UNO
-        asyncio.get_running_loop().call_later(self._latencia_s, self._entregar, linha)
+        asyncio.get_running_loop().call_later(self._latencia_s, self._entregar, linha, Entrada.USB)
 
     async def ler_linha(self) -> LinhaRecebida:
         if not self._conectado:
@@ -551,9 +656,9 @@ class TransporteSimulado:
             self._relogio = None
 
     def simular_receptor(self, deteccao: Deteccao) -> None:
-        """O NodeMCU receptor entregando uma detecção ao RX, como na operação."""
+        """O NodeMCU receptor entregando uma detecção ao A0, como na operação."""
         asyncio.get_running_loop().call_later(
-            self._latencia_s, self._entregar, deteccao.codificar()
+            self._latencia_s, self._entregar, deteccao.codificar(), Entrada.RECEPTOR
         )
 
     # -- interno ---------------------------------------------------------------
@@ -566,9 +671,9 @@ class TransporteSimulado:
             self._conectado = False
             self._fila.put_nowait(None)  # acorda quem está esperando em ler_linha
 
-    def _entregar(self, linha: bytes) -> None:
+    def _entregar(self, linha: bytes, entrada: Entrada) -> None:
         if self._conectado and self.uno is not None:
-            self._publicar(self.uno.receber(linha, self._agora()))
+            self._publicar(self.uno.receber(linha, self._agora(), entrada))
 
     def _publicar(self, linhas: Sequence[bytes]) -> None:
         if self._conectado:

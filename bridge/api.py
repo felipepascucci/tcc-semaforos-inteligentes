@@ -1,14 +1,18 @@
-"""HTTP da ponte — `/health`, `/estado` e `/injecao` (`context/05` §6).
+"""HTTP da ponte — `/health`, `/estado`, `/autorizacoes` e `/injecao` (`context/05` §6).
 
 A ponte é um processo separado do backend (`context/02` §3: precisa da porta
-USB, e o backend roda no compose). Desde 2026-10-05 ela só **escuta** o UNO, e
-**não sabe que o backend existe**: é o backend que lê `GET /estado` a 5 Hz
-(decisão de 2026-10-05, Bloco 6). O histórico de telemetrias, eventos e amostras
-de H3 existe para isso: quem lê entre duas consultas não perde nada.
+USB, e o backend roda no compose). Ela **não sabe que o backend existe**: é o
+backend que lê `GET /estado` a 5 Hz (decisão de 2026-10-05, Bloco 6). O
+histórico de telemetrias, eventos e amostras de H3 existe para isso: quem lê
+entre duas consultas não perde nada.
 
-`POST /injecao` é a única escrita, e é de teste: com o fio do NodeMCU solto do
-RX, faz o papel do receptor. É o que o roteiro de aceitação (`bridge/verificar.py`)
-e o passo 4 da demonstração usam.
+Duas escritas no UNO, pelo USB (decisão de 2026-10-06):
+
+* `PUT /autorizacoes` — a lista da Central, a criticidade da ocorrência ativa de
+  cada tipo. O backend a chama quando a lista que a `ST` traz difere da dele;
+  na bancada sem backend, o roteiro de aceitação a chama direto.
+* `POST /injecao` — de teste: faz o papel do receptor. É o que o roteiro de
+  aceitação (`bridge/verificar.py`) e o passo 4 da demonstração usam.
 """
 
 from __future__ import annotations
@@ -25,7 +29,17 @@ from pydantic import BaseModel, Field
 
 from bridge.latencia import AmostraH3
 from bridge.ponte import Ponte
-from bridge.protocolo import N_SEMAFOROS, Deteccao, Regime, Telemetria, TipoEvento
+from bridge.protocolo import (
+    CRITICIDADE_MAXIMA,
+    N_SEMAFOROS,
+    SEM_OCORRENCIA,
+    TIPOS_DA_BANCADA,
+    Autorizacao,
+    Deteccao,
+    Regime,
+    Telemetria,
+    TipoEvento,
+)
 from bridge.transporte import ConexaoPerdidaError
 from core.modelos import TipoVeiculo
 
@@ -41,6 +55,9 @@ class TelemetriaSchema(BaseModel):
     regime: Regime
     rua_ativa: int | None
     rua_fila: int | None
+    autorizacoes: dict[TipoVeiculo, int] = Field(
+        description="A criticidade que o UNO tem para cada tipo; 0 é sem ocorrência"
+    )
 
 
 class EventoSchema(BaseModel):
@@ -94,6 +111,24 @@ class RespostaHealth(BaseModel):
     )
 
 
+class PedidoAutorizacoes(BaseModel):
+    """A lista da Central: a criticidade da ocorrência ativa de cada tipo.
+
+    Os tipos ausentes não são tocados. 0 é sem ocorrência (o VE não preempta);
+    de 1 a 3, a criticidade (1 a mais crítica).
+    """
+
+    autorizacoes: dict[TipoVeiculo, int] = Field(min_length=1)
+
+    def linhas(self) -> list[Autorizacao]:
+        return [Autorizacao(tipo, c) for tipo, c in self.autorizacoes.items()]
+
+
+class RespostaAutorizacoes(BaseModel):
+    linhas: list[str]
+    t_envio: datetime
+
+
 class PedidoInjecao(BaseModel):
     """Um VE chegando pela rua — a linha que o NodeMCU receptor escreveria."""
 
@@ -104,7 +139,9 @@ class PedidoInjecao(BaseModel):
 class RespostaInjecao(BaseModel):
     linha: str
     t_envio: datetime
-    decisao: TipoEvento | None = Field(description="PREEMP_INI, RENOVADO, FILA ou DESCARTADO")
+    decisao: TipoEvento | None = Field(
+        description="PREEMP_INI, RENOVADO, FILA, DESCARTADO ou SEM_OCORRENCIA"
+    )
     decisao_t_dispositivo_ms: int | None = Field(description="millis() do UNO na decisão")
     t_decisao: datetime | None
     latencia_ms: float | None = Field(description="Envio -> decisão; conferência, não H3")
@@ -143,6 +180,7 @@ def _telemetria(recebida_em: datetime, telemetria: Telemetria) -> TelemetriaSche
         regime=telemetria.regime,
         rua_ativa=telemetria.rua_ativa,
         rua_fila=telemetria.rua_fila,
+        autorizacoes=dict(zip(TIPOS_DA_BANCADA, telemetria.autorizacoes, strict=True)),
     )
 
 
@@ -215,12 +253,38 @@ def criar_app(ponte: Ponte, porta: str) -> FastAPI:
             amostras_h3=[_amostra(amostra) for amostra in ponte.amostras_h3],
         )
 
+    @app.put(
+        "/autorizacoes",
+        response_model=RespostaAutorizacoes,
+        status_code=status.HTTP_202_ACCEPTED,
+        responses={
+            422: {"description": f"Criticidade fora de {SEM_OCORRENCIA}..{CRITICIDADE_MAXIMA}"},
+            503: {"description": "Porta serial fechada"},
+        },
+    )
+    async def autorizacoes(pedido: PedidoAutorizacoes) -> RespostaAutorizacoes:
+        """Manda ao UNO a lista da Central. A confirmação vem na `ST` seguinte."""
+        for criticidade in pedido.autorizacoes.values():
+            if not SEM_OCORRENCIA <= criticidade <= CRITICIDADE_MAXIMA:
+                raise HTTPException(
+                    status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    f"criticidade fora de {SEM_OCORRENCIA}..{CRITICIDADE_MAXIMA}: {criticidade}",
+                )
+        linhas = pedido.linhas()
+        try:
+            t_envio = await ponte.autorizar(linhas)
+        except ConexaoPerdidaError as erro:
+            raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(erro)) from erro
+        return RespostaAutorizacoes(
+            linhas=[a.codificar().decode("ascii").rstrip("\n") for a in linhas], t_envio=t_envio
+        )
+
     @app.post(
         "/injecao",
         response_model=RespostaInjecao,
         responses={
             503: {"description": "Porta serial fechada"},
-            504: {"description": "O UNO não decidiu no prazo — o fio do NodeMCU está no RX?"},
+            504: {"description": "O UNO não decidiu no prazo"},
         },
     )
     async def injecao(pedido: PedidoInjecao, resposta: Response) -> RespostaInjecao:

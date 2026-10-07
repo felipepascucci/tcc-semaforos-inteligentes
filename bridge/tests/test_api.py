@@ -1,4 +1,4 @@
-"""HTTP da ponte — `/health`, `/estado`, `/injecao`."""
+"""HTTP da ponte — `/health`, `/estado`, `/autorizacoes`, `/injecao`."""
 
 from __future__ import annotations
 
@@ -14,6 +14,7 @@ from fastapi import FastAPI
 
 from bridge.api import criar_app
 from bridge.ponte import Ponte
+from bridge.protocolo import NENHUMA_AUTORIZACAO
 from bridge.tests.conftest import PortaAusente, PortaRoteirizada, ate, transporte_rapido
 from bridge.transporte import LinhaRecebida, Transporte
 
@@ -150,11 +151,59 @@ async def test_sem_porta_health_e_injecao_dao_503() -> None:
         assert (await cliente.post("/injecao", json=pedido)).status_code == 503
 
 
-async def test_fio_do_nodemcu_no_rx_da_504() -> None:
-    transporte = transporte_rapido(fio_do_nodemcu_no_rx=True)
-    async with _cliente(transporte, timeout_decisao_s=0.2) as (cliente, ponte):
-        await ate(ponte.uno_respondendo)
+async def test_uno_calado_da_504() -> None:
+    """Porta aberta e nenhuma decisão no prazo: o UNO não respondeu à linha."""
+    async with _cliente(PortaRoteirizada(), timeout_decisao_s=0.2) as (cliente, ponte):
+        await ate(lambda: ponte.conectada)
         resposta = await cliente.post("/injecao", json={"rua": 3, "veiculo": "AMBULANCIA"})
 
         assert resposta.status_code == 504
         assert resposta.json()["decisao"] is None
+
+
+async def test_put_autorizacoes_chega_ao_uno_e_aparece_no_estado() -> None:
+    transporte = transporte_rapido(autorizacoes=NENHUMA_AUTORIZACAO)
+    async with _cliente(transporte) as (cliente, ponte):
+        await ate(ponte.uno_respondendo)
+        assert (await cliente.get("/estado")).json()["telemetria"]["autorizacoes"] == {
+            "AMBULANCIA": 0,
+            "BOMBEIRO": 0,
+            "POLICIA": 0,
+        }
+        resposta = await cliente.put(
+            "/autorizacoes", json={"autorizacoes": {"AMBULANCIA": 1, "BOMBEIRO": 0}}
+        )
+        assert resposta.status_code == 202
+        assert resposta.json()["linhas"] == ["AUT,AMBULANCIA,1", "AUT,BOMBEIRO,0"]
+        await ate(
+            lambda: (
+                ponte.ultima_telemetria is not None
+                and ponte.ultima_telemetria.autorizacoes == (1, 0, 0)
+            )
+        )
+        injecao = await cliente.post("/injecao", json={"rua": 3, "veiculo": "AMBULANCIA"})
+        assert injecao.json()["decisao"] == "PREEMP_INI"
+        negada = await cliente.post("/injecao", json={"rua": 1, "veiculo": "BOMBEIRO"})
+        assert negada.json()["decisao"] == "SEM_OCORRENCIA"
+
+
+@pytest.mark.parametrize(
+    "corpo",
+    [
+        {"autorizacoes": {"AMBULANCIA": 4}},
+        {"autorizacoes": {"AMBULANCIA": -1}},
+        {"autorizacoes": {"HELICOPTERO": 1}},
+        {"autorizacoes": {}},
+    ],
+)
+async def test_put_autorizacoes_invalido_da_422(cliente: httpx.AsyncClient, corpo: Any) -> None:
+    assert (await cliente.put("/autorizacoes", json=corpo)).status_code == 422
+
+
+async def test_sem_porta_autorizacoes_da_503() -> None:
+    porta = PortaAusente()
+    async with _cliente(porta, espera_reconexao_s=0.01) as (cliente, _):
+        # A ponte precisa ter começado a rodar: `rodar()` limpa o pedido de parada.
+        await ate(lambda: porta.tentativas > 0)
+        corpo = {"autorizacoes": {"AMBULANCIA": 1}}
+        assert (await cliente.put("/autorizacoes", json=corpo)).status_code == 503

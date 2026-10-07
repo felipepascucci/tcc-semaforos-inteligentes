@@ -22,13 +22,25 @@
  * Os itens 3 a 6 mudam o comportamento do sketch e aguardam a confirmação da
  * equipe de hardware (contrato §15, item 1).
  *
- * Placa: Arduino UNO R3 (clone com CH340), core arduino:avr 1.8.8.
- * Biblioteca: "LiquidCrystal I2C" 1.1.2, de Frank de Brabander (a que tem
- * lcd.init()). Compilar sem a IDE:
+ * A CENTRAL VALE NA BANCADA (context/09, decisão de 2026-10-06):
+ *  10. o receptor passou do RX (0) para o A0, numa serial por software, e o
+ *      USB ficou livre para a ponte mandar AUT,<VEICULO>,<0..3>: a criticidade
+ *      da ocorrência ativa de cada tipo, que a Central decide (P20);
+ *  11. o UNO liga negando todos; VE de tipo sem ocorrência recebe
+ *      EV,SEM_OCORRENCIA, e o LCD mostra "SEM OCORRENCIA" por 3 s;
+ *  12. quem interrompe quem é a CRITICIDADE, e não mais o tipo; o tipo só fixa
+ *      a duração do verde (9, 8 e 7 s).
+ *
+ * Placa: Arduino UNO R3, core arduino:avr 1.8.8. Bibliotecas: "LiquidCrystal
+ * I2C" 1.1.2, de Frank de Brabander (a que tem lcd.init()), e SoftwareSerial,
+ * que vem com o core. Compilar sem a IDE:
  *   arduino-cli compile --fqbn arduino:avr:uno firmware/uno/semaforo
  *
- * GRAVAR: solte o fio do TX do NodeMCU receptor do RX (pino 0) do UNO, senão o
- * upload falha. Recoloque depois.
+ * GRAVAR: python -m bridge.gravar_uno --porta COM3 (com a ponte fechada). Ele
+ * compila, grava em pedaços de 16 bytes e relê a flash inteira. NÃO use o
+ * arduino-cli upload: na bancada ele grava errado os bytes 60..63 de cada
+ * página e não percebe (context/05 §3.7). Com o receptor no A0, o RX (0) é só
+ * do USB, e a gravação não pede para soltar fio nenhum.
  *
  * Pinagem (LEDs acendem com HIGH; os módulos já têm resistor):
  *   S1  Principal, sentido A    (RUA1)   R 13  Y 12  G 11
@@ -36,23 +48,33 @@
  *   S3  Transversal, sentido A  (RUA3)   R  7  Y  6  G  5
  *   S4  Transversal, sentido B  (RUA4)   R  4  Y  3  G  2
  *   LCD 16x2 I2C, endereço 0x27, 5 V:    SDA A4 · SCL A5
- *   RX (0) <- TX do NodeMCU receptor.    TX (1) -> só o USB.
+ *   A0     <- TX do NodeMCU receptor (serial por software, só recepção).
+ *   A1     reservado: é o TX que a SoftwareSerial exige; nada ligado.
+ *   RX (0) <- USB (a ponte).             TX (1) -> USB.
  *
- * Serial a 9600 baud nos dois sentidos (é a velocidade do receptor). Entra só
- * a linha do receptor; saem as linhas ST e EV de context/05 §4.2.
+ * Tudo a 9600 baud. Entram a linha do receptor (A0) e as da ponte (USB); saem
+ * as linhas ST e EV de context/05 §4.2.
  *
- * ACEITAÇÃO (context/05 §6): placa gravada, fio do RX SOLTO,
+ * ACEITAÇÃO (context/05 §6), com o backend PARADO (ele reenvia a lista da
+ * Central e atrapalharia o roteiro):
  *   python -m bridge.main --porta COM3
  *   python -m bridge.verificar           (noutro terminal, logo em seguida)
- * Precisa dar 16 de 16, como dá contra o dublê.
  */
 
 #include <LiquidCrystal_I2C.h>
+#include <SoftwareSerial.h>
 #include <Wire.h>
 
 #include "controlador.h"
 
 static const unsigned long BAUD = 9600;
+
+// O receptor fala a 9600, como sempre. A SoftwareSerial do core desliga as
+// interrupções enquanto recebe cada byte (~1 ms a 9600): o millis() não perde
+// tique (o estouro do Timer0 fica pendente e é atendido em seguida), e a UART
+// do USB guarda até 2 bytes nesse meio-tempo.
+static const uint8_t PINO_RECEPTOR = A0;
+static const uint8_t PINO_TX_SEM_USO = A1;
 
 // Tabela de pinos e índice, não estados enumerados um a um (05 §3.1).
 static const uint8_t VERDE_DE[bancada::N_SEMAFOROS] = {11, 8, 5, 2};
@@ -85,6 +107,7 @@ class PlacaUno : public bancada::Placa {
 static PlacaUno placa;
 static bancada::Controlador controlador(placa);
 static LiquidCrystal_I2C lcd(0x27, 16, 2);
+static SoftwareSerial receptor(PINO_RECEPTOR, PINO_TX_SEM_USO);
 
 static void atualizarLcd() {
   char linha1[17];
@@ -104,17 +127,22 @@ void setup() {
     pinMode(VERDE_DE[i], OUTPUT);
   }
   Serial.begin(BAUD);
+  receptor.begin(BAUD);
   controlador.boot(millis());  // all-red e EV,BOOT; o all-red de 1 s conta daqui
   lcd.init();                  // pode bloquear: no setup() pode (05 §3.5, item 1)
   lcd.backlight();
   atualizarLcd();
 }
 
-// Nenhum delay(). A serial é lida a cada volta, e o LCD é atualizado por
-// último: o evento de decisão já saiu quando a escrita I2C começa (05 §3.5).
+// Nenhum delay(). As duas entradas são lidas a cada volta, e o LCD é
+// atualizado por último: o evento de decisão já saiu quando a escrita I2C
+// começa (05 §3.5).
 void loop() {
   const uint32_t agora = millis();
   controlador.avancar(agora);
+  while (receptor.available() > 0) {
+    controlador.receberDoReceptor(static_cast<char>(receptor.read()), agora);
+  }
   while (Serial.available() > 0) {
     controlador.receber(static_cast<char>(Serial.read()), agora);
   }

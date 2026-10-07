@@ -1,16 +1,17 @@
 r"""Protocolo serial do Arduino UNO da bancada — `context/05` §4.
 
-Texto ASCII, uma mensagem por linha, **9600 baud** — a velocidade do NodeMCU
-receptor, que divide a única UART do UNO com o USB. Este módulo é **puro**: não
+Texto ASCII, uma mensagem por linha, **9600 baud**. Este módulo é **puro**: não
 abre porta, não lê relógio, não sabe que o pyserial existe. Entram `bytes`, sai
 mensagem; entra mensagem, saem `bytes`. É o que permite desenvolver e testar sem
 a bancada (`context/05` §8).
 
-Três vozes passam por aqui, desde a arquitetura de 2026-10-05:
+Quatro vozes passam por aqui, desde a decisão de 2026-10-06 (o receptor no A0):
 
-* **NodeMCU receptor → UNO**: `RUA3,AMBULANCIA` (`Deteccao`). É a única
-  entrada do UNO. A ponte escreve a mesma linha para testar, com o fio do
-  NodeMCU solto do RX (`context/05` §6).
+* **NodeMCU receptor → UNO**, pela serial por software no A0:
+  `RUA3,AMBULANCIA` (`Deteccao`).
+* **Notebook → UNO**, pelo USB: `AUT,AMBULANCIA,1` (`Autorizacao`), a
+  criticidade da ocorrência ativa de cada tipo, que a Central decide (P20). A
+  ponte também escreve ali a mesma `Deteccao` do receptor, para testar.
 * **UNO → notebook**: telemetria `ST` e eventos `EV` (`Telemetria`, `Evento`).
 * **NodeMCU emissor → notebook**: `Tag <UID> lida -> Enviando RUAn`
   (`LeituraVeiculo`), só na medição de H3 (`context/05` §4.3).
@@ -40,6 +41,20 @@ N_SEMAFOROS: Final = 4
 #: O eixo de cada aproximação, na ordem S1..S4: 0 principal, 1 transversal.
 #: Aproximações de eixos diferentes conflitam (I1 na bancada, `context/01` §6).
 EIXO_DE: Final = (0, 0, 1, 1)
+
+#: A ordem dos tipos no campo de autorizações da `ST`: um dígito por tipo.
+TIPOS_DA_BANCADA: Final = (TipoVeiculo.AMBULANCIA, TipoVeiculo.BOMBEIRO, TipoVeiculo.POLICIA)
+
+#: Criticidade de um tipo na bancada: 0 é sem ocorrência ativa (não preempta);
+#: 1 a 3 são os valores de `core.modelos.Criticidade`, 1 o mais crítico.
+SEM_OCORRENCIA: Final = 0
+CRITICIDADE_MAXIMA: Final = 3
+
+Autorizacoes: TypeAlias = tuple[int, int, int]
+
+#: O UNO liga negando todos (decisão de 2026-10-06): até a ponte mandar a
+#: lista, nenhum VE preempta.
+NENHUMA_AUTORIZACAO: Final[Autorizacoes] = (0, 0, 0)
 
 _DIGITOS = re.compile(r"[0-9]+")
 _LEITURA_VEICULO = re.compile(r"Tag ([0-9A-F]+) lida -> Enviando RUA([1-4])")
@@ -89,6 +104,7 @@ class TipoEvento(StrEnum):
     PREEMP_FIM = "PREEMP_FIM"
     TIMEOUT = "TIMEOUT"
     RECUSADO = "RECUSADO"
+    SEM_OCORRENCIA = "SEM_OCORRENCIA"
 
 
 #: Os eventos que dizem respeito a um VE e trazem `<rua>,<veiculo>`.
@@ -99,13 +115,21 @@ EVENTOS_DE_VEICULO: Final = frozenset(
         TipoEvento.FILA,
         TipoEvento.DESCARTADO,
         TipoEvento.PREEMP_FIM,
+        TipoEvento.SEM_OCORRENCIA,
     }
 )
 
-#: As quatro respostas possíveis a uma detecção válida — exatamente uma por
-#: linha recebida, escrita antes de qualquer outra (`context/05` §4.2).
+#: As respostas possíveis a uma detecção válida — exatamente uma por linha
+#: recebida, escrita antes de qualquer outra (`context/05` §4.2).
+#: `SEM_OCORRENCIA` é o VE do tipo sem ocorrência ativa na Central (P20).
 EVENTOS_DE_DECISAO: Final = frozenset(
-    {TipoEvento.PREEMP_INI, TipoEvento.RENOVADO, TipoEvento.FILA, TipoEvento.DESCARTADO}
+    {
+        TipoEvento.PREEMP_INI,
+        TipoEvento.RENOVADO,
+        TipoEvento.FILA,
+        TipoEvento.DESCARTADO,
+        TipoEvento.SEM_OCORRENCIA,
+    }
 )
 
 _E = TypeVar("_E", bound=StrEnum)
@@ -216,13 +240,84 @@ def interpretar_deteccao(linha: bytes) -> Deteccao:
 
 
 # ---------------------------------------------------------------------------
+# Notebook -> UNO (pelo USB, desde 2026-10-06)
+# ---------------------------------------------------------------------------
+
+#: O primeiro campo da linha de autorização.
+PREFIXO_AUTORIZACAO: Final = "AUT"
+
+
+def _validar_criticidade(criticidade: int) -> None:
+    if isinstance(criticidade, bool) or not SEM_OCORRENCIA <= criticidade <= CRITICIDADE_MAXIMA:
+        raise ProtocoloError(
+            f"criticidade precisa estar em {SEM_OCORRENCIA}..{CRITICIDADE_MAXIMA}, "
+            f"veio {criticidade!r}"
+        )
+
+
+@dataclass(frozen=True)
+class Autorizacao:
+    """`AUT,<VEICULO>,<criticidade>` — o que a Central diz sobre um tipo (P20).
+
+    `criticidade` 0 é "sem ocorrência ativa": o VE desse tipo não preempta e
+    recebe `EV,SEM_OCORRENCIA`. De 1 a 3, é a criticidade da ocorrência
+    (`core.modelos.Criticidade`), e é ela, e não o tipo, que ordena quem
+    interrompe quem no UNO (decisão de 2026-10-06).
+
+    Só o USB aceita esta linha. Vinda do receptor (rádio), ela é uma detecção
+    inválida e recebe `EV,RECUSADO`: um VE não se autoriza sozinho.
+
+    Raises:
+        ProtocoloError: criticidade fora de 0..3.
+    """
+
+    veiculo: TipoVeiculo
+    criticidade: int
+
+    def __post_init__(self) -> None:
+        _validar_criticidade(self.criticidade)
+
+    def codificar(self) -> bytes:
+        """A linha como a ponte a escreve."""
+        return _linha(PREFIXO_AUTORIZACAO, self.veiculo.value, str(self.criticidade))
+
+
+def parece_autorizacao(linha: bytes) -> bool:
+    """A linha começa como uma autorização, válida ou não."""
+    return linha.startswith((PREFIXO_AUTORIZACAO + SEPARADOR).encode("ascii"))
+
+
+def interpretar_autorizacao(linha: bytes) -> Autorizacao:
+    """Interpreta a linha de autorização — o lado do UNO, usado pelo dublê.
+
+    Exige a forma exata: sem espaços, criticidade de um dígito.
+
+    Raises:
+        LinhaInvalidaError: tipo desconhecido, criticidade fora de 0..3 ou campos
+            a mais.
+    """
+    campos = _texto(linha).split(SEPARADOR)
+    if len(campos) != 3 or campos[0] != PREFIXO_AUTORIZACAO:
+        raise LinhaInvalidaError(f"autorização espera AUT,<VEICULO>,<0..3>, veio {linha!r}")
+    veiculo = _membro(TipoVeiculo, campos[1], "veículo")
+    if len(campos[2]) != 1:
+        raise LinhaInvalidaError(f"criticidade de um dígito, veio {campos[2]!r}")
+    try:
+        return Autorizacao(veiculo, _natural(campos[2], "criticidade"))
+    except LinhaInvalidaError:
+        raise
+    except ProtocoloError as erro:
+        raise LinhaInvalidaError(str(erro)) from erro
+
+
+# ---------------------------------------------------------------------------
 # UNO -> notebook
 # ---------------------------------------------------------------------------
 
 
 @dataclass(frozen=True)
 class Telemetria:
-    """`ST,<ms>,<s1s2s3s4>,<C|E>,<rua_ativa>,<rua_fila>` (`context/05` §4.2).
+    """`ST,<ms>,<s1s2s3s4>,<C|E>,<rua_ativa>,<rua_fila>,<aut>` (`context/05` §4.2).
 
     Sai a 2 Hz e a cada mudança de estado. Uma telemetria com verde nos dois
     eixos é **interpretada, não rejeitada**: é a evidência de uma violação de
@@ -235,6 +330,10 @@ class Telemetria:
         regime: Ciclo ou emergência.
         rua_ativa: A rua do VE atendido, ou `None`.
         rua_fila: A rua do VE na fila, ou `None`.
+        autorizacoes: A criticidade que o UNO tem para cada tipo, na ordem de
+            `TIPOS_DA_BANCADA`; 0 é sem ocorrência. Na linha, três dígitos
+            (`100`: só a ambulância, com risco à vida). É por aqui que o
+            backend confere se o UNO tem a lista da Central.
     """
 
     t_dispositivo_ms: int
@@ -242,6 +341,17 @@ class Telemetria:
     regime: Regime
     rua_ativa: int | None = None
     rua_fila: int | None = None
+    autorizacoes: Autorizacoes = NENHUMA_AUTORIZACAO
+
+    def __post_init__(self) -> None:
+        if len(self.autorizacoes) != len(TIPOS_DA_BANCADA):
+            raise ProtocoloError(f"autorizações de {len(TIPOS_DA_BANCADA)} tipos")
+        for criticidade in self.autorizacoes:
+            _validar_criticidade(criticidade)
+
+    def criticidade(self, tipo: TipoVeiculo) -> int:
+        """A criticidade que o UNO tem para o tipo; 0 é sem ocorrência."""
+        return self.autorizacoes[TIPOS_DA_BANCADA.index(tipo)]
 
     @property
     def viola_i1(self) -> bool:
@@ -263,6 +373,7 @@ class Telemetria:
             self.regime.value,
             str(self.rua_ativa or 0),
             str(self.rua_fila or 0),
+            "".join(str(c) for c in self.autorizacoes),
         )
 
 
@@ -306,6 +417,15 @@ def _cores(texto: str) -> tuple[Cor, Cor, Cor, Cor]:
     return (s1, s2, s3, s4)
 
 
+def _autorizacoes(texto: str) -> Autorizacoes:
+    if len(texto) != len(TIPOS_DA_BANCADA):
+        raise LinhaInvalidaError(f"autorizações precisam de 3 dígitos, veio {texto!r}")
+    a, b, c = (_natural(digito, "criticidade") for digito in texto)
+    if max(a, b, c) > CRITICIDADE_MAXIMA:
+        raise LinhaInvalidaError(f"criticidade fora de 0..{CRITICIDADE_MAXIMA}: {texto!r}")
+    return (a, b, c)
+
+
 def interpretar(linha: bytes) -> Resposta:
     r"""Interpreta uma linha do UNO.
 
@@ -318,14 +438,15 @@ def interpretar(linha: bytes) -> Resposta:
     campos = _texto(linha).split(SEPARADOR)
     match campos[0]:
         case "ST":
-            if len(campos) != 6:
-                raise LinhaInvalidaError(f"ST espera 6 campos, veio {len(campos)}")
+            if len(campos) != 7:
+                raise LinhaInvalidaError(f"ST espera 7 campos, veio {len(campos)}")
             return Telemetria(
                 t_dispositivo_ms=_natural(campos[1], "ms"),
                 cores=_cores(campos[2]),
                 regime=_membro(Regime, campos[3], "regime"),
                 rua_ativa=_rua_ou_zero(campos[4], "rua_ativa"),
                 rua_fila=_rua_ou_zero(campos[5], "rua_fila"),
+                autorizacoes=_autorizacoes(campos[6]),
             )
         case "EV":
             if len(campos) not in (3, 5):
