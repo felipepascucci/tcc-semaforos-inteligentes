@@ -297,7 +297,7 @@ A ponte carimba o **primeiro byte** das duas linhas (`Tag … lida` e `EV,…,PR
 - ✅ **P9** — não se aplica: o LCD está no UNO, de 5 V.
 - ✅ **P10** — resistores integrados nos módulos.
 - **Fotos da bancada** — pendentes (questionário, seção 7).
-- **Versões das bibliotecas** (`MFRC522`, `LiquidCrystal_I2C`) **e do pacote `esp8266`** — não informadas; necessárias para compilar de forma reprodutível. O firmware novo do UNO foi compilado com `arduino:avr` 1.8.8 e `LiquidCrystal I2C` 1.1.2 (Frank de Brabander); faltam as do emissor e do receptor.
+- **Versões das bibliotecas e do pacote `esp8266`** — informadas pelo Felipe em 2026-10-07: `MFRC522` 1.4.12 (GithubCommunity) e `LiquidCrystal I2C` 1.1.2 (Frank de Brabander). **Falta o número de versão do pacote `esp8266`** (ESP8266 Community), que traz também o `ESP8266WiFi` e o `espnow` dos dois NodeMCUs. O firmware novo do UNO foi compilado com `arduino:avr` 1.8.8 e a mesma `LiquidCrystal I2C` 1.1.2.
 
 ---
 
@@ -322,7 +322,7 @@ Registro completo em `context/09`.
 
 Detalhado em [`docs/plano-desenvolvimento.md`](plano-desenvolvimento.md). Feito em 2026-10-05: protocolo (5.1), dublê com a regra da bancada (5.2), a ponte que escuta e mede H3 (5.7), os sketches dos NodeMCUs versionados como estão (5.6), os seeds da bancada (5.8) e o firmware do UNO (5.3), em `firmware/uno/semaforo/`, compilado e comparado com o dublê linha por linha no PC.
 
-**Falta, e exige a bancada:** gravar o firmware no UNO e rodar a aceitação (§7, 16 de 16), e medir H3 (§10). O firmware dos NodeMCUs não muda.
+**Feito na bancada (2026-10-06 e 2026-10-07):** o firmware gravado no UNO e a aceitação (§7, 20 de 20, com a Central), H3 e RNF05 nas 100 passagens (§10), o checklist de `context/06` §6 (falta o item 5) e o ensaio da demonstração (`bridge/demo.py`, 19 de 19). O firmware dos NodeMCUs não muda.
 
 ---
 
@@ -330,10 +330,10 @@ Detalhado em [`docs/plano-desenvolvimento.md`](plano-desenvolvimento.md). Feito 
 
 | # | Item | Status |
 | --- | --- | --- |
-| 1 | **As mudanças de comportamento do firmware do UNO** (§7): renovação do mesmo VE, recusa de tipo desconhecido, volta pelo eixo oposto e teto de 30 s. As demais mudanças são de segurança e não estão em discussão | pendente |
+| 1 | **As mudanças de comportamento do firmware do UNO** (§7): renovação do mesmo VE, recusa de tipo desconhecido, volta pelo eixo oposto e teto de 30 s. As demais mudanças são de segurança e não estão em discussão | ✅ confirmadas pelo Felipe em 2026-10-07, as 8 da mensagem do Bloco 5 e o receptor no A0 |
 | 2 | Fotos da bancada | pendente |
-| 3 | Versões das bibliotecas e do pacote `esp8266` | pendente |
-| 4 | Quem fica com a bancada e grava os programas novos (questionário 6.1) | pendente |
+| 3 | Versões das bibliotecas e do pacote `esp8266` | parcial: `MFRC522` 1.4.12 e `LiquidCrystal I2C` 1.1.2; falta o número do pacote `esp8266` (§12) |
+| 4 | Quem fica com a bancada e grava os programas novos (questionário 6.1) | ✅ o Felipe, que desde 2026-10-07 responde também pela parte de hardware |
 
 ---
 

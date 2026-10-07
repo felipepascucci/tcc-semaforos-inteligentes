@@ -1,5 +1,12 @@
 # Bloco 5 — firmware novo do UNO: o que precisamos de vocês
 
+> **Respondida em 2026-10-07 pelo Felipe**, que ficou com a bancada e passou a
+> responder também pela parte de hardware. "Ok" nas 8 mudanças da seção 1 e no
+> A0 da seção 2. Da seção 3: `MFRC522` 1.4.12 e `LiquidCrystal I2C` 1.1.2;
+> faltam o número de versão do pacote `esp8266` e as fotos. Registro em
+> `context/09` (decisão de 2026-10-07) e em `docs/contrato-hardware-software.md`
+> §15.
+
 Oi, pessoal! O programa novo do Arduino UNO está pronto, na pasta
 `firmware/uno/semaforo/`. Ele mantém o que o sketch de vocês já fazia: a mesma
 linha vinda do NodeMCU (`RUA3,AMBULANCIA`), os mesmos tempos de verde do VE (9, 8

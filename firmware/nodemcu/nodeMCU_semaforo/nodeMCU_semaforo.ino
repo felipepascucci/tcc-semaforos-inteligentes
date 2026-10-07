@@ -7,7 +7,8 @@
  * acrescentado, e tests/firmware/test_sketches_nodemcu.py confere o corpo.
  *
  * Placa: NodeMCU 1.0 (ESP-12E Module), pacote de placas "esp8266".
- * Bibliotecas: ESP8266WiFi e espnow (versões não informadas; contrato §12).
+ * Bibliotecas: ESP8266WiFi e espnow, que vêm com o pacote esp8266, de versão
+ * não informada (contrato §12).
  *
  * MAC desta placa: 40:91:51:58:A8:E1. É o endereço gravado no emissor
  *   (veiculo_ambulancia.ino, enderecoReceptor[]).

@@ -8,8 +8,9 @@
  * coisas: o corpo idêntico e este cabeçalho de acordo com o código.
  *
  * Placa: NodeMCU 1.0 (ESP-12E Module), pacote de placas "esp8266".
- * Bibliotecas: MFRC522, ESP8266WiFi e espnow (versões não informadas;
- * contrato §12). Gravado com a Arduino IDE 2.3.10.
+ * Bibliotecas: MFRC522 1.4.12 (GithubCommunity); ESP8266WiFi e espnow vêm
+ * com o pacote esp8266, de versão não informada (contrato §12). Gravado com
+ * a Arduino IDE 2.3.10.
  *
  * MAC do receptor (o NodeMCU do cruzamento): 40:91:51:58:A8:E1
  *   Está em enderecoReceptor[]. Trocar a placa do receptor exige trocar aqui.
