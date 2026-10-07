@@ -250,7 +250,7 @@ def _detectores_da_execucao(saida: Path) -> Path:
 PERIODO_SUMMARY_S = 60
 
 
-def _comando_sumo(opcoes: Opcoes, rotas: Path, saida: Path, duracao_s: float) -> list[str]:
+def comando_sumo(opcoes: Opcoes, rotas: Path, saida: Path, duracao_s: float) -> list[str]:
     binario = "sumo-gui" if opcoes.gui else "sumo"
     return [
         executavel(binario),
@@ -364,7 +364,7 @@ def executar(opcoes: Opcoes) -> ResultadoExecucao:
 
     transmissor = _transmissor(opcoes)
     ritmo = None if opcoes.velocidade is None else Ritmo(opcoes.velocidade)
-    adaptador.iniciar(_comando_sumo(opcoes, rotas, saida, duracao_s))
+    adaptador.iniciar(comando_sumo(opcoes, rotas, saida, duracao_s))
     try:
         _laco(
             adaptador,
@@ -468,45 +468,68 @@ def _laco(
         t = adaptador.passo()
         estado = adaptador.ler_estado(t)
 
-        latencia_ms: float | None = None
-        if controlar:
-            inicio = time.perf_counter()
-            comandos = motor.avaliar(estado)
-            latencia_ms = (time.perf_counter() - inicio) * 1000.0
-            coletor.registrar_decisao(latencia_ms, len(comandos))
-            coletor.registrar_conflitos(conflitos)
-            conflitos.clear()
-        else:
-            comandos = []
-        if transmissor is not None:
-            transmissor.publicar(estado, latencia_ms)
-            if transmissor.quer_trafego():
-                transmissor.publicar_trafego(_posicoes_do_trafego(adaptador, estado))
-
-        transicoes = adaptador.aplicar(comandos, t)
-
-        coletor.registrar_estado(estado)
-        coletor.registrar_transicoes(transicoes)
-        coletor.registrar_incidentes(adaptador.colisoes(), adaptador.teleportes())
-
-        for id_semaforo, controlador in adaptador.controladores().items():
-            violacoes = verificador.verificar(
-                controlador,
-                adaptador.malha.topologia.cruzamento(id_semaforo),
-                t,
-                [tr for tr in transicoes if tr.id_semaforo == id_semaforo],
-            )
-            if violacoes:
-                coletor.registrar_violacoes(violacoes)
-                # Fail-safe de `context/01` §6: abandona a preempção e volta ao
-                # ciclo fixo. A execução continua — o incidente fica registrado e
-                # `validar_execucao()` a reprova depois (context/06 §4).
-                adaptador.aplicar([motor.abortar(id_semaforo, str(violacoes[0]))], t)
+        decidir_e_aplicar(
+            adaptador, motor, verificador, coletor, estado, controlar, conflitos, transmissor
+        )
 
         if adaptador.cliente.veiculos_restantes() == 0:
             break
         if ritmo is not None:
             ritmo.esperar(t)
+
+
+def decidir_e_aplicar(
+    adaptador: AdaptadorSumo,
+    motor: MotorDecisao,
+    verificador: VerificadorSeguranca,
+    coletor: ColetorMetricas,
+    estado: EstadoMalha,
+    controlar: bool,
+    conflitos: list[EventoConflito],
+    transmissor: Transmissor | None = None,
+) -> None:
+    """O corpo de um passo do laço, depois da leitura do estado.
+
+    Separado do laço para que os ramos da rotulagem por bifurcação (10.4) rodem
+    **o mesmo** código da trajetória principal. É o que garante que um ramo,
+    reexecutado do zero com a mesma seed, chegue ao instante da disputa no
+    mesmo estado em que a principal chegou.
+    """
+    t = estado.t
+    latencia_ms: float | None = None
+    if controlar:
+        inicio = time.perf_counter()
+        comandos = motor.avaliar(estado)
+        latencia_ms = (time.perf_counter() - inicio) * 1000.0
+        coletor.registrar_decisao(latencia_ms, len(comandos))
+        coletor.registrar_conflitos(conflitos)
+        conflitos.clear()
+    else:
+        comandos = []
+    if transmissor is not None:
+        transmissor.publicar(estado, latencia_ms)
+        if transmissor.quer_trafego():
+            transmissor.publicar_trafego(_posicoes_do_trafego(adaptador, estado))
+
+    transicoes = adaptador.aplicar(comandos, t)
+
+    coletor.registrar_estado(estado)
+    coletor.registrar_transicoes(transicoes)
+    coletor.registrar_incidentes(adaptador.colisoes(), adaptador.teleportes())
+
+    for id_semaforo, controlador in adaptador.controladores().items():
+        violacoes = verificador.verificar(
+            controlador,
+            adaptador.malha.topologia.cruzamento(id_semaforo),
+            t,
+            [tr for tr in transicoes if tr.id_semaforo == id_semaforo],
+        )
+        if violacoes:
+            coletor.registrar_violacoes(violacoes)
+            # Fail-safe de `context/01` §6: abandona a preempção e volta ao
+            # ciclo fixo. A execução continua — o incidente fica registrado e
+            # `validar_execucao()` a reprova depois (context/06 §4).
+            adaptador.aplicar([motor.abortar(id_semaforo, str(violacoes[0]))], t)
 
 
 def _veiculos_planejados(rotas: Path) -> int:

@@ -305,8 +305,11 @@ Se dois VEs demandam fases conflitantes no mesmo TLS, **um espera**. Nunca conce
 > ```
 > score = w · (x_A − x_B)      escolhe A se score > 0, senão B
 >
-> x = (eta_s, velocidade_ms, fila_no_acesso, cruzamentos_restantes)
+> x = (eta_s, velocidade_ms, fila_por_faixa, cruzamentos_restantes)
 > ```
+>
+> *A fila entra **por faixa** desde a entrega 10.5 (2026-10-06): é a que o VE tem
+> à frente e a que E3 usa. O desenho de 2026-09-10 dizia `fila_no_acesso`.*
 >
 > **`tipo` saiu do vetor em 2026-09-29 (P20).** Sob o rótulo minimax em tempo, o
 > peso de `tipo` não carregaria relevância — o tempo não sabe que a ambulância
@@ -322,9 +325,12 @@ Se dois VEs demandam fases conflitantes no mesmo TLS, **um espera**. Nunca conce
 > ordem de apresentação — inconsistência que apareceria como oscilação na rua.
 >
 > **Critério de treino: minimax** — minimizar o tempo de travessia do VE mais
-> prejudicado. Rótulos vêm de **bifurcar a simulação** no instante do conflito
-> (`traci.simulation.saveState`/`loadState`), rodando as duas escolhas e medindo a
-> consequência. Rotular por heurística ensinaria ao modelo a própria heurística.
+> prejudicado. Rótulos vêm de **bifurcar a simulação** no instante do conflito,
+> rodando as duas escolhas e medindo a consequência. Rotular por heurística
+> ensinaria ao modelo a própria heurística. ~~(`traci.simulation.saveState`/
+> `loadState`)~~ — **desde 2026-10-05 cada ramo reexecuta a seed do zero** até a
+> disputa, porque o estado carregado do arquivo não reproduz a trajetória exatamente
+> (entrega 10.4, `09` P19).
 >
 > **O item 3 acima — "preempção em curso vence" — continua sendo regra rígida
 > ACIMA do modelo.** A política decide só quando não há preempção em curso;
@@ -339,6 +345,26 @@ Se dois VEs demandam fases conflitantes no mesmo TLS, **um espera**. Nunca conce
 > **Continua aberto apenas o volume de dados**, que é a entrega 10.1. ~~Ninguém
 > conta eventos de conflito hoje.~~ **A instrumentação existe desde 2026-09-10**;
 > falta rodar o lote e ler o número. Ver abaixo.
+
+**Política de desempate (entrega 10.4, 2026-10-05).** `MotorDecisao` aceita uma
+`politica` opcional (`PoliticaDesempate`, em `conflito.py`), que **propõe** o
+vencedor de E8. Quem decide se a proposta vale é `resolver`: ela só é aceita se
+for um dos pedidos **e** tiver a criticidade mais alta entre eles. Com isso a
+criticidade continua acima de qualquer política por construção, e não por
+disciplina de quem a escreve. Sem política, o motor é o E8 de sempre; os braços
+`PREEMPCAO` e `PREEMPCAO_COMPENSADA` não a usam. Hoje a usa a rotulagem (10.4),
+que força uma escolha em cada ramo; a política aprendida (10.6) vai entrar pelo
+mesmo ponto. Os atributos que o modelo vê saem de `core/priorizacao/atributos.py`,
+a mesma função na rotulagem e na inferência, para que o modelo não seja treinado
+sobre uma coisa e consultado sobre outra.
+
+**Os pesos (entrega 10.5, 2026-10-06)** ficam em
+`backend/config/politica_desempate.yaml`, gerado por
+`python -m analysis.treino_politica` e conferido por teste contra os rótulos
+versionados. Os pesos já estão nas unidades originais dos atributos, e a
+inferência da 10.6 é `score = Σ pesos[a] · (x_A[a] − x_B[a])`: escolhe A se
+`score > 0`, senão B. O arquivo é lido em `adapters/`, como `parametros.yaml`, e
+o `core/` recebe só os números.
 
 **Observação dos conflitos (entrega 10.1, 2026-09-10).** E8 passou a ser
 observável de fora, sem deixar de ser a mesma regra. `MotorDecisao` aceita um
@@ -628,7 +654,8 @@ backend/
 │   │   ├── deteccao.py         # E1, E2, E3
 │   │   ├── fases.py            # E4, E5
 │   │   ├── compensacao.py      # E7
-│   │   └── conflito.py         # E8
+│   │   ├── conflito.py         # E8, e o ponto de entrada da política (P19)
+│   │   └── atributos.py        # o que o modelo de P19 vê de cada VE
 │   ├── autorizacao.py          # P20: tag + ocorrência ativa -> em serviço?
 │   ├── seguranca.py            # invariantes I1..I5
 │   ├── modelos.py              # dataclasses de estado

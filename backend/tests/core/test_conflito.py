@@ -345,3 +345,54 @@ def test_resolucao_sem_adiados_tem_motivo_simples(
     assert resolucao is not None
     assert "adiados" not in resolucao.motivo
     assert resolucao.motivo
+
+
+# ---------------------------------------------------------------------------
+# Vencedor imposto por uma política de desempate (P19, entregas 10.4 e 10.6)
+# ---------------------------------------------------------------------------
+
+
+def test_politica_decide_entre_iguais(cruzamento: Cruzamento, parametros: Parametros) -> None:
+    """No mesmo nível, a proposta da política vence a chave de E8."""
+    rapida = _disputa("RAPIDA", TipoVeiculo.AMBULANCIA, eta_s=8.0, fase=FASE_ARTERIAL)
+    lenta = _disputa("LENTA", TipoVeiculo.AMBULANCIA, eta_s=30.0, fase=FASE_TRANSVERSAL)
+
+    resolucao = resolver(CRUZAMENTO, [rapida, lenta], cruzamento, parametros, imposto=lenta)
+
+    assert resolucao is not None
+    assert resolucao.vencedor == lenta
+    assert resolucao.adiados == (rapida,)
+    assert "política de desempate" in resolucao.motivo
+
+
+def test_politica_nao_passa_por_cima_da_criticidade(
+    cruzamento: Cruzamento, parametros: Parametros
+) -> None:
+    """A criticidade é regra acima de qualquer política (P20): a proposta é ignorada."""
+    vida = _disputa("VIDA", TipoVeiculo.POLICIA, eta_s=30.0, fase=FASE_ARTERIAL)
+    urgencia = _disputa(
+        "URGENCIA",
+        TipoVeiculo.AMBULANCIA,
+        eta_s=8.0,
+        fase=FASE_TRANSVERSAL,
+        criticidade=Criticidade.URGENCIA,
+    )
+
+    resolucao = resolver(CRUZAMENTO, [vida, urgencia], cruzamento, parametros, imposto=urgencia)
+
+    assert resolucao is not None
+    assert resolucao.vencedor == vida
+    assert "criticidade 1 sobre 3" in resolucao.motivo
+
+
+def test_proposta_fora_das_disputas_e_ignorada(
+    cruzamento: Cruzamento, parametros: Parametros
+) -> None:
+    rapida = _disputa("RAPIDA", TipoVeiculo.AMBULANCIA, eta_s=8.0, fase=FASE_ARTERIAL)
+    lenta = _disputa("LENTA", TipoVeiculo.AMBULANCIA, eta_s=30.0, fase=FASE_TRANSVERSAL)
+    estranha = _disputa("OUTRA", TipoVeiculo.AMBULANCIA, eta_s=1.0, fase=FASE_TRANSVERSAL)
+
+    resolucao = resolver(CRUZAMENTO, [rapida, lenta], cruzamento, parametros, imposto=estranha)
+
+    assert resolucao is not None
+    assert resolucao.vencedor == rapida

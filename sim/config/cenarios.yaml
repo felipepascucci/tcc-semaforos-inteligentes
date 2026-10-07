@@ -99,8 +99,16 @@ execucao:
   # podem usar: 1..50 são as do Bloco 8, 101..105 as da calibração (P16, P17).
   # Uma execução pedida pelo dashboard ocuparia em execucao_simulacao o ponto
   # (cenário, modo, seed) do lote, que rodaria aquele ponto sem registro no banco
-  # (decisão de 2026-10-05, Bloco 6). Intervalos fechados.
-  seeds_reservadas: [[1, 50], [101, 105]]
+  # (decisão de 2026-10-05, Bloco 6). 201..250 são as do treino do modelo de
+  # P19 (entrega 10.2). Intervalos fechados.
+  seeds_reservadas: [[1, 50], [101, 105], [201, 250]]
+  # Divisão por seed do cenário de treino (P19, decidida em 2026-10-05, antes de
+  # qualquer treino). Fora de 1..50 (Bloco 8, onde H4 é testada), de 101..105
+  # (calibração de P16 e P17) e de 101..110 (contagem da 10.1). A validação serve
+  # para escolher a regularização na 10.5; H4 continua sendo testada no Bloco 8.
+  seeds_treino_ml:
+    treino: [201, 240]
+    validacao: [241, 250]
 
 modos: [FIXO, PREEMPCAO, PREEMPCAO_COMPENSADA]
 
@@ -135,3 +143,46 @@ cenarios:
     # É uma aproximação — atraso semafórico e fila deslocam os dois —, e é o
     # bastante: ao longo de uma hora vários pares se encontram.
     atraso_secundario_s: 10
+
+# --- Cenários de treino — entrega 10.2 (P19) --------------------------------
+#
+# FORA do experimento. Produzem as disputas que a 10.4 rotula e a 10.5 usa para
+# treinar; nenhum número do capítulo 5 sai daqui. Ficam numa seção própria para
+# não entrar na tabela de caracterização da metodologia (`sim.calibracao.cenarios`
+# só lê `cenarios`), no lote padrão nem na API do dashboard.
+#
+# Desenho decidido pela equipe em 2026-10-05, depois da remedição da 10.1
+# (85 disputas decidíveis em 10 execuções, abaixo do piso de 100). A geometria é
+# a do cenário de avaliação, `multiplas_emergencias`, para o modelo treinar no
+# mesmo tipo de encontro em que vai ser testado. O que muda está abaixo.
+cenarios_treino:
+  treino_multiplas:
+    objetivo: Treinar a priorização aprendida entre VEs (P19, entrega 10.2)
+    # Tráfego de fundo do `moderado` (700 veíc./h), o mesmo do cenário de
+    # avaliação: ver ARQUIVO_DE_FLUXO em sim/demanda/gerar_rotas.py.
+    ves_simultaneos: 2
+    rota_secundaria: ROTA_VE_TRANSVERSAL
+    # Um par a cada 300 s, contra 600 na avaliação. Dobra os pares sem sobrepor
+    # um par ao seguinte: o corredor leva ~250 s para ser percorrido.
+    intervalo_s: 300
+    # Atraso da segunda partida, SORTEADO por par, uniforme nesta faixa. Na
+    # avaliação ele é fixo em 10 s, e a diferença de ETA entre os dois VEs quase
+    # não varia; o modelo não teria como aprender o peso de `eta_s`. O sorteio usa
+    # um gerador próprio, derivado da seed, separado do tráfego de fundo.
+    # EXCEÇÃO DECLARADA à regra de que a partida do VE não depende da seed
+    # (context/04 §7): vale só aqui, onde não há comparação entre braços a parear
+    # entre seeds. Os braços de uma mesma seed continuam lendo o mesmo arquivo.
+    atraso_secundario_faixa_s: [0, 20]
+    # Criticidade em rodízio PRÓPRIO, de período 4, desacoplado do rodízio de
+    # tipos (período 3): em doze pares aparecem as nove combinações de tipo e
+    # nível. Os dois VEs
+    # de um par têm o mesmo nível, que é o domínio do modelo (P20)...
+    criticidades: [1, 2, 3, 2]
+    # ...exceto um par a cada cinco, em que o segundo VE vai para o nível
+    # seguinte (1→2, 2→3, 3→1). Esses pares a regra de criticidade decide; estão
+    # aqui só para exercitá-la. Proporção fixa: 80% de mesmo nível.
+    par_misto_a_cada: 5
+    # O tipo do segundo VE vem uma posição adiante no rodízio: o par
+    # AMBULANCIA-BOMBEIRO, BOMBEIRO-POLICIA, POLICIA-AMBULANCIA. Os três tipos têm
+    # a mesma dinâmica (veiculos.typ.xml), então isso não muda o tráfego.
+    defasagem_tipo_secundaria: 1

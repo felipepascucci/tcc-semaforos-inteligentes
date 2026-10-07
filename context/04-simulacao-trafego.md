@@ -177,6 +177,15 @@ Três detalhes da construção que valem registro:
 > nenhum número medido muda. O gerador recusa listas de tamanhos diferentes. O
 > cenário de treino da 10.2 é que vai desacoplar criticidade de tipo.
 
+> **Cenário de treino da entrega 10.2 — fora do experimento (2026-10-05).**
+> `treino_multiplas` fica na seção `cenarios_treino` de `cenarios.yaml`, e não em
+> `cenarios`: não entra nesta tabela, no lote padrão nem na API. Usa as rotas e o
+> fundo de `multiplas_emergencias`, com um par a cada 300 s, atraso da segunda
+> partida sorteado por par em [0, 20] s e criticidade desacoplada do tipo
+> (rodízio `[1, 2, 3, 2]`, um par a cada cinco de nível misto). Serve só para
+> produzir as disputas que a 10.4 rotula; seeds 201..240 (treino) e 241..250
+> (validação). Ver a decisão em `context/09`.
+
 > **A coluna de saturação era declarada e passou a ser medida** (decisão de
 > 2026-08-25, `context/09`). Os fluxos e os nomes dos cenários **não mudaram** —
 > vêm do pré-projeto e já estão no texto entregue. O que mudou é que a
@@ -252,6 +261,8 @@ Rodar os três é o que permite isolar o efeito da compensação. Comparar apena
 > As chegadas seguem processo de **Poisson** (intervalos exponenciais). Intervalos constantes produziriam um tráfego artificialmente regular, que forma menos fila para o mesmo fluxo médio — e subestimaria justamente o efeito que o trabalho quer medir.
 >
 > **Os VEs partem nos mesmos instantes em toda seed**, e com o mesmo rodízio de tipos e de criticidades (P20).
+>
+> **Exceção declarada: o cenário de treino `treino_multiplas` (10.2).** Lá o atraso da segunda partida é sorteado por um gerador próprio, `Random("emergencias:<seed>")`, separado do gerador do fundo, para o modelo ver diferenças de ETA variadas. A exceção não toca nenhum cenário do experimento, e o pareamento entre braços de uma mesma seed continua garantido pelo arquivo materializado.
 >
 > **O cache de rotas só é reaproveitado se for idêntico ao que o código atual
 > geraria** (P20, 2026-09-29). Antes, `garantir()` reaproveitava qualquer arquivo

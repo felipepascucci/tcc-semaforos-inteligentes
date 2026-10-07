@@ -23,7 +23,7 @@ from core.malha import Cruzamento, TopologiaMalha
 from core.modelos import EstadoMalha, EstadoSemaforo, Sinal
 from core.parametros import Parametros
 from core.priorizacao import compensacao as e7
-from core.priorizacao.conflito import Disputa, EventoConflito, resolver
+from core.priorizacao.conflito import Disputa, EventoConflito, PoliticaDesempate, resolver
 from core.priorizacao.deteccao import dentro_da_janela, detectar, fila_por_faixa
 from core.priorizacao.fases import selecionar_fase
 
@@ -76,13 +76,17 @@ class MotorDecisao:
             mais de um VE demanda fases distintas (entrega 10.1). É observação
             pura: não influencia decisão nenhuma, e o motor **não acumula** os
             eventos — quem quiser contá-los que os guarde. Manter o motor sem
-            esse acúmulo é o que faz a fotografia de estado da bifurcação (10.4)
-            continuar sendo apenas os três dicionários abaixo.
+            esse acúmulo é o que mantém o estado do motor nos três dicionários
+            abaixo.
+        politica: Quem propõe o vencedor de E8 no lugar da chave determinística
+            (P19). `None`, o padrão, é o E8 de sempre. A criticidade continua
+            acima da política, garantida por `resolver`.
     """
 
     parametros: Parametros
     topologia: TopologiaMalha
     observador_conflito: Callable[[EventoConflito], None] | None = None
+    politica: PoliticaDesempate | None = None
     _preempcoes: dict[str, PreempcaoAtiva] = field(default_factory=dict, repr=False)
     _compensacoes: dict[str, CompensacaoEmCurso] = field(default_factory=dict, repr=False)
     _ultimo_verde: dict[str, dict[int, float]] = field(default_factory=dict, repr=False)
@@ -192,12 +196,19 @@ class MotorDecisao:
         observador = self.observador_conflito
         if observador is None:
             return
+        for evento in self._eventos_de_conflito(disputas, t):
+            observador(evento)
 
+    def _eventos_de_conflito(
+        self, disputas: dict[str, list[Disputa]], t: float
+    ) -> list[EventoConflito]:
+        """Os conflitos contidos nos pedidos de um passo."""
+        eventos: list[EventoConflito] = []
         for id_semaforo, pedidos in disputas.items():
             if len({pedido.fase_desejada for pedido in pedidos}) < 2:
                 continue
             ativa = self._preempcoes.get(id_semaforo)
-            observador(
+            eventos.append(
                 EventoConflito(
                     t=t,
                     id_semaforo=id_semaforo,
@@ -205,6 +216,17 @@ class MotorDecisao:
                     preempcao_em_curso=ativa.id_veiculo if ativa is not None else None,
                 )
             )
+        return eventos
+
+    def conflitos_em(self, estado: EstadoMalha) -> list[EventoConflito]:
+        """Os conflitos que `avaliar(estado)` publicaria, **sem decidir nada**.
+
+        Existe para a rotulagem por bifurcação (10.4), que precisa reconhecer a
+        abertura da disputa **antes** de o motor escolher o vencedor, para ler os
+        atributos e instalar a escolha forçada nesse instante. Não altera estado:
+        só lê as preempções em curso.
+        """
+        return self._eventos_de_conflito(self._levantar_disputas(estado), estado.t)
 
     # -- E3, E5, E6, E7, E8: decisão -----------------------------------------
 
@@ -237,7 +259,12 @@ class MotorDecisao:
                 ),
             )
 
-        resolucao = resolver(id_semaforo, disputas, cruzamento, self.parametros)
+        imposto = (
+            self.politica.escolher(id_semaforo, disputas, t)
+            if self.politica is not None and len(disputas) > 1
+            else None
+        )
+        resolucao = resolver(id_semaforo, disputas, cruzamento, self.parametros, imposto)
 
         # Nenhum VE à vista: encerra a preempção que porventura esteja ativa e,
         # se houver plano de compensação vigente, é hora de executá-lo (E7).
