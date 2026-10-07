@@ -88,6 +88,18 @@ vencedor (`PoliticaDesempate`, em `core/priorizacao/conflito.py`). Quem decide �
 `resolver`, que só aceita a proposta se ela for um dos pedidos **e** tiver a
 criticidade mais alta entre eles.
 
+**Como a 10.6 implementou a ordem** (`core/priorizacao/politica.py`, função
+`decidir`). As duas regras vêm antes do modelo, no código, e não leem os pesos:
+
+1. só os pedidos do nível mais crítico seguem; se sobra um, ele vence;
+2. se um deles é o dono da preempção em curso no cruzamento, ele vence;
+3. se todos os que sobraram pedem a **mesma fase**, não há conflito (o mesmo
+   verde serve todos), e a política devolve `None`, para o E8 de sempre decidir;
+4. senão, o modelo decide, por torneio (§4).
+
+O modelo só é consultado no passo 4. Os atributos dos VEs também só são
+calculados ali.
+
 **Por que a criticidade pode passar por cima da preempção em curso sem
 oscilar:** A só toma o verde de B se `crit(A) < crit(B)`, e então B nunca o toma
 de volta. São no máximo duas trocas por episódio (3 → 2 → 1), cada uma pela
@@ -103,6 +115,19 @@ score = Σ pesos[a] · (x_A[a] − x_B[a])      escolhe A se score > 0, senão B
 
 Com três ou mais VEs, a disputa se resolve por torneio. Nos cenários medidos até
 agora, porém, toda disputa foi entre dois VEs.
+
+**O torneio é todos-contra-todos, e vence o invicto**, o VE que nenhum outro
+bate. Como o score é linear, `score(A, B) = s(A) − s(B)` com `s(X) = pesos · x_X`,
+então o invicto é o VE de maior `s`, e não há ciclo possível: a ordem em que os
+pedidos chegam não muda o vencedor.
+
+**Empate exato** (`score = 0`, na prática só com os quatro atributos iguais): o
+modelo não tem preferência, e decide a chave do E8 **entre os empatados** (tipo,
+depois ETA). Decisão da equipe em 2026-10-07. Seguir "senão B" ao pé da letra
+faria o vencedor depender da ordem de apresentação, justamente o que a forma do
+modelo existe para impedir. Nos 652 exemplos rotulados nenhum score sai zero, e o
+desempate não age sobre eles. O treino (10.5) contou `score = 0` como B ao medir
+o acerto, o que, pelo mesmo motivo, não altera nenhum número de lá.
 
 **Por que diferenças, e sem intercepto.** Um modelo que recebesse os dois vetores
 soltos poderia preferir A a B *e* B a A conforme a ordem em que fossem
@@ -267,19 +292,29 @@ framework dentro do motor. São quatro números num YAML versionado:
 ```
 rotulos.csv ──► analysis/treino_politica.py ──► backend/config/politica_desempate.yaml
                 (numpy + scipy, offline)          (pesos, λ, seeds, escala, sha256 dos rótulos)
-                                                        │  lido em adapters/
+                                                        │  lido em adapters/configuracao.py
+                                                        │  (carregar_politica)
                                                         ▼
-                                  core/priorizacao: score = Σ pesos · (x_A − x_B)
+                    core/priorizacao/politica.py: score = Σ pesos · (x_A − x_B)
+                    (PoliticaAprendida, no ponto PoliticaDesempate do motor)
 ```
 
 Isso preserva três decisões já tomadas:
 
-1. **O mesmo motor roda na simulação e no protótipo** (`01` §1). O `core/` não
-   importa framework, e `test_arquitetura.py` continua verde.
-2. **RNF01 (< 100 ms).** A inferência é um produto escalar de quatro termos.
+1. **O motor é agnóstico ao atuador** (`01` §1). O `core/` não importa
+   framework nem lê arquivo, e `test_arquitetura.py` continua verde. *(Até
+   2026-10-07 este item dizia "o mesmo motor roda na simulação e no protótipo".
+   Isso deixou de valer em 2026-10-05: o UNO decide sozinho, como diz o
+   parágrafo logo abaixo e `00` §3.)*
+2. **RNF01 (< 100 ms).** A inferência é um produto escalar de quatro termos, e
+   fica dentro de `motor.avaliar()`, no trecho cronometrado. `test_desempenho.py`
+   mede o p95 com o modelo consultado em todo passo.
 3. **Reprodutibilidade.** O YAML guarda o `sha256` de `rotulos.csv`. O teste
    `test_pesos_versionados_saem_do_treino_sobre_os_rotulos_versionados` refaz o
-   treino e confere os pesos. Ninguém edita os pesos à mão.
+   treino e confere os pesos. Ninguém edita os pesos à mão. E
+   `test_inferencia_do_core_escolhe_como_o_treino_em_todos_os_rotulos` confere
+   que a inferência do `core/`, com os pesos lidos por `adapters/`, escolhe como
+   o treino nos 652 exemplos: o modelo consultado é o que foi treinado.
 
 **Na bancada física, o modelo não roda.** O UNO decide localmente por
 criticidade e ordem de chegada (`05` §3.3). O ML é avaliado só na simulação, onde
@@ -312,7 +347,7 @@ há múltiplos VEs em rotas que se cruzam.
 | 10.3 | Declarar o critério (minimax) antes de treinar | ✅ 2026-09-10 |
 | 10.4 | Rotulagem por bifurcação | ✅ 517 / 135 exemplos |
 | 10.5 | Treino e exportação dos pesos | ✅ `politica_desempate.yaml` |
-| 10.6 | Inferência pura em `core/priorizacao/` | ⏳ por fazer: hoje só existe o ponto de entrada `PoliticaDesempate` |
+| 10.6 | Inferência pura em `core/priorizacao/` | ✅ `politica.py` (2026-10-07); nenhum número dos braços existentes muda |
 | 10.7 | Braço `PREEMPCAO_ML` no executor e no lote | ⏳ por fazer |
 | 10.8 | Análise estatística de H4 | ⏳ por fazer (depois do Bloco 8) |
 
@@ -343,6 +378,8 @@ Atualizar esta tabela no mesmo commit de cada entrega, junto com
 | --- | --- |
 | Decisões e justificativas completas | `09-pendencias-e-decisoes.md`, P19 e P20 |
 | E8 e o ponto de entrada da política | `backend/core/priorizacao/conflito.py` (`PoliticaDesempate`, `resolver`) |
+| Inferência e as regras acima do modelo | `backend/core/priorizacao/politica.py` (`PoliticaAprendida`, `decidir`) |
+| Carga dos pesos | `backend/adapters/configuracao.py` (`carregar_politica`) |
 | Atributos do modelo | `backend/core/priorizacao/atributos.py` |
 | Cenário de treino | `sim/config/cenarios.yaml` (`cenarios_treino`), `sim/demanda/gerar_rotas.py` (`partidas_de_treino`) |
 | Rotulagem | `sim/controlador/rotulagem.py` |

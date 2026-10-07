@@ -357,9 +357,11 @@ vencedor de E8. Quem decide se a proposta vale é `resolver`: ela só é aceita 
 for um dos pedidos **e** tiver a criticidade mais alta entre eles. Com isso a
 criticidade continua acima de qualquer política por construção, e não por
 disciplina de quem a escreve. Sem política, o motor é o E8 de sempre; os braços
-`PREEMPCAO` e `PREEMPCAO_COMPENSADA` não a usam. Hoje a usa a rotulagem (10.4),
-que força uma escolha em cada ramo; a política aprendida (10.6) vai entrar pelo
-mesmo ponto. Os atributos que o modelo vê saem de `core/priorizacao/atributos.py`,
+`PREEMPCAO` e `PREEMPCAO_COMPENSADA` não a usam. A usam a rotulagem (10.4), que
+força uma escolha em cada ramo, e a política aprendida (10.6), que entra pelo
+mesmo ponto. Desde a 10.6, `escolher` recebe o `EstadoMalha` do passo, e não só
+o instante: o modelo precisa da velocidade do VE, da fila do acesso e da rota
+restante, que o pedido não carrega. Os atributos que o modelo vê saem de `core/priorizacao/atributos.py`,
 a mesma função na rotulagem e na inferência, para que o modelo não seja treinado
 sobre uma coisa e consultado sobre outra.
 
@@ -370,6 +372,16 @@ versionados. Os pesos já estão nas unidades originais dos atributos, e a
 inferência da 10.6 é `score = Σ pesos[a] · (x_A[a] − x_B[a])`: escolhe A se
 `score > 0`, senão B. O arquivo é lido em `adapters/`, como `parametros.yaml`, e
 o `core/` recebe só os números.
+
+**A inferência (entrega 10.6, 2026-10-07)** está em `core/priorizacao/politica.py`.
+`PoliticaAprendida` aplica, nesta ordem: criticidade (só o nível mais crítico
+segue), guarda de oscilação (no mesmo nível, a preempção em curso vence), e o
+modelo, por torneio todos-contra-todos, se os que sobraram pedem fases
+distintas. Pedidos pela mesma fase não são conflito e ficam com o E8. No empate
+exato do modelo decide a chave do E8 entre os empatados (decisão de 2026-10-07).
+Os pesos vêm de `adapters/configuracao.carregar_politica()`, que recusa arquivo
+cujos atributos não sejam exatamente os do modelo, na ordem do treino. O braço
+`PREEMPCAO_ML` que a usa no executor e no lote é a 10.7. Detalhes em `10` §3 e §4.
 
 **Observação dos conflitos (entrega 10.1, 2026-09-10).** E8 passou a ser
 observável de fora, sem deixar de ser a mesma regra. `MotorDecisao` aceita um
@@ -661,17 +673,20 @@ backend/
 │   │   ├── fases.py            # E4, E5
 │   │   ├── compensacao.py      # E7
 │   │   ├── conflito.py         # E8, e o ponto de entrada da política (P19)
-│   │   └── atributos.py        # o que o modelo de P19 vê de cada VE
+│   │   ├── atributos.py        # o que o modelo de P19 vê de cada VE
+│   │   └── politica.py         # inferência do modelo de P19 (10.6)
 │   ├── autorizacao.py          # P20: tag + ocorrência ativa -> em serviço?
 │   ├── seguranca.py            # invariantes I1..I5
 │   ├── modelos.py              # dataclasses de estado
 │   └── comandos.py             # tipos de comando abstratos
 ├── adapters/
+│   ├── configuracao.py         # lê parametros*.yaml e politica_desempate.yaml
 │   ├── sumo/
 │   └── hardware/
 ├── config/
 │   ├── parametros.yaml
-│   └── parametros.hardware.yaml
+│   ├── parametros.hardware.yaml
+│   └── politica_desempate.yaml # pesos de P19, gerados por analysis.treino_politica
 └── tests/
 ```
 

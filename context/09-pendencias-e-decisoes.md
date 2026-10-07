@@ -1350,6 +1350,63 @@ pip install -e ".[dev,analysis]"
 python -m analysis.treino_politica --relatorio analysis/data/bloco10_treino/relatorio.md
 ```
 
+#### Entrega 10.6, 2026-10-07 · ✅ **IMPLEMENTADA** — inferência pura em `core/priorizacao/politica.py`
+
+**O que entrou.** `PoliticaAprendida` é uma `PoliticaDesempate` como a escolha
+forçada da rotulagem, e entra no motor pelo mesmo ponto. Os pesos são lidos por
+`adapters/configuracao.carregar_politica()`, que recusa arquivo cujos atributos
+não sejam exatamente os do modelo, na ordem do treino, ou cujos pesos não sejam
+números finitos. O `core/` recebe só os quatro números. O braço `PREEMPCAO_ML`
+no executor e no lote **não** é desta entrega: é a 10.7.
+
+**A ordem de decisão, no código** (`decidir`):
+
+1. criticidade: só os pedidos do nível mais crítico seguem, com ou sem
+   preempção em curso de nível menos crítico (P20);
+2. guarda de oscilação: no mesmo nível, o dono da preempção em curso vence;
+3. pedidos que sobraram todos pela **mesma fase** não são conflito, e a política
+   devolve `None`, para o E8 de sempre decidir;
+4. o modelo, por torneio todos-contra-todos: vence o invicto.
+
+As regras 1 e 2 não leem os pesos, e o modelo, com os atributos, só é calculado
+no passo 4. `resolver` continua recusando proposta de nível menos crítico, então
+a regra 1 vale por construção mesmo se outra política errar. O item 3 decorre
+da definição de conflito desta pendência ("conflito é fase distinta") e não é
+decisão nova: é também o domínio em que os rótulos foram tirados.
+
+**Empate exato.** Decidido pela equipe em 2026-10-07 (tabela do fim): decide a
+chave do E8 entre os empatados. Com o score linear, o torneio só tem mais de um
+invicto nesse caso.
+
+**Uma mudança de assinatura.** `PoliticaDesempate.escolher` recebia o instante
+`t`, que ninguém usava, e passa a receber o `EstadoMalha` do passo: o modelo
+precisa da velocidade do VE, da fila do acesso e da rota restante, que o pedido
+não carrega. A escolha forçada da rotulagem só mudou de assinatura. O texto do
+`motivo` ganhou um caso: quando a proposta aceita é a do dono da preempção em
+curso, ele diz "preempção já em curso", e não "escolha da política". O `motivo`
+não vai a nenhum CSV.
+
+**Verificação.**
+
+| Verificação | Resultado |
+| --- | --- |
+| Braços existentes, código da main (`effc7c6`) contra a branch: `leve`, `moderado`, `intenso` e `multiplas_emergencias` × `FIXO`, `PREEMPCAO` e `PREEMPCAO_COMPENSADA` × seeds 101 e 102, `--sem-banco` | **Zero diferenças** em `execucoes.csv` (24 linhas), `ve_por_execucao.csv` (162), `transversal_por_execucao.csv` (768) e `conflitos_por_execucao.csv` (37), fora das colunas de latência e de versão; o mesmo número de amostras de latência por execução. Os braços existentes não constroem política, então o resultado era esperado; a corrida o confirma |
+| Inferência do `core/` contra o treino | Nos 652 exemplos de `rotulos.csv` (517 + 135), o `score` do `core/`, com os pesos lidos por `adapters/`, escolhe como `escolhas` do treino em todos. Nenhum score sai exatamente zero |
+| Antissimetria | `score(B, A) = −score(A, B)` exatamente, por Hypothesis, para quaisquer pesos e atributos |
+| RNF01 | `test_desempenho.py` mede o p95 de `avaliar()` em 10.000 chamadas com o modelo consultado em todo passo, em dois cruzamentos |
+| Arquitetura | `test_arquitetura.py` verde: `politica.py` não importa framework nem lê arquivo |
+
+A corrida de verificação não foi gravada em `analysis/data/`: é regressão, não
+experimento.
+
+**Como reproduzir a verificação:**
+
+```bash
+# na main e na branch, em pastas de saída diferentes
+python -m sim.controlador.lote --cenarios leve,moderado,intenso,multiplas_emergencias     --modos FIXO,PREEMPCAO,PREEMPCAO_COMPENSADA --seeds 101..102 --paralelo 6     --sem-banco --saida <pasta>
+pytest backend/tests/core/test_politica.py backend/tests/core/test_desempenho.py     analysis/tests/test_treino_politica.py
+```
+
 Toda disputa é entre **dois** VEs, sempre no cruzamento **CRUZ_02**, que é onde a
 rota do corredor cruza a transversal. A ausência de dispersão entre seeds é
 esperada e não é defeito: as partidas de VE não dependem da seed, só o tráfego de
@@ -1893,6 +1950,8 @@ diferenças) foram verificados.
 
 | Data | Item | Decisão | Justificativa |
 | --- | --- | --- | --- |
+| 2026-10-07 | **Entrega 10.6: empate exato do modelo decide pelo E8 entre os empatados** (P19; decisão do Felipe) | Com `score = 0` (na prática, os quatro atributos iguais), ou com mais de um invicto no torneio, vence pela chave do E8 (tipo, depois ETA) **só entre os empatados**. | Escolhida contra seguir "senão B" ao pé da letra, com A pelo menor id como no treino. No motor a ordem dos pedidos vem do estado, e o "senão B" faria o vencedor depender dela, justamente o que a forma sobre diferenças existe para impedir. O E8 é regra declarada e não depende da ordem. Não age sobre os 652 exemplos rotulados: nenhum score sai zero. |
+| 2026-10-07 | **Entrega 10.6: `PoliticaDesempate.escolher` recebe o `EstadoMalha`** (implementação) | A assinatura troca `t` por `estado`. `PoliticaAprendida` guarda a topologia e os parâmetros do motor, e calcula os atributos com `atributos_do_ve`, a mesma função da rotulagem. | O modelo precisa de velocidade, fila do acesso e rota restante, que `Disputa` não carrega, e `t` não era usado por ninguém. Os braços existentes não mudam: zero diferenças na matriz de regressão (P19, registro da 10.6). |
 | 2026-10-07 | **O Felipe assume a parte de hardware; mudanças do firmware do UNO confirmadas** | A bancada fica com o Felipe, que grava e testa, e as confirmações de hardware passam a ser feitas por ele, nesta frente. Confirmadas as 8 mudanças de comportamento da mensagem do Bloco 5 (tempos 3/2 s, verde contado do verde exclusivo, renovação, recusa de tipo desconhecido, volta pelo eixo oposto, teto de 30 s, `DESCARTADO` no log, a Central e a criticidade decidindo) e o receptor no A0. Versões informadas: `MFRC522` 1.4.12 (GithubCommunity) e `LiquidCrystal I2C` 1.1.2 (Frank de Brabander); o pacote `esp8266` sem número de versão. | A bancada já estava com ele desde 2026-10-06, e todas as mudanças rodaram na placa (`bridge.verificar` 20 de 20, checklist de `06` §6, ensaio da demonstração 19 de 19). Fecha os itens 1 e 4 de `docs/contrato-hardware-software.md` §15; ficam as fotos e a versão do pacote `esp8266`. |
 | 2026-10-06 | **A Central (P20) vale na bancada — "caminho A"** (decisão do Felipe, discutida na sessão de 2026-10-06) — revê em parte "Arquitetura da bancada adotada como está" e "Notebook só escuta", de 2026-10-05 | **Um fio muda:** o TX do NodeMCU receptor sai do RX (0) do UNO e vai para o **A0**, lido por `SoftwareSerial` (vem com o core; A1 fica reservado como o TX que ela exige). O RX (0) fica só para o USB, e a ponte manda ao UNO `AUT,<VEICULO>,<0..3>`: a criticidade da ocorrência ativa de cada tipo. O UNO guarda a lista na RAM e decide contra ela; tipo sem ocorrência recebe `EV,SEM_OCORRENCIA` e o LCD mostra `SEM OCORRENCIA` por 3 s. A lista vai na `ST` (sétimo campo, três dígitos). Os sketches dos NodeMCUs não mudam. | A Central existia (API, banco, painel), mas nenhum caminho em execução a consumia: na defesa, abrir e encerrar ocorrência não tinha efeito visível. Com o receptor no RX (0) o notebook não conseguia escrever no UNO. A checagem fica **local**: o notebook continua fora do caminho da decisão, e a autonomia do cruzamento (passo de demonstração) segue valendo. De quebra, gravar o UNO e injetar VEs deixam de exigir fio solto. |
 | 2026-10-06 | **Caminho B descartado** | Ligar o receptor também ao notebook por USB e filtrar as detecções no notebook. | Muda o sketch do receptor, o UNO nunca saberia da negação (sem LCD) e exige conferir a alimentação dupla do receptor. |

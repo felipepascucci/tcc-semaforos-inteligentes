@@ -19,12 +19,23 @@ from __future__ import annotations
 
 import statistics
 import time
+from collections.abc import Sequence
+from dataclasses import dataclass
 
 import pytest
 
 from core.malha import TopologiaMalha
-from core.modelos import EstadoMalha, EstadoSemaforo, Sinal, TipoVeiculo, VeiculoEmergencia
+from core.modelos import (
+    Criticidade,
+    EstadoMalha,
+    EstadoSemaforo,
+    Sinal,
+    TipoVeiculo,
+    VeiculoEmergencia,
+)
+from core.priorizacao.conflito import Disputa
 from core.priorizacao.motor import MotorDecisao
+from core.priorizacao.politica import PesosPolitica, PoliticaAprendida
 from tests.core.conftest import (
     CRITICIDADE_TIPICA,
     FASE_TRANSVERSAL,
@@ -163,3 +174,76 @@ def test_multiplos_ves_nao_estouram_o_orcamento() -> None:
 
     p95 = _percentil(_medir(motor, estados), 0.95)
     assert p95 < parametros.latencia_decisao_p95_max_ms, f"p95={p95:.3f} ms com 4 VEs"
+
+
+@dataclass
+class _ContaConsultas:
+    """Repassa à política aprendida e conta as chamadas."""
+
+    politica: PoliticaAprendida
+    chamadas: int = 0
+
+    def escolher(
+        self, id_semaforo: str, disputas: Sequence[Disputa], estado: EstadoMalha
+    ) -> Disputa | None:
+        self.chamadas += 1
+        return self.politica.escolher(id_semaforo, disputas, estado)
+
+
+def test_politica_aprendida_nao_estoura_o_orcamento() -> None:
+    """RNF01 com o braço `PREEMPCAO_ML` (entrega 10.6): a inferência entra no trecho medido.
+
+    Dois pares de VEs de nível 1 disputam fases distintas em `CRUZ_TESTE_1` e
+    `CRUZ_TESTE_2`, longe demais para a janela de E3. Sem preempção aberta, a
+    guarda de oscilação nunca decide, e o modelo é consultado em todo passo e
+    nos dois cruzamentos, que é o caminho mais caro da política. Os pesos são da
+    ordem dos treinados; o valor não muda o custo de um produto escalar.
+    """
+    parametros = construir_parametros()
+    topologia = construir_topologia(n_cruzamentos=8)
+    pesos = PesosPolitica(
+        eta_s=-0.04, velocidade_ms=-0.15, fila_por_faixa=0.001, cruzamentos_restantes=0.5
+    )
+    politica = _ContaConsultas(PoliticaAprendida(pesos, topologia, parametros))
+    motor = MotorDecisao(parametros, topologia, politica=politica)
+
+    estados = []
+    for passo in range(N_CHAMADAS):
+        posicao = 50.0 + float(passo % 200)
+        veiculos = tuple(
+            VeiculoEmergencia(
+                id=f"{prefixo}_{numero}",
+                tipo=TipoVeiculo.AMBULANCIA,
+                criticidade=Criticidade.RISCO_VIDA,
+                posicao=(0.0, 0.0),
+                velocidade=10.0,
+                rota=rota,
+                indice_via_atual=0,
+                posicao_na_via_m=posicao,
+            )
+            for numero in (1, 2)
+            for prefixo, rota in (
+                ("ART", tuple(f"E{i}" for i in range(numero - 1, 9))),
+                ("TRV", (f"T{numero}_IN", f"T{numero}_OUT")),
+            )
+        )
+        semaforos = {
+            id_cruzamento: EstadoSemaforo(
+                id=id_cruzamento,
+                fase_atual=FASE_TRANSVERSAL,
+                tempo_na_fase=10.0,
+                fila_por_acesso=dict.fromkeys(cruzamento.acessos(), 4),
+                sinal=Sinal.VERDE,
+            )
+            for id_cruzamento, cruzamento in topologia.cruzamentos.items()
+        }
+        estados.append(
+            EstadoMalha(t=passo * 0.1, semaforos=semaforos, veiculos_emergencia=veiculos)
+        )
+
+    amostras = _medir(motor, estados)
+    p95 = _percentil(amostras, 0.95)
+
+    assert politica.chamadas == 2 * (N_AQUECIMENTO + N_CHAMADAS)
+    assert all(motor.preempcao_ativa(f"CRUZ_TESTE_{n}") is None for n in (1, 2))
+    assert p95 < parametros.latencia_decisao_p95_max_ms, f"p95={p95:.3f} ms com a política"

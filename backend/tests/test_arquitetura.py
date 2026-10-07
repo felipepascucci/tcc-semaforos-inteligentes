@@ -1,10 +1,12 @@
 """RNF07 — `core/` não importa framework nem I/O (`context/06` §2).
 
 Este teste é barato e evita a erosão da regra principal do projeto
-(`context/01` §1). Ele não checa estilo: checa a afirmação que sustenta o
-trabalho inteiro — *"o modelo validado em simulação é o mesmo que roda no
-protótipo"*. Essa frase só é verdadeira enquanto o núcleo não souber de que lado
-está o atuador.
+(`context/01` §1). Ele não checa estilo: checa que o motor avaliado na
+simulação é agnóstico ao atuador, e que o modelo de P19 entra nele como dado,
+com inferência pura (`core/priorizacao/politica.py`), e não como framework.
+Desde 2026-10-05 o protótipo não roda o motor (`context/00` §3), então o teste
+não sustenta mais a frase "o mesmo motor roda na simulação e no protótipo".
+Sustenta o que continua valendo: o núcleo não sabe de que lado está o atuador.
 
 A verificação é via AST, não por convenção nem por revisão: um `import traci`
 dentro de `core/` quebra a suite, e quem escreveu descobre em segundos em vez de

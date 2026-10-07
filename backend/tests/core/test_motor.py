@@ -588,8 +588,10 @@ class _Preferir:
 
     id_veiculo: str
 
-    def escolher(self, id_semaforo: str, disputas: Sequence[Disputa], t: float) -> Disputa | None:
-        del id_semaforo, t
+    def escolher(
+        self, id_semaforo: str, disputas: Sequence[Disputa], estado: EstadoMalha
+    ) -> Disputa | None:
+        del id_semaforo, estado
         return next((d for d in disputas if d.deteccao.id_veiculo == self.id_veiculo), None)
 
 
