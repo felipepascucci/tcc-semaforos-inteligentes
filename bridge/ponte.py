@@ -24,7 +24,8 @@ transporte (`LinhaRecebida`).
 **Medição de H3** (`context/05` §4.3). Com `transporte_veiculo`, a ponte ouve
 também a serial do NodeMCU emissor, casa cada `Tag … lida -> Enviando RUAn` com
 a decisão do UNO para ela (`bridge/latencia.py`) e entrega as amostras ao
-gravador do CSV.
+gravador do CSV. Todo desfecho, amostra ou não, vai para o gravador de
+desfechos: é o dado do RNF05.
 """
 
 from __future__ import annotations
@@ -46,6 +47,7 @@ from bridge.latencia import (
     DecisaoCarimbada,
     Desfecho,
     GravadorCsv,
+    GravadorDesfechos,
     LeituraCarimbada,
 )
 from bridge.protocolo import (
@@ -133,6 +135,8 @@ class Ponte:
         relogio: Fonte dos carimbos; injetável nos testes.
         transporte_veiculo: A serial do NodeMCU emissor, só na medição de H3.
         gravador: Onde as amostras de H3 vão parar; só com `transporte_veiculo`.
+        gravador_desfechos: Onde todo desfecho de detecção vai parar (RNF05);
+            só com `transporte_veiculo`.
     """
 
     def __init__(
@@ -144,12 +148,14 @@ class Ponte:
         espera_reconexao_s: float = ESPERA_RECONEXAO_S,
         transporte_veiculo: Transporte | None = None,
         gravador: GravadorCsv | None = None,
+        gravador_desfechos: GravadorDesfechos | None = None,
     ) -> None:
-        if gravador is not None and transporte_veiculo is None:
-            raise ValueError("o gravador de H3 exige a porta do emissor")
+        if (gravador is not None or gravador_desfechos is not None) and transporte_veiculo is None:
+            raise ValueError("os gravadores da medição exigem a porta do emissor")
         self.transporte = transporte
         self.transporte_veiculo = transporte_veiculo
         self.gravador = gravador
+        self.gravador_desfechos = gravador_desfechos
         self.relogio = relogio or Relogio()
         self._timeout_decisao_s = timeout_decisao_s
         self._espera_reconexao_s = espera_reconexao_s
@@ -205,6 +211,9 @@ class Ponte:
         try:
             await self._manter_uno()
         finally:
+            if self._casador is not None and self._casador.pendentes:
+                # Ficam fora dos dois CSV: a decisão delas ainda podia chegar.
+                log.warning("deteccoes_pendentes_no_encerramento", n=self._casador.pendentes)
             if emissor is not None:
                 emissor.cancel()
                 with contextlib.suppress(asyncio.CancelledError):
@@ -343,6 +352,11 @@ class Ponte:
 
     def _concluir(self, desfechos: list[Desfecho]) -> None:
         for desfecho in desfechos:
+            if self.gravador_desfechos is not None:
+                try:
+                    self.gravador_desfechos.gravar(desfecho)
+                except OSError as erro:
+                    log.error("csv_desfechos_nao_gravado", erro=str(erro))
             amostra = desfecho.amostra
             if amostra is None:
                 # FILA, RENOVADO e DESCARTADO não têm atuação para medir;

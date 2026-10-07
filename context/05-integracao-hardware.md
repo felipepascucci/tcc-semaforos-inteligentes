@@ -613,7 +613,11 @@ Processo Python no notebook. Responsabilidades:
   decisão do UNO para ela e gravar a amostra em
   `analysis/data/latencia_bancada.csv`. Detecção que vira `FILA`, `RENOVADO`,
   `DESCARTADO` ou `SEM_OCORRENCIA` não é amostra de H3: não houve atuação para
-  medir. O casamento
+  medir. **Toda leitura do emissor**, amostra ou não, vira uma linha de
+  `analysis/data/deteccoes_bancada.csv`, com o evento de decisão que teve ou
+  `SEM_DECISAO` (desde 2026-10-07): é o dado do RNF05. `RECUSADO` não traz rua,
+  não casa, e a leitura fica `SEM_DECISAO`. Os dois CSV levam a mesma `sessao`, e
+  `python -m analysis.resumo_bancada` tira deles o RNF05 e o p95 de H3. O casamento
   está em `bridge/latencia.py`:
   - cada detecção casa com o **primeiro evento de decisão da mesma rua**
     carimbado depois dela, seja qual for. Só se ele for `PREEMP_INI` há amostra.

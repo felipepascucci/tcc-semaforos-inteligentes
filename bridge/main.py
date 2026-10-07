@@ -17,7 +17,9 @@ UNO, que volta **negando todos** até receber a lista: com o backend no ar, ele 
 reenvia sozinho em até ~1 s.
 
 Com `--porta-veiculo`, cada detecção que o UNO atende vira uma linha de
-`analysis/data/latencia_bancada.csv`. **Não há como medir H3 com o dublê**: a
+`analysis/data/latencia_bancada.csv` (H3), e cada leitura do emissor, atendida
+ou não, uma de `analysis/data/deteccoes_bancada.csv` (RNF05). O resumo das duas
+sai de `python -m analysis.resumo_bancada`. **Não há como medir H3 com o dublê**: a
 combinação `--simulado --porta-veiculo` é recusada, para que nenhum número
 simulado chegue ao CSV.
 """
@@ -34,7 +36,7 @@ import uvicorn
 from dotenv import load_dotenv
 
 from bridge.api import criar_app
-from bridge.latencia import CSV_PADRAO, GravadorCsv
+from bridge.latencia import CSV_DESFECHOS_PADRAO, CSV_PADRAO, GravadorCsv, GravadorDesfechos
 from bridge.ponte import Ponte
 from bridge.protocolo import BAUD
 from bridge.serial_client import TransporteSerial
@@ -67,6 +69,13 @@ def _argumentos(argv: Sequence[str] | None) -> argparse.Namespace:
         default=CSV_PADRAO,
         help="onde gravar as amostras de H3 (padrão: analysis/data/latencia_bancada.csv)",
     )
+    parser.add_argument(
+        "--csv-deteccoes",
+        type=Path,
+        default=CSV_DESFECHOS_PADRAO,
+        help="onde gravar cada desfecho de detecção, o dado do RNF05 "
+        "(padrão: analysis/data/deteccoes_bancada.csv)",
+    )
     parser.add_argument("--host", default=os.getenv("BRIDGE_HOST", "127.0.0.1"))
     parser.add_argument("--porta-http", type=int, default=int(os.getenv("BRIDGE_PORT", "8001")))
     args = parser.parse_args(argv)
@@ -94,14 +103,26 @@ def main(argv: Sequence[str] | None = None) -> None:
 
     veiculo: Transporte | None = None
     gravador: GravadorCsv | None = None
+    gravador_desfechos: GravadorDesfechos | None = None
     if args.porta_veiculo is not None:
         # O emissor imprime a 9600 (veiculo_ambulancia.ino), qualquer que seja o
         # baud do UNO.
         veiculo = TransporteSerial(args.porta_veiculo, BAUD)
-        gravador = GravadorCsv(args.csv_h3, sessao=datetime.now(UTC))
-        print(f"Medindo H3: emissor em {args.porta_veiculo}, amostras em {args.csv_h3}")
+        sessao = datetime.now(UTC)
+        gravador = GravadorCsv(args.csv_h3, sessao=sessao)
+        gravador_desfechos = GravadorDesfechos(
+            args.csv_deteccoes, sessao=sessao, versao_codigo=gravador.versao_codigo
+        )
+        print(f"Medindo H3 e RNF05: emissor em {args.porta_veiculo}, sessão {sessao.isoformat()}")
+        print(f"  amostras de H3 em {args.csv_h3}")
+        print(f"  desfechos de cada leitura em {args.csv_deteccoes}")
 
-    ponte = Ponte(transporte, transporte_veiculo=veiculo, gravador=gravador)
+    ponte = Ponte(
+        transporte,
+        transporte_veiculo=veiculo,
+        gravador=gravador,
+        gravador_desfechos=gravador_desfechos,
+    )
     uvicorn.run(criar_app(ponte, nome), host=args.host, port=args.porta_http)
 
 
