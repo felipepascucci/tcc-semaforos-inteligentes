@@ -60,6 +60,7 @@ from bridge.protocolo import (
     EIXO_DE,
     EVENTOS_DE_DECISAO,
     NENHUMA_AUTORIZACAO,
+    TIPOS_DA_BANCADA,
     Evento,
     LinhaInvalidaError,
     Regime,
@@ -304,8 +305,13 @@ def item_1(partes: Sequence[Trecho]) -> Resultado:
         f"Maior trecho contínuo de ciclo dentro da tolerância: {maior / 1000:.1f} s "
         f"(precisa de {CICLO_CONTINUO_MS / 1000:.0f} s)"
     )
-    if periodos:
-        resultado.ok = not fora and maior >= CICLO_CONTINUO_MS and all(oks)
+    if fora or not all(oks):
+        resultado.ok = False
+    elif maior >= CICLO_CONTINUO_MS:
+        resultado.ok = True
+    elif periodos:
+        # Nenhuma falha, mas a sessão não teve ciclo bastante para julgar.
+        resultado.detalhes.append("Sessão sem 5 min de ciclo puro: nada a julgar no trecho.")
     return resultado
 
 
@@ -660,9 +666,13 @@ def item_12(linhas: Sequence[Linha], partes: Sequence[Trecho]) -> Resultado:
         f"(a ponte dá o UNO por calado a partir de {SILENCIO_MAXIMO_S:.0f} s)",
         f"Tempo pelo millis() do UNO: {sum(millis) / 60:.1f} min",
     ]
-    resultado.ok = (
-        duracao_s >= SESSAO_CONTINUA_S and reinicios == 0 and silencio_s <= SILENCIO_MAXIMO_S
-    )
+    if reinicios or silencio_s > SILENCIO_MAXIMO_S:
+        resultado.ok = False
+    elif duracao_s >= SESSAO_CONTINUA_S:
+        resultado.ok = True
+    else:
+        # Sessão encerrada antes dos 30 min, sem falha: não é um soak.
+        resultado.detalhes.append("Sessão mais curta que 30 min, sem falha: não é o soak.")
     return resultado
 
 
@@ -702,43 +712,26 @@ def item_15(linhas: Sequence[Linha], partes: Sequence[Trecho]) -> Resultado:
         primeira = sts[0].st
         assert primeira is not None
         negando = primeira.autorizacoes == NENHUMA_AUTORIZACAO
-        volta = next(
-            (
-                linha
-                for linha in sts
-                if linha.st is not None and linha.st.autorizacoes != NENHUMA_AUTORIZACAO
-            ),
-            None,
-        )
-        envio = next(
-            (
-                linha
-                for linha in linhas
-                if linha.direcao is Direcao.PONTE
-                and linha.texto.startswith("AUT,")
-                and linha.t >= t_boot
-            ),
-            None,
-        )
-        if volta is None:
+        envio = _primeira_lista_escrita(linhas, t_boot)
+        if envio is None:
             resultado.detalhes.append(
-                f"Arranque {n}: primeira lista {_lista(primeira)}; a lista não mudou na sessão "
-                "(Central sem ocorrência, ou backend fora do ar)"
+                f"Arranque {n}: primeira lista {_lista(primeira)}; a ponte não escreveu a lista "
+                "da Central na sessão (backend fora do ar?)"
             )
             continue
-        assert volta.st is not None
-        espera_s = (volta.t - t_boot).total_seconds()
-        ok = negando and espera_s <= LISTA_VOLTA_MAX_S
+        t_envio, desejada = envio
+        volta = next(
+            (linha for linha in sts if linha.st is not None and linha.st.autorizacoes == desejada),
+            None,
+        )
+        espera_s = None if volta is None else (volta.t - t_boot).total_seconds()
+        ok = negando and espera_s is not None and espera_s <= LISTA_VOLTA_MAX_S
         oks.append(ok)
         resultado.detalhes.append(
-            f"Arranque {n}: primeira lista {_lista(primeira)}; a lista {_lista(volta.st)} chegou "
-            f"{espera_s:.2f} s depois do BOOT"
-            + (
-                ""
-                if envio is None
-                else " (a ponte escreveu o primeiro AUT "
-                f"{(envio.t - t_boot).total_seconds():.2f} s depois)"
-            )
+            f"Arranque {n}: primeira lista {_lista(primeira)}; a ponte escreveu "
+            f"{''.join(map(str, desejada))} {(t_envio - t_boot).total_seconds():.2f} s depois do "
+            "BOOT, e a ST a trouxe inteira "
+            + ("— nunca" if espera_s is None else f"{espera_s:.2f} s depois do BOOT")
             + f"; critério ≤ {LISTA_VOLTA_MAX_S:.0f} s — {'ok' if ok else 'FALHA'}"
         )
     if oks:
@@ -748,6 +741,36 @@ def item_15(linhas: Sequence[Linha], partes: Sequence[Trecho]) -> Resultado:
 
 def _lista(st: Telemetria) -> str:
     return "".join(map(str, st.autorizacoes))
+
+
+#: As linhas `AUT` de um mesmo envio saem juntas: o backend escreve as três em
+#: ~2 ms (`PUT /autorizacoes`).
+JANELA_DO_ENVIO_S = 0.1
+
+
+def _primeira_lista_escrita(
+    linhas: Sequence[Linha], t_boot: datetime
+) -> tuple[datetime, tuple[int, ...]] | None:
+    """O primeiro envio da lista da Central depois do BOOT, e a lista que ele deixa no UNO.
+
+    A lista começa em `000` no boot e cada `AUT` do envio troca um tipo, como no
+    UNO (`context/05` §3.2.1).
+    """
+    escritas = [
+        linha
+        for linha in linhas
+        if linha.direcao is Direcao.PONTE and linha.texto.startswith("AUT,") and linha.t >= t_boot
+    ]
+    if not escritas:
+        return None
+    t_envio = escritas[0].t
+    lista = list(NENHUMA_AUTORIZACAO)
+    for linha in escritas:
+        if (linha.t - t_envio).total_seconds() > JANELA_DO_ENVIO_S:
+            break
+        _, tipo, criticidade = linha.texto.split(",")
+        lista[TIPOS_DA_BANCADA.index(TipoVeiculo(tipo))] = int(criticidade)
+    return t_envio, tuple(lista)
 
 
 # ---------------------------------------------------------------------------

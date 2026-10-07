@@ -246,8 +246,13 @@ medição; as durações são do `millis()` do UNO, com a folga de 60 ms de
   meio, e nenhum intervalo entre duas `ST` maior que 2 s, o silêncio a partir do
   qual a ponte dá o UNO por calado.
 - **15** — a cada abertura da porta, a primeira `ST` traz `000`, e a lista da
-  Central chega à `ST` em até **2 s** do `BOOT`. É a leitura de "~1 s": enquanto
-  a ponte esteve fora, o backend a procura só a cada 1 s.
+  Central, **inteira** como a ponte a escreveu no primeiro envio depois do
+  `BOOT`, chega à `ST` em até **2 s** do `BOOT`. É a leitura de "~1 s":
+  enquanto a ponte esteve fora, o backend a procura só a cada 1 s.
+
+"Não atende" quer dizer que o dado mostra uma falha. Sessão curta demais para
+o item, sem falha (as sessões de 20 s do item 15, para os itens 1 e 12), sai
+"sem veredito" (ajuste de 2026-10-07, depois da rodada; `09`).
 - **14** — o dado mostra só que a sessão terminou em emergência; o resto é
   observação, como 5, 6, 8 e 13, registrados com data e executor.
 

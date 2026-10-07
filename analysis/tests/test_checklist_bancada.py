@@ -107,9 +107,11 @@ def test_roteiro_completo_atende_o_que_o_dado_julga(tmp_path: Path) -> None:
 
     for item in ("1", "2", "3", "5b", "10", "11", "15"):
         assert r[item].ok is True, (item, r[item].detalhes)
-    # A sessão tem ~7 min: não é o soak.
-    assert r["12"].ok is False
-    assert "0.50 s depois do BOOT" in " ".join(r["15"].detalhes)
+    # A sessão tem ~7 min, sem falha: não é o soak, e não há o que julgar.
+    assert r["12"].ok is None
+    assert "escreveu 100 0.50 s depois do BOOT, e a ST a trouxe inteira 0.50 s" in (
+        " ".join(r["15"].detalhes)
+    )
     assert any("BOMBEIRO (criticidade 2)" in d for d in r["10"].detalhes)
 
 
@@ -136,6 +138,39 @@ def test_so_ciclo_nao_julga_a_emergencia(tmp_path: Path) -> None:
     assert r["5b"].ok is None and r["10"].ok is None and r["11"].ok is None
     # Sem backend, a lista nunca chega: não há o que medir no 15.
     assert r["15"].ok is None
+
+
+def test_sessao_curta_sem_falha_nao_julga_ciclo_nem_soak(tmp_path: Path) -> None:
+    """A sessão de 20 s do item 15 não é evidência contra os itens 1 e 12."""
+    caminho = tmp_path / "telemetria.csv"
+    ensaio = Ensaio(caminho)
+    ensaio.ate(0.2)
+    ensaio.central(AMBULANCIA=2, BOMBEIRO=1, POLICIA=0)
+    ensaio.ate(20)
+    r = _resultados(caminho)
+
+    assert r["1"].ok is None and r["12"].ok is None
+    assert r["15"].ok is True
+    assert "escreveu 210" in r["15"].detalhes[0]
+
+
+def test_ciclo_fora_da_tolerancia_numa_sessao_curta_nao_atende(tmp_path: Path) -> None:
+    caminho = tmp_path / "telemetria.csv"
+    _gravar_a_mao(
+        caminho,
+        [
+            (0.0, "EV,0,BOOT"),
+            (0.0, "ST,0,RRRR,C,0,0,000"),
+            (1.0, "ST,1000,GGRR,C,0,0,000"),
+            (4.0, "ST,4000,YYRR,C,0,0,000"),
+            (6.0, "ST,6000,RRRR,C,0,0,000"),
+            (7.0, "ST,7000,RRGG,C,0,0,000"),
+            (10.0, "ST,10000,RRYY,C,0,0,000"),
+            (12.0, "ST,12000,RRRR,C,0,0,000"),
+            (13.2, "ST,13200,GGRR,C,0,0,000"),  # ciclo de 12,2 s
+        ],
+    )
+    assert _resultados(caminho)["1"].ok is False
 
 
 def test_soak_de_30_min(tmp_path: Path) -> None:
