@@ -189,7 +189,7 @@ ver a nota abaixo da tabela.
 | 1 | Ciclo alterna os **2 eixos** (ciclo de 12 s) por 5 min sem travar; liga em all-red | ☐ |
 | 2 | Nunca há verde nos dois eixos ao mesmo tempo; em emergência só a aproximação do VE fica verde — 5 min de observação e a telemetria do mesmo período | ☐ |
 | 3 | Toda transição verde→vermelho passa por amarelo, e há all-red antes de todo verde novo, **inclusive na entrada e na saída da emergência** | ☐ |
-| 4 | 100 passagens sobre as tags das ruas: em ≥ 95 a linha chega ao UNO com a rua certa, ou seja, há um evento de decisão com a rua da tag — RNF05. Um `RECUSADO` conta como falha (a linha chegou corrompida) | ☐ |
+| 4 | 100 passagens sobre as tags das ruas: em ≥ 95 a linha chega ao UNO com a rua certa, ou seja, há um evento de decisão com a rua da tag — RNF05. Um `RECUSADO` conta como falha (a linha chegou corrompida). **Medido na mesma rodada do 7b, com o emissor no USB do notebook** (decisão de 2026-10-06): o denominador são as leituras que o emissor imprimiu, e o resultado é declarado nessa condição, que alimenta o emissor melhor que a bateria de 9 V da demonstração | ☐ |
 | 5 | Tag fora das 4 ruas não gera envio nem mexe no semáforo | ☐ |
 | 5b | **Tag sem ocorrência** (volta em 2026-10-06): sem ocorrência aberta para a ambulância na Central, a passagem gera `SEM_OCORRENCIA`, não mexe no semáforo, e o LCD mostra `SEM OCORRENCIA` por 3 s; abrindo a ocorrência, a passagem seguinte preempta | ☐ |
 | 6 | LCD mostra o VE e a rua em < 1 s após a leitura | ☐ |
