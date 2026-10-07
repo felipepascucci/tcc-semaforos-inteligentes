@@ -4,6 +4,9 @@ Isto **não** vive em `core/` de propósito. Ler arquivo é I/O, e a regra de
 `context/01` §1 é que o núcleo seja puro: testável com `pytest` sem SUMO
 instalado, sem hardware ligado e sem arquivo nenhum no lugar certo.
 
+Também lê `politica_desempate.yaml`, os pesos do modelo de P19 (entrega 10.6),
+pela mesma razão: o núcleo recebe só os números (`core/priorizacao/politica.py`).
+
 O perfil `hardware` é uma **sobreposição**: `parametros.hardware.yaml` traz só as
 chaves que mudam na bancada, e as demais são herdadas do perfil de simulação.
 Manter os dois arquivos completos convidaria à divergência silenciosa — alguém
@@ -21,11 +24,13 @@ import yaml
 
 from core.excecoes import ConfiguracaoInvalidaError
 from core.parametros import Parametros
+from core.priorizacao.politica import PesosPolitica
 
 DIRETORIO_PADRAO = Path(__file__).resolve().parents[1] / "config"
 
 ARQUIVO_SIMULACAO = "parametros.yaml"
 ARQUIVO_HARDWARE = "parametros.hardware.yaml"
+ARQUIVO_POLITICA = "politica_desempate.yaml"
 
 PERFIS = ("simulacao", "hardware")
 
@@ -97,3 +102,29 @@ def snapshot(perfil: str | None = None, diretorio: Path | None = None) -> Mappin
     junto do resultado.
     """
     return carregar_dicionario(perfil, diretorio)
+
+
+def carregar_politica(diretorio: Path | None = None) -> PesosPolitica:
+    """Carrega os pesos da política de desempate de P19.
+
+    O arquivo é gerado por `python -m analysis.treino_politica` e não se edita à
+    mão. Daqui só saem os quatro pesos; o resto do arquivo (λ, seeds, escala,
+    `sha256` dos rótulos) é proveniência, conferida pelo teste do treino.
+
+    Args:
+        diretorio: Onde está o YAML. Padrão: `backend/config/`.
+
+    Returns:
+        Os pesos validados, prontos para `PoliticaAprendida`.
+
+    Raises:
+        ConfiguracaoInvalidaError: se o arquivo não existir, ou se os atributos e
+            os pesos não forem exatamente os do modelo.
+    """
+    caminho = (diretorio or DIRETORIO_PADRAO) / ARQUIVO_POLITICA
+    dados = _ler_yaml(caminho)
+    atributos = dados.get("atributos")
+    pesos = dados.get("pesos")
+    if not isinstance(atributos, list) or not isinstance(pesos, dict):
+        raise ConfiguracaoInvalidaError(f"{caminho} não traz `atributos` (lista) e `pesos` (mapa)")
+    return PesosPolitica.de_dicionario(atributos, pesos)

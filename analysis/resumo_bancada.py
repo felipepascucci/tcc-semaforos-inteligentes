@@ -34,6 +34,7 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+from adapters.terminal import saida_utf8
 from sim.controlador.coletor import percentil
 
 RAIZ = Path(__file__).resolve().parents[1]
@@ -265,6 +266,7 @@ def gerar_relatorio(
 
 def main(argv: Sequence[str] | None = None) -> int:
     """Ponto de entrada: `python -m analysis.resumo_bancada`."""
+    saida_utf8()
     analisador = argparse.ArgumentParser(description=__doc__)
     analisador.add_argument("--deteccoes", type=Path, default=CSV_DETECCOES)
     analisador.add_argument("--latencia", type=Path, default=CSV_LATENCIA)

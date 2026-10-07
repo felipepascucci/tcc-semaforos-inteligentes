@@ -177,3 +177,54 @@ def test_parametro_obrigatorio_ausente_e_apontado_pelo_nome(tmp_path: Path) -> N
 
     with pytest.raises(ConfiguracaoInvalidaError, match="ganho_compensacao_k"):
         configuracao.carregar("simulacao", diretorio=tmp_path)
+
+
+# ---------------------------------------------------------------------------
+# Pesos da política de desempate de P19 (entrega 10.6)
+# ---------------------------------------------------------------------------
+
+
+def test_pesos_da_politica_carregam_do_arquivo_versionado() -> None:
+    """Os números que o núcleo recebe são os do YAML, na ordem do treino."""
+    with (DIRETORIO_REAL / configuracao.ARQUIVO_POLITICA).open(encoding="utf-8") as arquivo:
+        dados = yaml.safe_load(arquivo)
+
+    pesos = configuracao.carregar_politica()
+
+    assert pesos.vetor() == tuple(dados["pesos"][nome] for nome in dados["atributos"])
+
+
+def test_pesos_da_politica_ausentes_falham_na_carga(tmp_path: Path) -> None:
+    with pytest.raises(ConfiguracaoInvalidaError, match="não encontrado"):
+        configuracao.carregar_politica(diretorio=tmp_path)
+
+
+@pytest.mark.parametrize(
+    ("conteudo", "trecho"),
+    [
+        ({"atributos": ["eta_s"]}, "não traz"),
+        ({"pesos": {"eta_s": 1.0}}, "não traz"),
+        (
+            {
+                "atributos": ["eta_s", "velocidade_ms", "fila_no_acesso", "cruzamentos_restantes"],
+                "pesos": {
+                    "eta_s": 0.0,
+                    "velocidade_ms": 0.0,
+                    "fila_no_acesso": 0.0,
+                    "cruzamentos_restantes": 0.0,
+                },
+            },
+            "diferem",
+        ),
+    ],
+    ids=["sem-pesos", "sem-atributos", "outro-desenho"],
+)
+def test_pesos_da_politica_de_outro_formato_falham_na_carga(
+    tmp_path: Path, conteudo: dict[str, object], trecho: str
+) -> None:
+    (tmp_path / configuracao.ARQUIVO_POLITICA).write_text(
+        yaml.safe_dump(conteudo), encoding="utf-8"
+    )
+
+    with pytest.raises(ConfiguracaoInvalidaError, match=trecho):
+        configuracao.carregar_politica(diretorio=tmp_path)

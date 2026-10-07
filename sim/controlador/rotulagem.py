@@ -62,6 +62,8 @@ from adapters.sumo import topologia as topologia_sumo
 from adapters.sumo.adaptador import AdaptadorSumo
 from adapters.sumo.cliente import abrir_cliente
 from adapters.sumo.topologia import MalhaSumo
+from adapters.terminal import saida_utf8
+from core.modelos import EstadoMalha
 from core.parametros import Parametros
 from core.priorizacao.atributos import AtributosVE, atributos_do_ve
 from core.priorizacao.conflito import Disputa, EventoConflito, resolver
@@ -151,9 +153,11 @@ class EscolhaForcada:
     vencedor: str
     outro: str
 
-    def escolher(self, id_semaforo: str, disputas: Sequence[Disputa], t: float) -> Disputa | None:
+    def escolher(
+        self, id_semaforo: str, disputas: Sequence[Disputa], estado: EstadoMalha
+    ) -> Disputa | None:
         """O pedido de `vencedor`, se a disputa for a forçada."""
-        del t
+        del estado
         if id_semaforo != self.id_semaforo:
             return None
         por_id = {disputa.deteccao.id_veiculo: disputa for disputa in disputas}
@@ -663,6 +667,7 @@ def rodar(
 
 
 def main(argumentos: Sequence[str] | None = None) -> int:
+    saida_utf8()
     analisador = argparse.ArgumentParser(
         description="Rotulagem por bifurcação da simulação (entrega 10.4, P19)."
     )

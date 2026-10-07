@@ -50,6 +50,7 @@ from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import urlencode
 
+from adapters.terminal import saida_utf8
 from bridge.verificar import (
     CICLO_MS,
     FOLGA_MS,
@@ -764,6 +765,7 @@ def _pedir_senha() -> str:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    saida_utf8()
     parser = argparse.ArgumentParser(
         prog="python -m bridge.demo",
         description=__doc__,

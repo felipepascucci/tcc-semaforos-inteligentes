@@ -34,6 +34,8 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Final, Protocol
 
+from adapters.terminal import saida_utf8
+
 RAIZ: Final = Path(__file__).resolve().parents[1]
 SKETCH: Final = RAIZ / "firmware" / "uno" / "semaforo"
 FQBN: Final = "arduino:avr:uno"
@@ -193,6 +195,7 @@ def compilar(sketch: Path, destino: Path) -> Path:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    saida_utf8()
     parser = argparse.ArgumentParser(prog="python -m bridge.gravar_uno", description=__doc__)
     parser.add_argument("--porta", default="COM3")
     parser.add_argument("--hex", type=Path, help="grava este .hex em vez de compilar o sketch")

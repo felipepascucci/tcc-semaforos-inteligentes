@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from core.modelos import Criticidade, TipoVeiculo
+from core.modelos import Criticidade, EstadoMalha, TipoVeiculo
 from core.priorizacao.atributos import AtributosVE
 from core.priorizacao.conflito import Disputa, EventoConflito
 from core.priorizacao.deteccao import DeteccaoVE
@@ -77,10 +77,11 @@ def _episodio(
 def test_escolha_forcada_vale_so_na_disputa_bifurcada() -> None:
     politica = EscolhaForcada("CRUZ_TESTE", vencedor="VE_B", outro="VE_A")
     a, b = _disputa("VE_A", fase=1), _disputa("VE_B", fase=2)
+    estado = EstadoMalha(t=0.0, semaforos={})
 
-    assert politica.escolher("CRUZ_TESTE", [a, b], 0.0) == b
-    assert politica.escolher("OUTRO_CRUZ", [a, b], 0.0) is None
-    assert politica.escolher("CRUZ_TESTE", [b, _disputa("VE_C")], 0.0) is None
+    assert politica.escolher("CRUZ_TESTE", [a, b], estado) == b
+    assert politica.escolher("OUTRO_CRUZ", [a, b], estado) is None
+    assert politica.escolher("CRUZ_TESTE", [b, _disputa("VE_C")], estado) is None
 
 
 # ---------------------------------------------------------------------------

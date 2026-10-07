@@ -10,7 +10,7 @@ import yaml
 
 np = pytest.importorskip("numpy", reason="extra analysis não instalado")
 pytest.importorskip("scipy", reason="extra analysis não instalado")
-pytest.importorskip("pandas", reason="extra analysis não instalado")
+pd = pytest.importorskip("pandas", reason="extra analysis não instalado")
 
 from scipy.optimize import check_grad  # noqa: E402
 
@@ -225,3 +225,47 @@ def test_pesos_versionados_saem_do_treino_sobre_os_rotulos_versionados() -> None
         assert versionado["pesos"][atributo] == pytest.approx(
             refeito["pesos"][atributo], rel=1e-6, abs=1e-9
         )
+
+
+def test_inferencia_do_core_escolhe_como_o_treino_em_todos_os_rotulos() -> None:
+    """A 10.6 consulta o modelo que a 10.5 treinou, e não outro (entrega 10.6).
+
+    Os pesos saem de `adapters.configuracao.carregar_politica` e o score de
+    `core/priorizacao/politica.py`, sobre `AtributosVE` montados das colunas de
+    `rotulos.csv`. Em todos os exemplos de treino e validação a escolha tem de
+    ser a de `escolhas` do treino. Nenhum score sai exatamente zero, então o
+    desempate do E8 num empate exato não age sobre estes dados.
+    """
+    from adapters.configuracao import carregar_politica
+    from core.priorizacao.politica import ATRIBUTOS_DO_MODELO, score
+
+    assert tuple(tp.ATRIBUTOS) == ATRIBUTOS_DO_MODELO
+    pesos = carregar_politica()
+    caminho = tp.DADOS / ARQUIVO_ROTULOS
+    conjuntos = tp.ler_conjuntos(caminho, divisao_de_seeds())
+    tabela = pd.read_csv(caminho, dtype={"rotulo": str})
+    tabela = tabela[tabela["rotulo"].isin(tp.TREINAVEIS)]
+
+    def atributos(linha: pd.Series, lado: str) -> AtributosVE:  # type: ignore[type-arg]
+        return AtributosVE(
+            eta_s=float(linha[f"eta_{lado}_s"]),
+            velocidade_ms=float(linha[f"velocidade_{lado}_ms"]),
+            fila_no_acesso=int(linha[f"fila_acesso_{lado}"]),
+            fila_por_faixa=float(linha[f"fila_faixa_{lado}"]),
+            cruzamentos_restantes=int(linha[f"cruzamentos_restantes_{lado}"]),
+        )
+
+    pesos_treino = np.array(pesos.vetor())
+    total = 0
+    for nome, (inicio, fim) in divisao_de_seeds().items():
+        parte = tabela[tabela["seed"].between(inicio, fim)]
+        scores = [
+            score(pesos, atributos(linha, "a"), atributos(linha, "b"))
+            for _, linha in parte.iterrows()
+        ]
+        do_core = np.where(np.array(scores) > 0.0, 1.0, -1.0)
+
+        assert 0.0 not in scores
+        assert np.array_equal(do_core, tp.escolhas(pesos_treino, conjuntos[nome].x)), nome
+        total += len(scores)
+    assert total == sum(len(conjunto) for conjunto in conjuntos.values())

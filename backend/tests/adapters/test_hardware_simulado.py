@@ -17,7 +17,7 @@ import asyncio
 from dataclasses import replace
 
 import pytest
-from hypothesis import given, settings
+from hypothesis import example, given, settings
 from hypothesis import strategies as st
 
 from adapters.hardware.simulado import (
@@ -563,11 +563,45 @@ def _rodar(sequencia: list[tuple[tuple[int, TipoVeiculo] | bytes, float]]) -> Ba
 
 @settings(max_examples=200, deadline=None)
 @given(chegadas)
+# Achado de 2026-10-07: instantes no meio do ms faziam o `round` do `millis()`
+# mostrar um all-red de 1,000 s como 999 ms (63002 -> 64001). Ver
+# `UnoSimulado.t_dispositivo_ms`.
+@example(
+    [
+        (b"RUA9,AMBULANCIA\n", 4.021798684369417),
+        (b"RUA9,AMBULANCIA\n", 7.979701373875734),
+        ((1, TipoVeiculo.AMBULANCIA), 4.0),
+        ((1, TipoVeiculo.AMBULANCIA), 3.0),
+    ]
+)
 def test_i1_a_i4_valem_para_qualquer_sequencia_de_chegadas(
     sequencia: list[tuple[tuple[int, TipoVeiculo] | bytes, float]],
 ) -> None:
     bancada = _rodar(sequencia)
     assert violacoes(bancada.sequencia()) == []
+
+
+@pytest.mark.parametrize(
+    ("t_s", "esperado_ms"),
+    [(2.3, 2300), (0.7, 700), (63.0015, 63001), (64.0015, 64001), (0.0009999, 0)],
+)
+def test_millis_do_duble_trunca_como_a_placa(t_s: float, esperado_ms: int) -> None:
+    """Trunca ao ms, como o `millis()`, sem cair um ms por ruído de ponto flutuante."""
+    uno = UnoSimulado(CONFIG, 0.0)
+    uno.avancar(t_s)
+
+    assert uno.t_dispositivo_ms == esperado_ms
+
+
+def test_duracao_exata_aparece_exata_mesmo_no_meio_do_ms() -> None:
+    """Um intervalo de 1,000 s entre dois instantes com meio ms dá 1000 ms."""
+    for inicio_s in (61.0015, 63.0015, 12.0015, 7.0005):
+        a = UnoSimulado(CONFIG, 0.0)
+        a.avancar(inicio_s)
+        b = UnoSimulado(CONFIG, 0.0)
+        b.avancar(inicio_s + 1.0)
+
+        assert b.t_dispositivo_ms - a.t_dispositivo_ms == 1000, inicio_s
 
 
 @settings(max_examples=100, deadline=None)

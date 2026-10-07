@@ -54,6 +54,7 @@ from numpy.typing import NDArray
 from scipy.optimize import minimize
 from scipy.special import expit
 
+from adapters.terminal import saida_utf8
 from analysis.resumo_rotulos import ARQUIVO_ROTULOS, TREINAVEIS, divisao_de_seeds
 
 RAIZ = Path(__file__).resolve().parents[1]
@@ -460,6 +461,7 @@ def gerar_relatorio(
 
 def main(argv: Sequence[str] | None = None) -> int:
     """Ponto de entrada: `python -m analysis.treino_politica`."""
+    saida_utf8()
     analisador = argparse.ArgumentParser(description=__doc__)
     analisador.add_argument("--dados", type=Path, default=DADOS)
     analisador.add_argument("--saida-dados", type=Path, default=SAIDA_DADOS)

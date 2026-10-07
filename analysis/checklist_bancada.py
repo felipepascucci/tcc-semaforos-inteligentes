@@ -55,6 +55,7 @@ from itertools import pairwise
 from pathlib import Path
 from typing import Any
 
+from adapters.terminal import saida_utf8
 from bridge.ponte import SILENCIO_MAXIMO_S
 from bridge.protocolo import (
     EIXO_DE,
@@ -923,6 +924,7 @@ def gerar_relatorio(
 
 def main(argv: Sequence[str] | None = None) -> int:
     """Ponto de entrada: `python -m analysis.checklist_bancada`."""
+    saida_utf8()
     analisador = argparse.ArgumentParser(description=__doc__)
     analisador.add_argument("--telemetria", type=Path, default=CSV_TELEMETRIA_PADRAO)
     grupo = analisador.add_mutually_exclusive_group()

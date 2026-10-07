@@ -49,6 +49,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import math
 import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
@@ -254,8 +255,17 @@ class UnoSimulado:
 
     @property
     def t_dispositivo_ms(self) -> int:
-        """O `millis()` da placa: tempo desde o boot."""
-        return round((self._t_s - self._t0_s) * 1000)
+        """O `millis()` da placa: tempo desde o boot, **truncado** ao ms, como na placa.
+
+        Truncar, e não arredondar ao mais próximo: com instantes no meio do
+        milissegundo (uma detecção em 12,0015 s), o `round` cai num empate em .5
+        que o ruído de ponto flutuante decide para um lado num carimbo e para o
+        outro no seguinte. Um all-red de 1,000 s exatos aparecia como 999 ms
+        (63001,5 -> 63002 e 64001,4999... -> 64001), e `bridge.verificar` acusava
+        I3 que o dublê não violou (achado de 2026-10-07). O `round(..., 6)` antes
+        tira só o ruído: 2,3 s dariam 2299,9999999999995 ms, e não 2299.
+        """
+        return math.floor(round((self._t_s - self._t0_s) * 1000, 6))
 
     @property
     def regime(self) -> Regime:

@@ -34,6 +34,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+from adapters.terminal import saida_utf8
 from sim.controlador import executor, lote
 from sim.controlador.coletor import ARQUIVO_EXECUCOES, DADOS
 
@@ -391,6 +392,7 @@ def relatorio(
 
 
 def main(argumentos: Sequence[str] | None = None) -> int:
+    saida_utf8()
     analisador = argparse.ArgumentParser(description="Calibração de E7 — P17.")
     analisador.add_argument("--paralelo", type=int, default=6, help="processos simultâneos")
     analisador.add_argument("--saida", type=Path, default=SAIDA)

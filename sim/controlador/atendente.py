@@ -36,6 +36,7 @@ import structlog
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
+from adapters.terminal import saida_utf8
 from app.logs import configurar_logs
 from app.models import ModoControle, PedidoSimulacao
 from app.repositories.experimento import buscar_execucao
@@ -200,6 +201,7 @@ def atender_pendentes(
 
 
 def main(argumentos: list[str] | None = None) -> int:
+    saida_utf8()
     analisador = argparse.ArgumentParser(description="Atende os pedidos de POST /simulacoes.")
     analisador.add_argument("--uma-vez", action="store_true", help="atende o que houver e sai")
     analisador.add_argument("--intervalo", type=float, default=2.0, help="segundos entre consultas")

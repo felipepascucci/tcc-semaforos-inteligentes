@@ -66,8 +66,10 @@ class MotorDecisao:
     """Agente reativo com otimização determinística baseada em conhecimento.
 
     A caracterização é a da decisão P3: técnica clássica de IA, coberta por
-    Russell & Norvig. Não há modelo treinado — o comportamento vem inteiramente
-    das regras E1 a E8 e dos parâmetros.
+    Russell & Norvig. Sem `politica`, o comportamento vem inteiramente das
+    regras E1 a E8 e dos parâmetros. No braço `PREEMPCAO_ML`, a única coisa
+    aprendida é a proposta de vencedor de E8 entre VEs de mesmo nível
+    (`politica.PoliticaAprendida`, P19); o resto do motor é o mesmo.
 
     Attributes:
         parametros: Parâmetros do algoritmo.
@@ -110,7 +112,7 @@ class MotorDecisao:
 
         for id_semaforo, estado_semaforo in estado.semaforos.items():
             comando = self._decidir_para(
-                id_semaforo, estado_semaforo, disputas.get(id_semaforo, []), estado.t
+                id_semaforo, estado_semaforo, disputas.get(id_semaforo, []), estado
             )
             if comando is not None:
                 comandos.append(comando)
@@ -235,9 +237,10 @@ class MotorDecisao:
         id_semaforo: str,
         estado_semaforo: EstadoSemaforo,
         disputas: list[Disputa],
-        t: float,
+        estado: EstadoMalha,
     ) -> Comando | None:
         """Decide o comando de um único cruzamento."""
+        t = estado.t
         cruzamento = self.topologia.cruzamentos.get(id_semaforo)
         if cruzamento is None:
             return None
@@ -260,7 +263,7 @@ class MotorDecisao:
             )
 
         imposto = (
-            self.politica.escolher(id_semaforo, disputas, t)
+            self.politica.escolher(id_semaforo, disputas, estado)
             if self.politica is not None and len(disputas) > 1
             else None
         )

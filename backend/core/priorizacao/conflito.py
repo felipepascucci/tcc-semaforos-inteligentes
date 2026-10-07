@@ -25,11 +25,14 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
 from core.malha import Cruzamento
 from core.parametros import Parametros
 from core.priorizacao.deteccao import DeteccaoVE
+
+if TYPE_CHECKING:
+    from core.modelos import EstadoMalha
 
 
 @dataclass(frozen=True)
@@ -106,17 +109,23 @@ class PoliticaDesempate(Protocol):
     """Quem escolhe o vencedor de E8 no lugar da chave determinística (P19).
 
     É o ponto em que a rotulagem por bifurcação (10.4) força uma escolha e em que
-    a política aprendida (10.6) vai decidir. A política **propõe**; quem decide se
-    a proposta vale é `resolver`, que mantém a criticidade como regra acima de
-    qualquer política (P20).
+    a política aprendida (`politica.PoliticaAprendida`, 10.6) decide. A política
+    **propõe**; quem decide se a proposta vale é `resolver`, que mantém a
+    criticidade como regra acima de qualquer política (P20).
+
+    Recebe o estado inteiro, e não só os pedidos, porque o modelo precisa de
+    atributos que o pedido não carrega: a velocidade do VE, a fila do acesso e
+    os cruzamentos que restam na rota (`atributos.py`).
     """
 
-    def escolher(self, id_semaforo: str, disputas: Sequence[Disputa], t: float) -> Disputa | None:
+    def escolher(
+        self, id_semaforo: str, disputas: Sequence[Disputa], estado: EstadoMalha
+    ) -> Disputa | None:
         """O pedido que deve vencer, ou `None` para deixar a chave de E8 decidir."""
         ...
 
 
-def _chave_de_desempate(disputa: Disputa, parametros: Parametros) -> tuple[int, int, float, int]:
+def chave_de_desempate(disputa: Disputa, parametros: Parametros) -> tuple[int, int, float, int]:
     """Chave de ordenação: menor vence, na ordem 0 → 1 → 2 → 3 de `context/01` §5.2."""
     return (
         int(disputa.deteccao.criticidade),
@@ -151,7 +160,7 @@ def resolver(
     if not disputas:
         return None
 
-    ordenadas = sorted(disputas, key=lambda d: _chave_de_desempate(d, parametros))
+    ordenadas = sorted(disputas, key=lambda d: chave_de_desempate(d, parametros))
     vencedor = ordenadas[0]
     imposto_valido = (
         imposto is not None
@@ -199,7 +208,9 @@ def _motivo(
         return base
 
     perdedor = lista[0].deteccao
-    if imposto and veiculo.criticidade == perdedor.criticidade:
+    if imposto and veiculo.criticidade == perdedor.criticidade and vencedor.ja_em_curso:
+        criterio = "preempção já em curso"
+    elif imposto and veiculo.criticidade == perdedor.criticidade:
         criterio = f"escolha da política de desempate sobre {perdedor.id_veiculo}"
     elif veiculo.criticidade < perdedor.criticidade:
         criterio = (
