@@ -39,7 +39,8 @@ sim/
 ├── controlador/
 │   ├── executor.py           # CLI: roda 1 execução
 │   ├── lote.py               # roda a matriz completa (Bloco 8)
-│   └── coletor.py            # extrai métricas do SUMO
+│   ├── coletor.py            # extrai métricas do SUMO
+│   └── traco.py              # séries no tempo de uma execução, para F3, F4 e F6 (Bloco 9)
 ├── validacao/
 │   ├── malha.py              # os quatro itens do §12, automatizados
 │   └── execucao.py           # validar_execucao() do context/06 §4

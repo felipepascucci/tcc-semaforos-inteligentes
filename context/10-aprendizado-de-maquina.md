@@ -92,6 +92,15 @@ com preempção em curso, o E8 ainda pode trocar o verde de VE, e o braço de ML
 não troca. As colunas acima contam só as decisões do modelo. Como tratar essa
 diferença na análise de H4 é questão da 10.8.
 
+**Como a 10.8 trata isso (2026-10-07).** O lote não registra se o E8 trocou o
+verde numa disputa sob preempção, então as duas fontes de diferença não se
+separam com o dado que existe. A análise conta, em cada braço, as disputas de
+mesmo nível abertas sob preempção em curso, que é onde a guarda age diferente,
+e o texto compara "a política aprendida, **com a guarda à frente dela**, contra
+o E8". O teste só nas seeds em que o modelo divergiu do E8 sai como
+exploratório, fora da família de Holm, porque o subconjunto é escolhido por uma
+variável que só existe no braço de ML.
+
 **A garantia é por construção, e não por disciplina.** A política só *propõe* um
 vencedor (`PoliticaDesempate`, em `core/priorizacao/conflito.py`). Quem decide é
 `resolver`, que só aceita a proposta se ela for um dos pedidos **e** tiver a
@@ -368,7 +377,7 @@ há múltiplos VEs em rotas que se cruzam.
 | 10.5 | Treino e exportação dos pesos | ✅ `politica_desempate.yaml` |
 | 10.6 | Inferência pura em `core/priorizacao/` | ✅ `politica.py` (2026-10-07); nenhum número dos braços existentes muda |
 | 10.7 | Braço `PREEMPCAO_ML` no executor e no lote | ✅ 2026-10-07: só no `multiplas_emergencias` (650 execuções no Bloco 8), sem E7, com quem decidiu cada disputa registrado; nenhum número dos braços existentes muda |
-| 10.8 | Análise estatística de H4 | ⏳ por fazer (depois do Bloco 8) |
+| 10.8 | Análise estatística de H4 | 🛠️ script pronto em 2026-10-07 (`python -m analysis.analise_h4`), testado com dado sintético; o veredito espera o Bloco 8. A variável de resposta e a regra de veredito estão em `07` §3.5, como proposta a confirmar |
 
 Atualizar esta tabela no mesmo commit de cada entrega, junto com
 `docs/plano-desenvolvimento.md` e o `09`.
