@@ -137,16 +137,43 @@ class Opcoes:
     velocidade: float | None = None
 
 
-def versao_do_codigo() -> str:
-    """`git rev-parse --short HEAD`, ou `"desconhecida"` fora de um repositório."""
+#: O que não entra na conta da árvore suja: não muda o resultado de uma execução.
+#: `analysis/data/` em particular, porque o próprio lote escreve nela no meio da
+#: rodada; o resto é documentação.
+FORA_DA_VERSAO = (
+    ":(exclude)analysis/data",
+    ":(exclude)docs",
+    ":(exclude)context",
+    ":(exclude)*.md",
+)
+
+
+def _git(raiz: Path, *argumentos: str) -> str:
+    # Sem locks opcionais: o lote chama isto em vários processos ao mesmo tempo,
+    # e o `status` tentaria atualizar o índice.
     resultado = subprocess.run(
-        ["git", "rev-parse", "--short", "HEAD"],
+        ["git", "--no-optional-locks", *argumentos],
         capture_output=True,
         text=True,
-        cwd=RAIZ,
+        cwd=raiz,
         check=False,
     )
-    return resultado.stdout.strip() or "desconhecida"
+    return resultado.stdout.strip() if resultado.returncode == 0 else ""
+
+
+def versao_do_codigo(raiz: Path = RAIZ) -> str:
+    """`git rev-parse --short HEAD`, com `-suja` se o código tem mudança fora do commit.
+
+    Conta arquivo modificado e arquivo novo não ignorado, fora de
+    `FORA_DA_VERSAO`. Sem o sufixo, a versão gravada dizia que a execução rodou
+    com um commit que não era o código dela (ressalva da 10.4, `context/09`).
+    `"desconhecida"` fora de um repositório.
+    """
+    head = _git(raiz, "rev-parse", "--short", "HEAD")
+    if not head:
+        return "desconhecida"
+    mudancas = _git(raiz, "status", "--porcelain", "--", ".", *FORA_DA_VERSAO)
+    return f"{head}-suja" if mudancas else head
 
 
 def _configuracao() -> dict[str, Any]:
