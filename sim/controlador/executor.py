@@ -10,17 +10,21 @@ O QUE ESTA FUNÇÃO GARANTE, E POR QUÊ
 
 * **Seed explícita, sempre.** É exigência do `CLAUDE.md`: rodar duas vezes com a
   mesma seed e a mesma configuração dá o mesmo resultado. A seed escolhe o
-  arquivo de rotas (o mesmo nos três modos — pareamento de `context/04` §7) e vai
-  também para o `--seed` do SUMO.
+  arquivo de rotas (o mesmo em todos os modos — pareamento de `context/04` §7) e
+  vai também para o `--seed` do SUMO.
 * **Registro em `execucao_simulacao`.** Com `versao_codigo` (`git rev-parse`) e o
   snapshot dos parâmetros. Sem os dois, a execução não é reproduzível e o número
   não é defensável na banca (`context/03` §4.3).
 * **No modo `FIXO`, o motor não é chamado.** Não é economia: o baseline precisa
   ser genuinamente sem intervenção, senão a comparação não vale (`context/04`
   §8).
-* **Os invariantes são verificados a cada passo, nos três modos.** Inclusive no
-  baseline — é o que permite afirmar zero violações com evidência, e não por
+* **Os invariantes são verificados a cada passo, em todos os modos.** Inclusive
+  no baseline — é o que permite afirmar zero violações com evidência, e não por
   suposição.
+* **O braço `PREEMPCAO_ML` é o `PREEMPCAO` com a política aprendida** (entrega
+  10.7, decisão da equipe de 2026-10-07). Mesmos parâmetros, sem E7; a única
+  diferença é quem propõe o vencedor de E8 (`montar_motor`). É o que permite
+  atribuir a diferença medida em H4 à política, e não a outra coisa.
 """
 
 from __future__ import annotations
@@ -38,15 +42,18 @@ from typing import Any
 import yaml
 
 from adapters.configuracao import carregar as carregar_parametros
+from adapters.configuracao import carregar_politica
 from adapters.configuracao import snapshot as snapshot_parametros
 from adapters.sumo import topologia as topologia_sumo
 from adapters.sumo.adaptador import AdaptadorSumo
 from adapters.sumo.cliente import abrir_cliente
 from adapters.terminal import saida_utf8
+from core.malha import TopologiaMalha
 from core.modelos import EstadoMalha
 from core.parametros import Parametros
 from core.priorizacao.conflito import EventoConflito
 from core.priorizacao.motor import MotorDecisao
+from core.priorizacao.politica import ConsultaModelo, PoliticaAprendida
 from core.seguranca import VerificadorSeguranca
 from sim.ambiente import executavel
 from sim.controlador.coletor import DADOS, ColetorMetricas, ResultadoExecucao, gravar_csv
@@ -62,7 +69,10 @@ TIPOS_VEICULO = RAIZ / "sim" / "demanda" / "veiculos.typ.xml"
 DETECTORES = RAIZ / "sim" / "rede" / "malha.det.add.xml"
 SAIDA = RAIZ / "sim" / "saida"
 
-MODOS = ("FIXO", "PREEMPCAO", "PREEMPCAO_COMPENSADA")
+MODOS = ("FIXO", "PREEMPCAO", "PREEMPCAO_COMPENSADA", "PREEMPCAO_ML")
+
+#: O braço de H4: o `PREEMPCAO` com a política aprendida de P19 em E8.
+MODO_ML = "PREEMPCAO_ML"
 
 #: Parâmetros que uma execução pode variar sem editar `parametros.yaml`. Só os de
 #: E7, porque é o que a calibração de P17 precisa (`context/09` P17). Ampliar a
@@ -145,6 +155,22 @@ def _configuracao() -> dict[str, Any]:
     return dados
 
 
+def ves_simultaneos(cenario: str) -> int:
+    """Quantos VEs o cenário põe na malha ao mesmo tempo (`cenarios.yaml`).
+
+    Procura nos cenários do experimento e nos de treino (10.2).
+
+    Raises:
+        ValueError: se o cenário não existir em nenhuma das duas seções.
+    """
+    configuracao = _configuracao()
+    for secao in ("cenarios", "cenarios_treino"):
+        definicao = (configuracao.get(secao) or {}).get(cenario)
+        if definicao is not None:
+            return int(definicao["ves_simultaneos"])
+    raise ValueError(f"cenário desconhecido: {cenario!r}")
+
+
 def parametros_do_modo(modo: str, base: Parametros) -> Parametros:
     """Ajusta os parâmetros ao braço de comparação.
 
@@ -153,12 +179,50 @@ def parametros_do_modo(modo: str, base: Parametros) -> Parametros:
     `COMPENSAR` e E7 nunca roda. Os dois braços saem, portanto, do **mesmo
     código** — o que é o que permite atribuir a diferença medida a E7, e não a
     uma implementação separada.
+
+    `PREEMPCAO_ML` fica sem E7, como o `PREEMPCAO`, que é o baseline de H4: a
+    política é a única diferença entre os dois (`montar_motor`).
     """
     from dataclasses import replace  # import local: uso local
 
-    if modo == "PREEMPCAO":
+    if modo in ("PREEMPCAO", MODO_ML):
         return replace(base, n_ciclos_compensacao=0)
     return base
+
+
+def montar_motor(
+    modo: str,
+    parametros: Parametros,
+    topologia: TopologiaMalha,
+    conflitos: list[EventoConflito],
+    consultas: list[ConsultaModelo],
+) -> MotorDecisao:
+    """O motor do braço, com os buffers de observação ligados.
+
+    Só o `PREEMPCAO_ML` recebe política: os pesos de `politica_desempate.yaml`,
+    lidos por `adapters/`, com a mesma topologia e os mesmos parâmetros do
+    motor. Os outros braços rodam o E8 de sempre, e o buffer `consultas` fica
+    vazio neles.
+
+    Os dois buffers são preenchidos dentro do trecho cronometrado, por um
+    `append` cada; quem os agrega é o coletor, depois (entregas 10.1 e 10.7).
+    """
+    politica = (
+        PoliticaAprendida(
+            pesos=carregar_politica(),
+            topologia=topologia,
+            parametros=parametros,
+            observador=consultas.append,
+        )
+        if modo == MODO_ML
+        else None
+    )
+    return MotorDecisao(
+        parametros=parametros,
+        topologia=topologia,
+        observador_conflito=conflitos.append,
+        politica=politica,
+    )
 
 
 def aplicar_ajustes(base: Parametros, ajustes: Ajustes) -> Parametros:
@@ -312,7 +376,7 @@ def executar(opcoes: Opcoes) -> ResultadoExecucao:
         As métricas da execução.
 
     Raises:
-        ValueError: se o modo não for um dos três braços.
+        ValueError: se o modo não for um dos braços de `MODOS`.
     """
     if opcoes.modo not in MODOS:
         raise ValueError(f"modo desconhecido: {opcoes.modo!r} (esperado um de {', '.join(MODOS)})")
@@ -347,12 +411,10 @@ def executar(opcoes: Opcoes) -> ResultadoExecucao:
     # O motor publica os conflitos entre VEs num buffer, e não no coletor: a
     # publicação acontece dentro do trecho cronometrado do laço, e um `append`
     # não mexe na medição do RNF01 — agregar episódios mexeria (entrega 10.1).
+    # As consultas ao modelo, no braço `PREEMPCAO_ML`, seguem a mesma regra (10.7).
     conflitos: list[EventoConflito] = []
-    motor = MotorDecisao(
-        parametros=parametros,
-        topologia=malha.topologia,
-        observador_conflito=conflitos.append,
-    )
+    consultas: list[ConsultaModelo] = []
+    motor = montar_motor(opcoes.modo, parametros, malha.topologia, conflitos, consultas)
     verificador = VerificadorSeguranca(parametros=parametros)
     coletor = ColetorMetricas(
         cenario=opcoes.cenario,
@@ -377,6 +439,7 @@ def executar(opcoes: Opcoes) -> ResultadoExecucao:
             conflitos,
             transmissor,
             ritmo,
+            consultas,
         )
     finally:
         adaptador.fechar()
@@ -453,6 +516,7 @@ def _laco(
     conflitos: list[EventoConflito],
     transmissor: Transmissor | None = None,
     ritmo: Ritmo | None = None,
+    consultas: list[ConsultaModelo] | None = None,
 ) -> None:
     """O laço de `context/04` §8.
 
@@ -460,8 +524,8 @@ def _laco(
     depois a decisão (cronometrada **sem** I/O), depois a atuação e, por último,
     a verificação dos invariantes sobre o estado resultante.
 
-    O buffer `conflitos` é preenchido pelo motor durante a decisão e drenado
-    depois que o cronômetro para. A transmissão ao vivo, quando ligada, também
+    Os buffers `conflitos` e `consultas` são preenchidos pelo motor durante a
+    decisão e drenados depois que o cronômetro para. A transmissão ao vivo, quando ligada, também
     fica fora do trecho cronometrado, e só anexa o estado numa fila. O ritmo,
     quando pedido, dorme no fim do passo, depois de tudo.
     """
@@ -470,7 +534,15 @@ def _laco(
         estado = adaptador.ler_estado(t)
 
         decidir_e_aplicar(
-            adaptador, motor, verificador, coletor, estado, controlar, conflitos, transmissor
+            adaptador,
+            motor,
+            verificador,
+            coletor,
+            estado,
+            controlar,
+            conflitos,
+            transmissor,
+            consultas,
         )
 
         if adaptador.cliente.veiculos_restantes() == 0:
@@ -488,6 +560,7 @@ def decidir_e_aplicar(
     controlar: bool,
     conflitos: list[EventoConflito],
     transmissor: Transmissor | None = None,
+    consultas: list[ConsultaModelo] | None = None,
 ) -> None:
     """O corpo de um passo do laço, depois da leitura do estado.
 
@@ -505,6 +578,9 @@ def decidir_e_aplicar(
         coletor.registrar_decisao(latencia_ms, len(comandos))
         coletor.registrar_conflitos(conflitos)
         conflitos.clear()
+        if consultas:
+            coletor.registrar_consultas(consultas, motor.parametros)
+            consultas.clear()
     else:
         comandos = []
     if transmissor is not None:

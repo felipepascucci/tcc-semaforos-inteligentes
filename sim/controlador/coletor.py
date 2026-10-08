@@ -26,7 +26,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from core.modelos import EstadoMalha, Transicao
+from core.parametros import Parametros
 from core.priorizacao.conflito import EventoConflito
+from core.priorizacao.politica import ConsultaModelo
 from core.seguranca import Violacao
 
 RAIZ = Path(__file__).resolve().parents[2]
@@ -116,6 +118,14 @@ class EpisodioConflito:
             em aberto. Distingue o conflito que nasceu sob preempção alheia e se
             libertou daquele que passou inteiro suspenso.
         preempcao_em_curso: VE que detinha a preempção na abertura, ou `None`.
+        decidida_pelo_modelo: Se o modelo de P19 decidiu a disputa em algum
+            passo do episódio (entrega 10.7). Só pode ser verdade no braço
+            `PREEMPCAO_ML`; nos outros não há modelo a consultar.
+        modelo_divergiu_do_e8: Se, em algum desses passos, o modelo escolheu
+            diferente do que o E8 determinístico escolheria. Episódio em que é
+            falso decorreu igual nos dois braços **no que dependeu do modelo**:
+            é o n em que a política aprendida pode ter mudado alguma coisa
+            (`context/07` §3.3.1).
     """
 
     id_semaforo: str
@@ -130,6 +140,8 @@ class EpisodioConflito:
     decidivel: bool
     decidivel_em_algum_passo: bool
     preempcao_em_curso: str | None = None
+    decidida_pelo_modelo: bool = False
+    modelo_divergiu_do_e8: bool = False
 
     @property
     def n_ves(self) -> int:
@@ -265,6 +277,8 @@ class _EpisodioAberto:
     t_fim_s: float
     passos: int
     decidivel_em_algum_passo: bool
+    decidida_pelo_modelo: bool = False
+    modelo_divergiu_do_e8: bool = False
 
     def fechar(self) -> EpisodioConflito:
         """Congela o episódio no formato que vai para o CSV."""
@@ -282,6 +296,8 @@ class _EpisodioAberto:
             decidivel=self.abertura.decidivel,
             decidivel_em_algum_passo=self.decidivel_em_algum_passo,
             preempcao_em_curso=self.abertura.preempcao_em_curso,
+            decidida_pelo_modelo=self.decidida_pelo_modelo,
+            modelo_divergiu_do_e8=self.modelo_divergiu_do_e8,
         )
 
 
@@ -387,6 +403,50 @@ class ColetorMetricas:
                 passos=1,
                 decidivel_em_algum_passo=evento.decidivel,
             )
+
+    def registrar_consultas(
+        self, consultas: Iterable[ConsultaModelo], parametros: Parametros
+    ) -> None:
+        """Marca os episódios em que o modelo decidiu, e se divergiu do E8 (10.7).
+
+        Chamado depois de `registrar_conflitos` do **mesmo passo**, e fora do
+        trecho cronometrado: comparar a escolha do modelo com a do E8 é
+        contabilidade, e não entra na latência do RNF01.
+
+        Toda consulta tem um episódio aberto: o modelo só decide entre pedidos
+        por fases distintas, e esses pedidos são justamente um conflito que o
+        motor publicou no mesmo passo e no mesmo cruzamento. O episódio é o
+        daquele cruzamento cujo último passo é o da consulta.
+
+        Args:
+            consultas: As consultas ao modelo publicadas neste passo.
+            parametros: Os parâmetros do motor, para a chave do E8.
+
+        Raises:
+            ValueError: se uma consulta não tiver episódio no mesmo passo. É
+                defeito, e não dado: a contagem de H4 não pode perder consulta
+                em silêncio.
+        """
+        folga = 0.5 * self.passo_s
+        for consulta in consultas:
+            ids = {disputa.deteccao.id_veiculo for disputa in consulta.candidatos}
+            episodio = next(
+                (
+                    aberto
+                    for (id_semaforo, ids_episodio), aberto in self._abertos.items()
+                    if id_semaforo == consulta.id_semaforo
+                    and abs(aberto.t_fim_s - consulta.t) <= folga
+                    and ids <= set(ids_episodio)
+                ),
+                None,
+            )
+            if episodio is None:
+                raise ValueError(
+                    f"consulta ao modelo sem conflito no mesmo passo: {consulta.id_semaforo} "
+                    f"em t={consulta.t:.1f}s, VEs {sorted(ids)}"
+                )
+            episodio.decidida_pelo_modelo = True
+            episodio.modelo_divergiu_do_e8 |= consulta.divergiu_do_e8(parametros)
 
     def _fechar_conflitos(self) -> tuple[EpisodioConflito, ...]:
         """Fecha os episódios ainda abertos e devolve todos, em ordem de início."""
@@ -703,6 +763,8 @@ def gravar_csv(
             "decidivel",
             "decidivel_em_algum_passo",
             "preempcao_em_curso",
+            "decidida_pelo_modelo",
+            "modelo_divergiu_do_e8",
         ),
         [
             [
@@ -722,6 +784,8 @@ def gravar_csv(
                 int(episodio.decidivel),
                 int(episodio.decidivel_em_algum_passo),
                 episodio.preempcao_em_curso or "",
+                int(episodio.decidida_pelo_modelo),
+                int(episodio.modelo_divergiu_do_e8),
             ]
             for episodio in resultado.conflitos
         ],

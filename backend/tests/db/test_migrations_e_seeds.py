@@ -16,7 +16,7 @@ from alembic.config import Config
 from sqlalchemy import Engine, text
 from sqlalchemy.orm import Session
 
-from app.models import Base
+from app.models import Base, ModoControle
 from db.seeds.carregar import aplicar, carregar_dados, coordenadas_da_grade, resumo
 
 RAIZ = Path(__file__).resolve().parents[3]
@@ -65,6 +65,48 @@ def test_os_cinco_enums_nativos_existem(engine: Engine) -> None:
     consulta = text("SELECT typname FROM pg_type WHERE typtype = 'e'")
     with engine.connect() as conexao:
         assert {linha[0] for linha in conexao.execute(consulta)} == ENUMS_ESPERADOS
+
+
+def test_modo_controle_tem_os_bracos_do_orm(engine: Engine) -> None:
+    """O braço `PREEMPCAO_ML` (10.7) entrou por migration, não só no ORM."""
+    consulta = text("SELECT unnest(enum_range(NULL::modo_controle))::text")
+    with engine.connect() as conexao:
+        no_banco = [linha[0] for linha in conexao.execute(consulta)]
+    assert no_banco == [modo.value for modo in ModoControle]
+
+
+def test_downgrade_do_braco_ml_recusa_apagar_execucao(
+    engine: Engine, url_banco_efemero: str
+) -> None:
+    """Voltar o schema não pode levar execuções do braço junto, em silêncio."""
+    configuracao = _configuracao(url_banco_efemero)
+    with engine.begin() as conexao:
+        conexao.execute(
+            text(
+                "INSERT INTO execucao_simulacao "
+                "(nome_cenario, modo, seed, duracao_s, arquivo_rede, parametros) "
+                "VALUES ('multiplas_emergencias', 'PREEMPCAO_ML', 900, 60, 'teste', '{}')"
+            )
+        )
+    try:
+        with pytest.raises(RuntimeError, match="PREEMPCAO_ML"):
+            command.downgrade(configuracao, "e5a17c3d8b42")
+    finally:
+        with engine.begin() as conexao:
+            conexao.execute(text("DELETE FROM execucao_simulacao WHERE seed = 900"))
+
+    command.downgrade(configuracao, "e5a17c3d8b42")
+    try:
+        with engine.connect() as conexao:
+            restantes = [
+                linha[0]
+                for linha in conexao.execute(
+                    text("SELECT unnest(enum_range(NULL::modo_controle))::text")
+                )
+            ]
+        assert restantes == ["FIXO", "PREEMPCAO", "PREEMPCAO_COMPENSADA"]
+    finally:
+        command.upgrade(configuracao, "head")
 
 
 def test_indices_de_context_03_secao_3_3(engine: Engine) -> None:

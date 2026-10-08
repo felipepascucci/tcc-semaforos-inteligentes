@@ -113,7 +113,7 @@ Preferir PlantUML a diagrama desenhado à mão: fica versionado, regenerável e 
 | --- | --- | --- |
 | Resultados reais não confirmam H1 (≥30%) | Alto | Rodar experimento piloto **cedo** (Sprint 3), com 5 seeds, para conhecer a ordem de grandeza antes de comprometer o texto |
 | Protótipo trava durante a apresentação | Alto | Teste de 30 min obrigatório (feito em 2026-10-07: 33 min sem reinício, `06` §6 item 12); sem `String`; emergência que termina sozinha e teto de 30 s (I6); roteiro ensaiado (`bridge/demo.py`, 19 de 19) com plano B `--sem-carrinho`; ter vídeo gravado de backup (**ainda não gravado**) |
-| 600 execuções não cabem no prazo | Médio | `traci` com 6 processos em paralelo: medido no piloto, as 600 levam ~6 h (P15). O braço `PREEMPCAO_ML` (10.7) acrescenta execuções nos cenários com múltiplos VEs |
+| 600 execuções não cabem no prazo | Médio | `traci` com 6 processos em paralelo: medido no piloto, as 600 levam ~6 h (P15). O braço `PREEMPCAO_ML` (10.7) acrescenta 50 execuções, só no `multiplas_emergencias`: 650 no total |
 | ~~Rede da faculdade bloqueia o ESP8266~~ | — | **Não se aplica desde 2026-10-05:** o protótipo não usa rede; os NodeMCUs falam por ESP-NOW, MAC a MAC (`05`). Resta a interferência em 2,4 GHz: testar no local antes |
 | Divergência entre texto do TCC e sistema | Médio | Regra do §4.7: `context/` atualizado no mesmo commit |
 | Escopo cresce além do declarado | Alto | Lista de não-escopo em `00-visao-geral.md` §8 é vinculante |

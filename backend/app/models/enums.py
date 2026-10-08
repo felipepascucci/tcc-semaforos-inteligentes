@@ -54,15 +54,18 @@ class StatusExecucao(StrEnum):
 
 
 class ModoControle(StrEnum):
-    """Os três braços do experimento (`context/04`).
+    """Os braços do experimento (`context/04`).
 
     `FIXO` é o baseline; `PREEMPCAO` isola o efeito de H1; `PREEMPCAO_COMPENSADA`
-    acrescenta E7 e é o braço que sustenta H2.
+    acrescenta E7 e é o braço que sustenta H2. `PREEMPCAO_ML` é o `PREEMPCAO` com
+    a política aprendida em E8, o braço de H4 (entrega 10.7, migration
+    `9d3e6b1f4a27`).
     """
 
     FIXO = "FIXO"
     PREEMPCAO = "PREEMPCAO"
     PREEMPCAO_COMPENSADA = "PREEMPCAO_COMPENSADA"
+    PREEMPCAO_ML = "PREEMPCAO_ML"
 
 
 def _tipo_pg(enum: type[StrEnum], nome: str) -> EnumSQL:

@@ -110,7 +110,10 @@ execucao:
     treino: [201, 240]
     validacao: [241, 250]
 
-modos: [FIXO, PREEMPCAO, PREEMPCAO_COMPENSADA]
+# PREEMPCAO_ML (H4, entrega 10.7) só roda nos cenários com `ves_simultaneos` > 1:
+# o corte é de `sim.controlador.lote.matriz()` (context/04 §6). A lista que o
+# lote usa de fato é `executor.MODOS`; esta é a declaração do experimento.
+modos: [FIXO, PREEMPCAO, PREEMPCAO_COMPENSADA, PREEMPCAO_ML]
 
 cenarios:
   leve:

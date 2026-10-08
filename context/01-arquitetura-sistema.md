@@ -380,8 +380,16 @@ modelo, por torneio todos-contra-todos, se os que sobraram pedem fases
 distintas. Pedidos pela mesma fase não são conflito e ficam com o E8. No empate
 exato do modelo decide a chave do E8 entre os empatados (decisão de 2026-10-07).
 Os pesos vêm de `adapters/configuracao.carregar_politica()`, que recusa arquivo
-cujos atributos não sejam exatamente os do modelo, na ordem do treino. O braço
-`PREEMPCAO_ML` que a usa no executor e no lote é a 10.7. Detalhes em `10` §3 e §4.
+cujos atributos não sejam exatamente os do modelo, na ordem do treino. Detalhes
+em `10` §3 e §4.
+
+**O braço `PREEMPCAO_ML` (entrega 10.7, 2026-10-07)** é o `PREEMPCAO` com a
+`PoliticaAprendida` no motor, e é montado em `executor.montar_motor()`. Só roda
+nos cenários com mais de um VE (`04` §6). A política aceita um `observador`,
+chamado com uma `ConsultaModelo` só nos passos em que o modelo decidiu, depois
+das duas regras. É a mesma forma do `observador_conflito`: um `append` dentro do
+trecho cronometrado. O coletor compara cada consulta com a escolha que o E8
+faria e marca o episódio (`decidida_pelo_modelo`, `modelo_divergiu_do_e8`).
 
 **Observação dos conflitos (entrega 10.1, 2026-09-10).** E8 passou a ser
 observável de fora, sem deixar de ser a mesma regra. `MotorDecisao` aceita um

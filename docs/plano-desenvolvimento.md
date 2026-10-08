@@ -14,8 +14,8 @@ Escopo: completo, conforme `context/` (`context/08` §2).
 > **Estado em 2026-10-07.** Os Blocos 5, 6 e 7 estão na main (PRs #11 a #15 e
 > #17 a #20); do 5, falta só o item 5 do checklist da bancada, e do contrato de
 > hardware, as fotos e a versão do pacote `esp8266`. Do Bloco 10, as entregas
-> 10.1 a 10.5 estão na main (PR #16), e a 10.6 foi feita em 2026-10-07;
-> faltam 10.7 e 10.8. Depois, os Blocos 8 e 9.
+> 10.1 a 10.6 estão na main (PRs #16 e #21), e a 10.7 foi feita em
+> 2026-10-07; falta a 10.8, que vem depois do Bloco 8. Depois, o Bloco 9.
 
 ---
 
@@ -448,13 +448,22 @@ resultado (mesma execução com e sem, `context/06` §2).
 
 ### Bloco 8 — Lote completo (Sprint 7) · ~1 semana + tempo de máquina
 
-~~`sim/controlador/lote.py`~~ **já existe** (entrega 4.1). O Bloco 8 é rodá-lo com `--seeds 1..50`: 4 cenários × 3 modos × 50 seeds = **600 execuções** de 3600 s. Medido no piloto, com `traci` e 6 processos, isso dá **~6 h** — uma noite de máquina. `libsumo` deixou de ser necessário para caber na janela (ver P15).
+~~`sim/controlador/lote.py`~~ **já existe** (entrega 4.1). O Bloco 8 é rodá-lo com `--seeds 1..50`: 4 cenários × 3 modos × 50 seeds = 600 execuções, mais o `PREEMPCAO_ML` no `multiplas_emergencias` × 50 seeds = **650 execuções** de 3600 s (entrega 10.7). Medido no piloto, com `traci` e 6 processos, isso dá **~6 h** — uma noite de máquina. `libsumo` deixou de ser necessário para caber na janela (ver P15).
 
 > **A matriz cresce com o Bloco 10.** O braço `PREEMPCAO_ML` (entrega 10.7) entra
-> nos cenários com múltiplos VEs, então as 600 execuções passam a ser o piso e não
-> o total. O acréscimo exato depende de quantos cenários de múltiplas emergências
-> existirem depois de 10.2. **Por isso o Bloco 10 executa antes do Bloco 8**: um
-> braço acrescentado depois obriga a rodar tudo de novo.
+> nos cenários com múltiplos VEs. ~~O acréscimo exato depende de quantos cenários
+> de múltiplas emergências existirem depois de 10.2.~~ **Fechado em 2026-10-07:**
+> a 10.2 criou só um cenário de treino, fora do experimento, então o braço entra
+> só no `multiplas_emergencias`, e o lote passa a 650 execuções. Quem corta é
+> `lote.matriz()`, e o Bloco 8 continua sendo um comando só:
+>
+> ```bash
+> python -m sim.controlador.lote --modos FIXO,PREEMPCAO,PREEMPCAO_COMPENSADA,PREEMPCAO_ML \
+>     --seeds 1..50 --paralelo 6 --saida <pasta própria>
+> ```
+>
+> **Por isso o Bloco 10 executa antes do Bloco 8**: um braço acrescentado depois
+> obriga a rodar tudo de novo.
 
 > **Bloqueado pelo Bloco 10.** ~~P16~~ foi resolvida em 2026-08-31 corrigindo o mecanismo, ~~P18~~ em 2026-09-10 sem teto numérico, e ~~P17~~ em 2026-10-01, com `K` e `n_ciclos_compensacao` calibrados e congelados. **P19 / Bloco 10** acrescenta um braço à matriz, com a mesma consequência. As 600 rodam com o código de `d63f774` em diante — o piloto de 2026-08-26 foi produzido pelo código anterior e **não** se mistura com elas.
 
@@ -500,7 +509,7 @@ convenção declarada, não otimização. Há lacuna genuína a preencher.
 | 10.4 | ✅ **Rodada em 2026-10-05: 517 exemplos de treino e 135 de validação**, 668 de 668 reexecuções fiéis, 16 empates, nenhum descarte (`analysis/data/bloco10_rotulos/`). 🛠️ **Implementada** (`sim/controlador/rotulagem.py`): cada ramo **reexecuta a seed do zero** até a disputa, em vez de `saveState`/`loadState`, que se mostrou inexato; o ramo força só a disputa bifurcada, depois decide o E8; empate fica fora do treino; teto de 900 s por ramo. Decisões em `context/09`. — Texto original: **Rotulagem por bifurcação da simulação** — `saveState`/`loadState` no instante do conflito, rodando as duas escolhas até os VEs liberarem a rota, e rotulando pelo minimax. Com **divisão treino/teste por seed** e o treino **fora** do intervalo 1..50 (guarda de P16). **Só as disputas de mesmo nível** (`mesmo_nivel = 1`) são bifurcadas — as mistas a regra de criticidade decide, e não há rótulo a aprender (P20) |
 | 10.5 | ✅ **Treinada em 2026-10-06** (`python -m analysis.treino_politica`): pesos em `backend/config/politica_desempate.yaml`, conferidos por teste contra os rótulos versionados; tabelas em `analysis/data/bloco10_treino/`. Fila **por faixa**; cada exemplo pesa a margem do minimax; L2 com λ escolhido na validação (λ = 0,01), modelo final só no treino; numpy e scipy, sem scikit-learn. Na validação, custo médio pela régua do rótulo de 4,30 s, contra 7,19 s do E8 como rodou (por tipo) e 6,43 s do menor ETA. O modelo fica perto de "sempre o corredor" (4,83 s), e no primeiro encontro (CRUZ_02) não supera o menor ETA. **Não é H4.** Decisões e leitura em `context/09`. — Texto original: Treino offline (regressão logística par a par sobre diferenças, **quatro atributos** desde a P20) e **exportação dos pesos como arquivo versionado** |
 | 10.6 | ✅ **Implementada em 2026-10-07** (`backend/core/priorizacao/politica.py`): `PoliticaAprendida` entra pelo ponto `PoliticaDesempate` do motor, que passou a receber o estado da malha; os pesos são lidos em `adapters/configuracao.carregar_politica`, e o `core/` recebe só os números. As duas regras vêm antes do modelo, no código, e não dependem dos pesos; `resolver` continua recusando proposta de nível menos crítico. Torneio todos-contra-todos com três ou mais VEs (vence o invicto); **empate exato decidido pelo E8 entre os empatados** (decisão da equipe, 2026-10-07); pedidos do nível mais crítico pela mesma fase não são conflito e ficam com o E8. Testes de antissimetria (exata, por Hypothesis), das duas regras, do torneio e do empate; a inferência do `core/` escolhe como o treino nos 652 exemplos rotulados; RNF01 medido com o modelo consultado em todo passo. **Nenhum número dos braços existentes muda**: matriz de regressão (4 cenários × `FIXO`, `PREEMPCAO`, `PREEMPCAO_COMPENSADA` × seeds 101 e 102) idêntica à da main. Registro em `context/09` P19. — Texto original: Inferência **pura** em `core/priorizacao/`, sem import de framework: `test_arquitetura.py` continua verde e o RNF01 continua medido. Duas regras ficam **acima** do modelo, nesta ordem: **criticidade** (o nível mais crítico vence, inclusive sobre preempção em curso — P20) e **guarda de oscilação** (no mesmo nível, a preempção em curso vence) |
-| 10.7 | Braço `PREEMPCAO_ML` no executor e no lote, comparável contra o E8 determinístico |
+| 10.7 | ✅ **Implementada em 2026-10-07.** `PREEMPCAO_ML` é o `PREEMPCAO` com a política aprendida, sem E7 (`executor.montar_motor`), e só roda nos cenários com mais de um VE: o lote o tira dos outros e o Bloco 8 fica com **650 execuções**. A política anuncia cada passo em que o modelo decidiu (`ConsultaModelo`), e o coletor grava por episódio `decidida_pelo_modelo` e `modelo_divergiu_do_e8`, o denominador de `context/07` §3.3.1. Enum `modo_controle` com o valor novo (migration `9d3e6b1f4a27`) e o modo no dashboard. RNF01 medido no executor com o braço novo, e a mesma seed reproduz a execução. **Nenhum número dos braços existentes muda.** As três decisões são da equipe (2026-10-07), registradas em `context/09` P19. — Texto original: Braço `PREEMPCAO_ML` no executor e no lote, comparável contra o E8 determinístico |
 | 10.8 | ~~Linha nova em T6~~ (a linha de H4 já está em `context/07` T6 desde a P20) e análise estatística própria de **H4** — mesmo rigor de H1: Wilcoxon pareado, Cliff's δ, IC 95% — **estratificada por `mesmo_nivel`**, com o n de escolhas que o modelo de fato decidiu (`context/07` §3.3.1) |
 
 **Desenho, decidido em 2026-09-10 e anterior a qualquer treino** (justificativas em P19):
@@ -560,9 +569,10 @@ desempate determinístico.
 
 > **Atualizado em 2026-10-07.** P8, P9, P11, P15, P16, P18 e P20 estão
 > **fechadas**. **P3 foi revogada:** a banca espera aprendizado de máquina, o que
-> abriu **P19** e o Bloco 10. **P17 foi calibrada e congelada.** Bloqueia o
-> Bloco 8 só o Bloco 10 (10.7). Da bancada, faltam o item 5 do checklist,
-> as fotos e a versão do pacote `esp8266`.
+> abriu **P19** e o Bloco 10. **P17 foi calibrada e congelada.** Com a 10.7
+> feita, nada mais do Bloco 10 bloqueia o Bloco 8: a 10.8 é a análise das
+> execuções dele. Da bancada, faltam o item 5 do checklist, as fotos e a versão
+> do pacote `esp8266`.
 
 - ~~**P16** — H1 abaixo da meta em `intenso`.~~ ✅ **Resolvida em 2026-08-31**
   corrigindo o mecanismo, sem tocar em H1: 18,1% → **31,2%**, paradas do VE
@@ -575,8 +585,8 @@ desempate determinístico.
   foi decidido em 2026-09-10, e as entregas 10.1 a 10.5 estão na main (PR #16,
   2026-10-06): o modelo está treinado e os pesos estão em
   `backend/config/politica_desempate.yaml`. A inferência em `core/` (10.6)
-  foi feita em 2026-10-07. Faltam o braço `PREEMPCAO_ML` (10.7) e a análise de
-  H4 (10.8). Ver Bloco 10
+  e o braço `PREEMPCAO_ML` (10.7) foram feitos em 2026-10-07. Falta a análise
+  de H4 (10.8), sobre as execuções do Bloco 8. Ver Bloco 10
   acima, P19 em `context/09` e `context/10`.
 - ~~**P18**~~ ✅ **Resolvida em 2026-09-10.** Sem teto numérico: o custo
   transversal é tratado qualitativamente, e o objetivo geral foi reescrito de
