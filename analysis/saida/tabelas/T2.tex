@@ -1,0 +1,17 @@
+\begin{table}[htbp]
+\centering
+\caption{Latência do sistema}
+\label{tab:t2}
+\small
+\begin{tabular}{llrrrrrrr}
+\toprule
+Ambiente & Modo & n & Mín (ms) & Mediana (ms) & Média (ms) & p95 (ms) & p99 (ms) & Máx (ms) \\
+\midrule
+SIMULACAO (decisão) & PREEMPCAO & 144000 & 0,006 & 0,025 & 0,042 & 0,110 & 0,158 & 4,457 \\
+SIMULACAO (decisão) & PREEMPCAO\_COMPENSADA & 144000 & 0,006 & 0,047 & 0,051 & 0,116 & 0,155 & 12,163 \\
+SIMULACAO (decisão) & PREEMPCAO\_ML & 36000 & 0,007 & 0,024 & 0,053 & 0,141 & 0,188 & 0,715 \\
+SIMULACAO (decisão) & pior execução & 450 execuções & — & — & — & 0,199 & 0,295 & 12,163 \\
+HARDWARE (fim a fim) & bancada & 100 & 0,114 & 24,920 & 25,683 & 31,617 & 43,311 & 46,349 \\
+\bottomrule
+\end{tabular}
+\end{table}
