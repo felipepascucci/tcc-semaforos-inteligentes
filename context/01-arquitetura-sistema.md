@@ -282,6 +282,19 @@ onde `DEFICIT_TOTAL` é o tempo de verde que o acesso deixou de receber durante 
 
 Se dois VEs demandam fases conflitantes no mesmo TLS, **um espera**. Nunca conceder as duas. Registrar em `log_prioridade` com `status_execucao = 'CONFLITO_ADIADO'`.
 
+> **Empate em todos os critérios (registrado em 2026-10-08, sem mudança de
+> código).** Se dois VEs empatam em criticidade, tipo e ETA, e nenhum tem
+> preempção em curso, a ordenação de `resolver` é estável e vence o que vem
+> primeiro na lista do `EstadoMalha`. O adaptador SUMO monta essa lista na ordem
+> das assinaturas, que é a ordem em que os VEs entraram na malha. Na prática vale
+> "quem chegou primeiro", a mesma regra do UNO na bancada (`05` §3.3). É
+> determinístico (mesma seed, mesmo resultado), mas sai da ordem da lista, e não
+> de um critério escrito, e por isso fica declarado aqui. Pôr o id do VE como
+> quinto critério explícito mudaria o motor depois do Bloco 8, então não foi
+> feito. ETA idêntico exige os dois VEs à mesma distância e velocidade no mesmo
+> passo de 0,1 s. Pedidos pela **mesma** fase não empatam: o mesmo verde serve os
+> dois.
+
 > **Criticidade — P20, 2026-09-29.** Os critérios de relevância por tipo
 > (ambulância: vida humana; bombeiro: coletividade e meio ambiente; polícia:
 > ordem pública) viraram uma escala **da ocorrência**, não do tipo, porque uma
@@ -488,6 +501,7 @@ Base: `/api/v1`. Documentação automática em `/docs` (FastAPI).
 | `GET` | `/logs/prioridade` | Logs paginados, com filtros |
 | `POST` | `/simulacoes` | Pede execução de cenário ao atendente do host (Bloco 6) |
 | `GET` | `/simulacoes` | Pedidos mais recentes (Bloco 6) |
+| `GET` | `/simulacoes/seeds-reservadas` | Faixas de seed do experimento e o uso de cada uma, de `cenarios.yaml`; o dashboard as mostra junto do campo de seed (2026-10-08) |
 | `GET` | `/simulacoes/{id}` | Status e métricas da execução |
 | `POST` | `/simulacoes/transmissao` | Estado ao vivo da simulação, empurrado pelo executor (Bloco 6) |
 | `GET` | `/metricas/resumo` | Agregados para o dashboard |

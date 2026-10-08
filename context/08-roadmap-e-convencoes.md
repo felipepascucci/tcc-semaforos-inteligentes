@@ -101,6 +101,14 @@ Além do código, o TCC exige (pré-projeto §2.7):
 
 Preferir PlantUML a diagrama desenhado à mão: fica versionado, regenerável e consistente com o código. Um diagrama que diverge do sistema é passivo, não ativo.
 
+> **Feito no Bloco 9 (2026-10-07):** `casos_uso.puml`, `componentes.puml`,
+> `sequencia_preempcao.puml`, `maquina_estados.puml` e o DER. **O DER não usa o
+> `eralchemy2`**, que não está em `02` §2 e exige o Graphviz: `python -m db.der`
+> escreve `docs/diagramas/der.puml` a partir do mesmo `Base.metadata` do Alembic,
+> e `tests/diagramas/test_der.py` falha se o arquivo ficar para trás de um model.
+> Os `.puml` são a fonte. Renderizá-los em PDF exige o PlantUML (Java), que não
+> está instalado. A infraestrutura continua no draw.io (`02` §8), por fazer.
+
 > **P20 (2026-09-29) — o que os diagramas precisam mostrar quando forem feitos.**
 > Casos de uso: o ator **Central de despacho** (simulada), com "abrir ocorrência"
 > e "encerrar ocorrência". Sequência de preempção: a consulta da ocorrência ativa

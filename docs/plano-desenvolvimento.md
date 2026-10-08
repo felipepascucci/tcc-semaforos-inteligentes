@@ -489,6 +489,14 @@ resultado (mesma execução com e sem, `context/06` §2).
 
 `python -m analysis.gerar_resultados_tcc` reproduz o capítulo 5 inteiro com um comando.
 
+> 🛠️ **Pipeline implementado em 2026-10-07, enquanto o Bloco 8 roda** (branch
+> `feat/bloco9-resultados`): T1 a T6, F1, F2 e
+> F5 a partir dos CSV do lote, e F3, F4 e F6 a partir de
+> `python -m sim.controlador.traco`, que roda uma (cenário, seed) com o laço do
+> executor e grava as séries no tempo. Mais a análise de H4 (10.8). Testado com
+> dado sintético e conferido contra os números do piloto. Ficam para o grupo:
+> as regras de veredito (`context/07` §3.5) e a T4 adaptada (`context/07` §4).
+
 Em paralelo: diagramas PlantUML do `context/08` §5, DER via eralchemy2, relatório de validação, checklist assinado do protótipo.
 
 ---

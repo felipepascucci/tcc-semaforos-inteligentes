@@ -6,13 +6,19 @@ atendente, que confere de novo antes de rodar:
 
 * o cenário precisa existir em `sim/config/cenarios.yaml`;
 * a seed não pode estar em `execucao.seeds_reservadas` (1..50 do Bloco 8,
-  101..105 da calibração). Uma execução de demonstração ocuparia em
-  `execucao_simulacao` o ponto do lote, que o rodaria sem registro no banco.
+  101..105 da calibração, 201..250 do treino do modelo de P19). Uma execução de
+  demonstração ocuparia em `execucao_simulacao` o ponto do lote, que o rodaria
+  sem registro no banco.
+
+Cada faixa traz o seu `uso`, que o dashboard mostra ao lado do campo de seed
+(`GET /simulacoes/seeds-reservadas`): as faixas e a explicação vêm do mesmo
+arquivo que a regra, e não há uma segunda cópia na tela para envelhecer.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import yaml
@@ -28,23 +34,33 @@ class CenarioDesconhecidoError(ValueError):
 
 
 class SeedReservadaError(ValueError):
-    """A seed pertence ao experimento (Bloco 8 ou calibração)."""
+    """A seed pertence ao experimento (Bloco 8, calibração ou treino do modelo)."""
 
 
 @dataclass(frozen=True)
 class RegrasSimulacao:
     cenarios: frozenset[str]
     seeds_reservadas: tuple[tuple[int, int], ...]
+    usos: Mapping[tuple[int, int], str] = field(default_factory=dict)
 
     @classmethod
     def de_arquivo(cls, arquivo: Path) -> RegrasSimulacao:
         with arquivo.open(encoding="utf-8") as entrada:
             configuracao = yaml.safe_load(entrada)
-        faixas = configuracao["execucao"]["seeds_reservadas"]
+        itens = configuracao["execucao"]["seeds_reservadas"]
+        faixas = tuple((int(item["faixa"][0]), int(item["faixa"][1])) for item in itens)
         return cls(
             cenarios=frozenset(configuracao["cenarios"]),
-            seeds_reservadas=tuple((int(inicio), int(fim)) for inicio, fim in faixas),
+            seeds_reservadas=faixas,
+            usos={faixa: str(item["uso"]) for faixa, item in zip(faixas, itens, strict=True)},
         )
+
+    def faixas(self) -> list[tuple[int, int, str]]:
+        """`(início, fim, uso)` de cada faixa reservada, em ordem crescente."""
+        return [
+            (inicio, fim, self.usos.get((inicio, fim), ""))
+            for inicio, fim in sorted(self.seeds_reservadas)
+        ]
 
     def reservada(self, seed: int) -> tuple[int, int] | None:
         """A faixa reservada que contém `seed`, ou `None`."""
@@ -56,8 +72,10 @@ class RegrasSimulacao:
                 f"cenário {cenario!r} não existe; use um de {', '.join(sorted(self.cenarios))}"
             )
         if (faixa := self.reservada(seed)) is not None:
+            uso = self.usos.get(faixa)
             raise SeedReservadaError(
-                f"seed {seed} é do experimento ({faixa[0]}..{faixa[1]}); "
+                f"seed {seed} é do experimento ({faixa[0]}..{faixa[1]}"
+                f"{f': {uso}' if uso else ''}); "
                 "demonstração usa seed fora das faixas reservadas"
             )
 

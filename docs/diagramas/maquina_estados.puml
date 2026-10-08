@@ -1,0 +1,38 @@
+@startuml maquina_estados
+' Máquina de estados de um cruzamento — context/08 §5.
+' Fonte: backend/core/priorizacao/fases.py (avancar, _do_verde, _do_amarelo,
+' _do_all_red, _expirar_preempcao). É a mesma máquina que o adaptador SUMO roda
+' e que o firmware do UNO reimplementa em C++ (context/04 §8).
+skinparam monochrome true
+hide empty description
+
+[*] --> Verde : estado_inicial()\nfase 1 em verde
+
+state "Verde da fase corrente" as Verde
+state "Amarelo" as Amarelo
+state "All-red" as AllRed
+
+Verde --> Verde : ESTENDER_VERDE\n(verde_ate ≤ início + verde_max)
+Verde --> Verde : IR_PARA_FASE\n(marca fase_alvo e preempção)
+Verde --> Amarelo : [tempo no verde ≥ verde_min]\ne (fim do verde ou fase_alvo ≠ corrente)
+Amarelo --> AllRed : [amarelo_s cumprido]
+AllRed --> Verde : [all_red_s cumprido]\nverde da fase_alvo,\nou da próxima do ciclo
+
+note right of Verde
+  I2: o único caminho de saída do verde é o amarelo.
+  I3: entre duas fases há sempre all-red.
+  I4: nenhum verde termina antes de verde_min.
+  verde_max é teto absoluto, também sob preempção (I5).
+end note
+
+note bottom of AllRed
+  E6: preempção com mais de preempcao_timeout_s
+  expira e devolve o cruzamento ao ciclo fixo,
+  sem forçar troca de fase.
+  LIBERAR, COMPENSAR e FALLBACK_SEGURO só mudam
+  o modo; a sinalização segue as transições acima.
+  IR_PARA_FASE no amarelo ou no all-red é recusado
+  (MODO): o destino não muda no meio de uma troca.
+end note
+
+@enduml

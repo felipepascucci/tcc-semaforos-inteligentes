@@ -12,6 +12,7 @@ from fastapi import APIRouter, HTTPException, status
 
 from app.api.dependencias import EXIGE_OPERADOR, RecursosDep, SessaoDep
 from app.schemas.simulacoes import (
+    FaixaSeedReservada,
     PedidoSimulacaoEntrada,
     PedidoSimulacaoSchema,
     TransmissaoSimulacao,
@@ -37,7 +38,7 @@ def pedir(
 ) -> PedidoSimulacaoSchema:
     """Grava o pedido como `PENDENTE`.
 
-    Seeds 1..50 (Bloco 8) e 101..105 (calibração) são recusadas: são do
+    As seeds de `GET /simulacoes/seeds-reservadas` são recusadas: são do
     experimento, e uma demonstração não pode ocupar o ponto do lote.
     """
     try:
@@ -53,6 +54,23 @@ def pedir(
 )
 def listar(sessao: SessaoDep) -> list[PedidoSimulacaoSchema]:
     return [PedidoSimulacaoSchema.model_validate(p) for p in simulacoes.listar_pedidos(sessao)]
+
+
+@router.get(
+    "/simulacoes/seeds-reservadas",
+    response_model=list[FaixaSeedReservada],
+    summary="Faixas de seed do experimento, que um pedido não pode usar",
+)
+def seeds_reservadas(recursos: RecursosDep) -> list[FaixaSeedReservada]:
+    """As faixas e o uso de cada uma, de `sim/config/cenarios.yaml`.
+
+    Declarada antes de `/simulacoes/{id_pedido}`, senão o caminho cairia lá e
+    seria recusado por não ser um número.
+    """
+    return [
+        FaixaSeedReservada(inicio=inicio, fim=fim, uso=uso)
+        for inicio, fim, uso in recursos.regras_simulacao.faixas()
+    ]
 
 
 @router.get(

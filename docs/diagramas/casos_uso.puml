@@ -1,0 +1,60 @@
+@startuml casos_uso
+' Diagrama de casos de uso — context/08 §5.
+' Fontes: context/01 §7 (rotas da API), context/00 §6 (RF01..RF07), P20 (Central).
+left to right direction
+skinparam monochrome true
+skinparam packageStyle rectangle
+
+actor "Operador do\ncentro de monitoramento" as Operador
+actor "Central de despacho\n(simulada, P20)" as Central
+actor "Veículo de emergência\n(tag RFID / V2I)" as VE
+actor "Equipe de pesquisa" as Pesquisador
+
+rectangle "Sistema de priorização semafórica" {
+  usecase "Identificar VE em serviço\n(RF01: tag + ocorrência ativa)" as UC_Identificar
+  usecase "Priorizar a rota do VE\n(RF02, RF03: preempção e corredor verde)" as UC_Priorizar
+  usecase "Recalcular a priorização\n(RF07)" as UC_Recalcular
+  usecase "Resolver conflito entre VEs\n(E8: criticidade, depois modelo ou E8)" as UC_Conflito
+  usecase "Compensar o ciclo após a passagem\n(E7, H2)" as UC_Compensar
+  usecase "Registrar eventos e métricas\n(RF05)" as UC_Registrar
+  usecase "Acompanhar semáforos e VEs\nem tempo real (RF04, RF06)" as UC_Acompanhar
+  usecase "Entrar no dashboard\n(login do operador)" as UC_Login
+  usecase "Abrir ocorrência" as UC_Abrir
+  usecase "Encerrar ocorrência" as UC_Encerrar
+  usecase "Cadastrar VE e tag" as UC_Cadastrar
+  usecase "Solicitar preempção manual\n(bancada)" as UC_Manual
+  usecase "Consultar logs de priorização" as UC_Logs
+  usecase "Pedir execução de simulação" as UC_Simular
+  usecase "Rodar o lote experimental\ne gerar o capítulo 5" as UC_Lote
+}
+
+VE --> UC_Identificar
+UC_Identificar ..> UC_Priorizar : <<include>>
+UC_Priorizar ..> UC_Registrar : <<include>>
+UC_Recalcular ..> UC_Priorizar : <<extend>>
+UC_Conflito ..> UC_Priorizar : <<extend>>
+UC_Compensar ..> UC_Priorizar : <<extend>>
+
+Central --> UC_Abrir
+Central --> UC_Encerrar
+UC_Identificar ..> UC_Abrir : consulta a\nocorrência ativa
+
+Operador --> UC_Login
+Operador --> UC_Acompanhar
+Operador --> UC_Cadastrar
+Operador --> UC_Manual
+Operador --> UC_Logs
+Operador --> UC_Simular
+UC_Cadastrar ..> UC_Login : <<include>>
+UC_Manual ..> UC_Login : <<include>>
+UC_Simular ..> UC_Login : <<include>>
+
+Pesquisador --> UC_Lote
+
+note bottom of Central
+  O painel "Central" do dashboard faz o papel da
+  central de despacho: abrir e encerrar ocorrência
+  exigem o login do operador (context/01 §7).
+end note
+
+@enduml

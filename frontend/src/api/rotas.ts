@@ -1,6 +1,7 @@
 // Uma função por rota de context/01 §7 que o dashboard usa.
 import { requisitar } from "./cliente";
 import type {
+  FaixaSeedReservada,
   ModoControle,
   Ocorrencia,
   PaginaLogs,
@@ -48,6 +49,7 @@ export const api = {
   metricas: () => requisitar<ResumoMetricas>("/metricas/resumo"),
 
   simulacoes: () => requisitar<PedidoSimulacao[]>("/simulacoes"),
+  seedsReservadas: () => requisitar<FaixaSeedReservada[]>("/simulacoes/seeds-reservadas"),
   pedirSimulacao: (pedido: {
     cenario: string;
     modo: ModoControle;

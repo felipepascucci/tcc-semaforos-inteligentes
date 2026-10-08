@@ -50,6 +50,26 @@ Um comando reproduz o capítulo inteiro:
 python -m analysis.gerar_resultados_tcc --dados analysis/data/ --saida analysis/saida/
 ```
 
+> **Implementado no Bloco 9 (2026-10-07).** Os
+> módulos são `carregar.py`, `estatistica.py`, `tabelas.py`, `figuras.py`,
+> `analise_h4.py` (entrega 10.8) e `gerar_resultados_tcc.py`. A entrada padrão é
+> `analysis/data/bloco8/`. A saída tem `resultados.md` (T1 a T6 em Markdown),
+> `tabelas/T*.tex` (`booktabs`), `comparacoes.csv` (toda comparação, com p bruto
+> e de Holm), `figuras/F*.pdf` e `h4.md`. `gerar_relatorio_validacao.py` não foi
+> feito: o relatório de validação é a própria seção de caracterização e a T5.
+> Rodado sobre os CSV do piloto (`d081473`, código antigo), o pipeline reproduz
+> os números já registrados (31,7% em `moderado`, 18,1% em `intenso`, mitigação
+> de +3,7%). Isso só confere as fórmulas, e nenhum número do piloto vai ao texto.
+>
+> **F3, F4 e F6 precisam de séries no tempo, que o lote não grava.** Elas vêm de
+> `python -m sim.controlador.traco --cenario intenso --seed 1 --saida
+> analysis/data/bloco8_traco`, que roda a mesma (cenário, seed) nos três braços
+> com o laço do executor (`decidir_e_aplicar`) e grava a posição dos VEs e a fila
+> das transversais a cada segundo, e as transições de sinal. O pipeline confere
+> o tempo de cada VE do traço contra o `ve_por_execucao.csv` do lote e declara se
+> conferem. O cruzamento (`CRUZ_01`) e o VE (o primeiro da execução) das figuras
+> foram fixados no código **antes** de ver as figuras.
+
 ## 3. Método estatístico
 
 ### 3.1 Desenho
@@ -106,6 +126,23 @@ resposta na arguição.
 
 São 4 cenários × várias métricas. Aplicar **Holm-Bonferroni** e reportar p bruto e p ajustado. Mencionar a correção no texto — mostra rigor metodológico.
 
+> **Família de Holm do Bloco 9: o capítulo inteiro.** Toda comparação de T1, de
+> T3 e a de H4 entram juntas, que é a leitura mais conservadora.
+
+### 3.5 Regras de veredito do pipeline · **PROPOSTAS em 2026-10-07, a confirmar pelo grupo antes dos dados do Bloco 8**
+
+Escritas no código (`analysis/gerar_resultados_tcc.py` e `analise_h4.py`) antes de
+haver dado do Bloco 8, pelo mesmo motivo do critério de P16: a regra tem de
+preceder o resultado. São propostas, e não decisões, até o Felipe confirmar.
+
+| Item | Regra proposta |
+| --- | --- |
+| Estatística | Wilcoxon bilateral (principal), t pareado (secundário), Shapiro-Wilk das diferenças só informado. Cliff's δ = P(braço > base) − P(braço < base), cortes de Romano et al. (2006). IC 95% por bootstrap percentil das seeds, 10.000 reamostras, semente fixa |
+| H1 | Por cenário, a redução do braço `PREEMPCAO` contra o `FIXO` é a média sobre as seeds de `(FIXO − braço) / FIXO`, com os VEs pareados por id. O cenário atinge se a redução for ≥ 25% **e** o p de Holm for < 0,05. `moderado` e `intenso` atingem: ACEITA; um: PARCIAL; nenhum: REJEITADA |
+| H2 | A mitigação de P17, com as médias entre as seeds, ≥ 15% em `moderado` **e** em `intenso`: ACEITA; senão, REJEITADA. IC e p de `COMPENSADA × PREEMPCAO` ao lado, sem entrar na regra |
+| H4 | Por execução, a média, sobre os pares de VEs que chegaram nos dois braços, do maior tempo do par (o minimax da rotulagem). FAVORÁVEL com p de Holm < 0,05 e mediana das diferenças e δ negativos. Um efeito significativo **contra** o modelo é reportado como DESFAVORÁVEL, valor que a T6 não previa |
+| RNF01 | O pior p95 da latência de decisão entre as execuções com motor, < 100 ms |
+
 ## 4. Tabelas a gerar
 
 ### T1 — Tempo de deslocamento do VE por cenário e modo
@@ -133,6 +170,15 @@ Duas linhas de ambiente: `SIMULACAO` e `HARDWARE`. A comparação entre os dois 
 
 | Cenário | Priorizações solicitadas | Sucesso | Conflito adiado | Timeout | Abortado |
 | --- | --- | --- | --- | --- | --- |
+
+> **A simulação não tem como preencher esta tabela como está (Bloco 9, 2026-10-07).**
+> As colunas viriam de `log_prioridade`, que a simulação não grava, e o lote não
+> conta pedidos de priorização nem timeouts de E6. O pipeline gera uma **T4
+> adaptada** com o que o lote registra: VEs que completaram a rota e quantos não
+> pararam (o critério do RF03), episódios de disputa entre VEs (um VE adiado em
+> cada) e abortos, que o executor só faz por violação de invariante. Aceitar a
+> versão adaptada ou instrumentar o lote (o que exigiria rodá-lo de novo) é
+> decisão do grupo.
 
 ### T5 — Segurança
 
