@@ -1357,7 +1357,7 @@ forçada da rotulagem, e entra no motor pelo mesmo ponto. Os pesos são lidos po
 `adapters/configuracao.carregar_politica()`, que recusa arquivo cujos atributos
 não sejam exatamente os do modelo, na ordem do treino, ou cujos pesos não sejam
 números finitos. O `core/` recebe só os quatro números. O braço `PREEMPCAO_ML`
-no executor e no lote **não** é desta entrega: é a 10.7.
+no executor e no lote **não** é desta entrega: é a 10.7 (registro logo abaixo).
 
 **A ordem de decisão, no código** (`decidir`):
 
@@ -1405,6 +1405,76 @@ experimento.
 # na main e na branch, em pastas de saída diferentes
 python -m sim.controlador.lote --cenarios leve,moderado,intenso,multiplas_emergencias     --modos FIXO,PREEMPCAO,PREEMPCAO_COMPENSADA --seeds 101..102 --paralelo 6     --sem-banco --saida <pasta>
 pytest backend/tests/core/test_politica.py backend/tests/core/test_desempenho.py     analysis/tests/test_treino_politica.py
+```
+
+#### Entrega 10.7, 2026-10-07 · ✅ **IMPLEMENTADA** — braço `PREEMPCAO_ML` no executor e no lote
+
+**Três decisões do Felipe**, tomadas antes do código (tabela do fim):
+
+1. **O braço é o `PREEMPCAO` com o modelo, sem E7.** `parametros_do_modo()` dá
+   a ele `n_ciclos_compensacao = 0`, e `executor.montar_motor()` lhe dá a
+   `PoliticaAprendida`, com os pesos de `carregar_politica()` e a mesma
+   topologia e os mesmos parâmetros do motor. Contra o `PREEMPCAO`, a política é
+   a única diferença.
+2. **Só roda nos cenários com mais de um VE.** `lote.matriz()` o tira dos
+   cenários com `ves_simultaneos: 1` e avisa na tela. Hoje fica só o
+   `multiplas_emergencias`, e o Bloco 8 passa a **650 execuções**, num comando
+   só.
+3. **Quem decidiu cada disputa fica registrado.** A política chama um
+   `observador` com uma `ConsultaModelo` só nos passos em que o modelo decidiu,
+   depois das duas regras. É um `append` dentro do trecho cronometrado, como o
+   `observador_conflito` da 10.1. Fora dele, o coletor compara cada consulta com
+   a escolha que o E8 faria e grava, por episódio de
+   `conflitos_por_execucao.csv`, `decidida_pelo_modelo` e
+   `modelo_divergiu_do_e8`, as duas valendo 1 se ocorreu em algum passo. Uma
+   consulta sem conflito no mesmo passo e no mesmo cruzamento é defeito, e o
+   coletor falha alto.
+
+**O que mais mudou.** O enum `modo_controle` ganhou o valor (migration
+`9d3e6b1f4a27`, com `db/schema.sql` regerado). O `downgrade` recria o tipo com
+os três valores antigos e **recusa** rodar se houver execução ou pedido do braço
+novo. O dashboard oferece o modo na aba Simulações. O `analysis.relatorio_piloto`
+continua lendo só os três braços de H1 e H2. A análise de H4 é a 10.8.
+
+**Achado a levar à 10.8: a guarda também separa os braços.** No `PREEMPCAO`, a
+chave do E8 é (criticidade, tipo, ETA, preempção em curso): numa disputa de
+mesmo nível que abre com preempção em curso, o E8 ainda pode passar o verde ao
+outro VE por tipo ou ETA. No `PREEMPCAO_ML` a guarda vem antes do modelo, e o
+verde fica com quem o tem (`10` §3). As duas colunas novas contam só as
+decisões do modelo. A diferença entre os braços, portanto, vem do modelo **e**
+da guarda, e como declarar isso na análise de H4 fica para a 10.8.
+
+**Verificação.**
+
+| Verificação | Resultado |
+| --- | --- |
+| Braços existentes, main (`eee22a8`) contra a branch: `leve`, `moderado`, `intenso` e `multiplas_emergencias` × `FIXO`, `PREEMPCAO` e `PREEMPCAO_COMPENSADA` × seeds 101 e 102, `--sem-banco` | **Zero diferenças** em `execucoes.csv` (24 linhas), `ve_por_execucao.csv` (162), `transversal_por_execucao.csv` (768) e `conflitos_por_execucao.csv` (37), fora das colunas de latência e de versão; o mesmo número de amostras de latência por execução (288.000). As duas colunas novas valem 0 em todas as linhas |
+| Reprodutibilidade do braço novo: `multiplas_emergencias` × `PREEMPCAO_ML`, seed 900 (fora das reservadas), 3.600 s, duas vezes | Idênticas fora das colunas de latência. O lote tirou o `PREEMPCAO_ML` do `leve` e avisou |
+| RNF01 no executor com o braço novo | A latência é medida em todo passo, como nos outros braços. O teste `sumo` de `sim/tests/test_executor_modos.py` confere 4.000 amostras em 400 s, com o modelo decidindo e divergindo do E8 na primeira disputa |
+| Núcleo | A consulta é anunciada só quando o modelo decide, e não quando decidem a criticidade, a guarda ou a mesma fase. No empate exato, ela registra o escolhido pelo E8. O observador não muda a decisão (`test_politica.py`) |
+| Banco | Enum igual ao do ORM; ciclo `upgrade → downgrade → upgrade`; `downgrade` recusado com execução do braço novo (`test_migrations_e_seeds.py`) |
+
+A corrida da seed 900 é verificação, e não experimento: não foi gravada em
+`analysis/data/`, e nenhum número dela entra no texto. H4 é testada no Bloco 8,
+nas seeds 1..50.
+
+> **Pendência anterior, que vale antes do Bloco 8:** `versao_do_codigo()`
+> continua lendo só o `HEAD` e não marca árvore suja (ressalva da 10.4). A
+> corrida de verificação desta entrega gravou `eee22a8` com a 10.7 ainda fora do
+> commit.
+
+**Como reproduzir a verificação:**
+
+```bash
+# na main e na branch, em pastas de saída diferentes; compare fora das colunas de latência e de versão
+python -m sim.controlador.lote --cenarios leve,moderado,intenso,multiplas_emergencias \
+    --modos FIXO,PREEMPCAO,PREEMPCAO_COMPENSADA --seeds 101..102 --paralelo 6 \
+    --sem-banco --saida <pasta>
+# o braço novo, duas vezes
+python -m sim.controlador.lote --cenarios leve,multiplas_emergencias \
+    --modos PREEMPCAO,PREEMPCAO_ML --seeds 900 --paralelo 6 --sem-banco --saida <pasta>
+pytest -m "sumo or not sumo" sim/tests/test_executor_modos.py sim/tests/test_conflitos.py \
+    sim/tests/test_lote.py backend/tests/core/test_politica.py
 ```
 
 Toda disputa é entre **dois** VEs, sempre no cruzamento **CRUZ_02**, que é onde a
@@ -1950,6 +2020,9 @@ diferenças) foram verificados.
 
 | Data | Item | Decisão | Justificativa |
 | --- | --- | --- | --- |
+| 2026-10-07 | **Entrega 10.7: o braço `PREEMPCAO_ML` só roda nos cenários com mais de um VE** (P19; decisão do Felipe) | `lote.matriz()` tira o `PREEMPCAO_ML` dos cenários com `ves_simultaneos: 1` e avisa na tela. Hoje o braço entra só no `multiplas_emergencias`, e o Bloco 8 passa de 600 a **650 execuções**, num comando só. | Escolhida contra rodar o Bloco 8 em dois comandos e contra rodar o braço nos 4 cenários (800). Com um VE não há disputa, o modelo nunca é consultado, e a execução repetiria a do `PREEMPCAO`. `00` §5 e `10` §8 já diziam "nos cenários com múltiplos VEs"; faltava o número. |
+| 2026-10-07 | **Entrega 10.7: `PREEMPCAO_ML` é o `PREEMPCAO` com o modelo, sem E7** (P19; decisão do Felipe) | `parametros_do_modo()` dá ao braço `n_ciclos_compensacao = 0`, e `montar_motor()` lhe dá a `PoliticaAprendida`. Nada mais muda. | Escolhida contra o `PREEMPCAO_COMPENSADA` com o modelo, que misturaria na comparação o efeito da compensação. É o mesmo princípio que separa o `PREEMPCAO` do `PREEMPCAO_COMPENSADA`: os braços comparados diferem numa coisa só. |
+| 2026-10-07 | **Entrega 10.7: quem decidiu cada disputa fica registrado** (P19, `07` §3.3.1; decisão do Felipe) | A política chama um `observador` com uma `ConsultaModelo` só nos passos em que o modelo decidiu, depois das duas regras. O coletor compara cada consulta com a escolha que o E8 faria e grava, por episódio de `conflitos_por_execucao.csv`, `decidida_pelo_modelo` e `modelo_divergiu_do_e8` (1 se em algum passo). | Escolhida contra só `decidida_pelo_modelo` e contra não instrumentar (aproximar por `mesmo_nivel` e `decidivel_em_algum_passo`). A aproximação erra quando a guarda, o timeout de E6 ou a mesma fase desviam a disputa antes do modelo. A divergência é o n em que os braços podem diferir pelo modelo. O registro fica fora do trecho cronometrado, como o dos conflitos (10.1). |
 | 2026-10-07 | **O `millis()` do dublê do UNO trunca, como o da placa** (achado ao rodar a suíte da 10.6; correção autorizada pelo Felipe) | `UnoSimulado.t_dispositivo_ms` passa de `round(t · 1000)` a `floor(round(t · 1000, 6))`. O exemplo achado fica como `@example` no teste de propriedade de I1 a I4, com dois testes do relógio. | O Hypothesis achou um all-red de 999 ms (63002 → 64001) num roteiro com instantes no meio do milissegundo. Por dentro o dublê cumpria 1,000 s; o `round` caía num empate em .5 que o ruído de ponto flutuante decidia para lados opostos nos dois carimbos, e `bridge.verificar` acusava I3. Falhava também na main. O firmware não muda, e a comparação com ele (só ms inteiros) dá o mesmo resultado. |
 | 2026-10-07 | **Saída dos `python -m` em UTF-8** (defeito achado na auditoria de 2026-10-07) | `adapters/terminal.saida_utf8()` reconfigura `stdout` e `stderr` para UTF-8, e todo `main()` de `analysis/`, `bridge/`, `sim/` e `db/` a chama na primeira linha (`08` §3). O `reconfigure(errors="replace")` que só `analysis.relatorio_piloto` tinha passa a ser esta mesma chamada. | O `--help` de `bridge.demo`, `analysis.resumo_bancada` e `analysis.treino_politica` caía com a saída redirecionada (cp1252 não tem `→`, `≥` e `λ`), e o mesmo risco valia para qualquer relatório impresso. Uma correção só, num lugar só, coberta por teste que roda os 22 `--help` em cp1252 e confere a chamada em todo `main()`. Um terminal que espere outra codificação mostra acento trocado, mas nada cai. |
 | 2026-10-07 | **Entrega 10.6: empate exato do modelo decide pelo E8 entre os empatados** (P19; decisão do Felipe) | Com `score = 0` (na prática, os quatro atributos iguais), ou com mais de um invicto no torneio, vence pela chave do E8 (tipo, depois ETA) **só entre os empatados**. | Escolhida contra seguir "senão B" ao pé da letra, com A pelo menor id como no treino. No motor a ordem dos pedidos vem do estado, e o "senão B" faria o vencedor depender dela, justamente o que a forma sobre diferenças existe para impedir. O E8 é regra declarada e não depende da ordem. Não age sobre os 652 exemplos rotulados: nenhum score sai zero. |

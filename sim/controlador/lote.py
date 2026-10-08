@@ -265,15 +265,27 @@ def matriz(
     """Produto cartesiano dos três eixos, em ordem estável.
 
     A ordem é `seed` mais externa, depois cenário, depois modo. Isso agrupa os
-    três braços de um mesmo (cenário, seed) — que é o conjunto que a comparação
+    braços de um mesmo (cenário, seed) — que é o conjunto que a comparação
     pareada consome — e faz com que uma interrupção do lote deixe seeds
     **completas** para trás, em vez de um cenário inteiro num modo só.
+
+    **Uma exceção ao produto:** o braço `PREEMPCAO_ML` só entra nos cenários
+    com mais de um VE simultâneo (decisão da equipe, 2026-10-07). Com um VE só
+    não há disputa, o modelo nunca é consultado, e a execução repetiria a do
+    `PREEMPCAO` gastando máquina. O corte é feito aqui, e não por quem chama,
+    para que o Bloco 8 continue sendo um comando só.
     """
+    com_disputa = {
+        cenario: executor.ves_simultaneos(cenario) > 1
+        for cenario in cenarios
+        if executor.MODO_ML in modos
+    }
     return tuple(
         Ponto(cenario, modo, seed, ajustes)
         for seed in seeds
         for cenario in cenarios
         for modo in modos
+        if modo != executor.MODO_ML or com_disputa[cenario]
     )
 
 
@@ -863,6 +875,12 @@ def main(argumentos: Sequence[str] | None = None) -> int:
         f"({len(cenarios)} cenários x {len(modos)} modos x {len(seeds)} seeds)"
         f" · {opcoes.paralelo} processos · {len(marcados)} exemplares (P5)"
     )
+    com_ml = {ponto.cenario for ponto in pontos if ponto.modo == executor.MODO_ML}
+    if executor.MODO_ML in modos and (sem_ml := [c for c in cenarios if c not in com_ml]):
+        print(
+            f"  {executor.MODO_ML} fica de fora de {', '.join(sem_ml)}: um VE só, sem disputa"
+            f" ({len(sem_ml) * len(seeds)} execuções a menos que o produto)"
+        )
 
     concluidas = 0
     inicio = time.perf_counter()

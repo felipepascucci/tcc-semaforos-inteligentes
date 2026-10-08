@@ -14,9 +14,11 @@ from pathlib import Path
 
 import pytest
 
+from adapters.configuracao import carregar as carregar_parametros
 from core.modelos import Criticidade, TipoVeiculo
 from core.priorizacao.conflito import Disputa, EventoConflito
 from core.priorizacao.deteccao import DeteccaoVE
+from core.priorizacao.politica import ConsultaModelo
 from sim.controlador.coletor import (
     ARQUIVO_CONFLITOS,
     ARQUIVO_EXECUCOES,
@@ -26,6 +28,9 @@ from sim.controlador.coletor import (
 )
 
 PASSO_S = 0.1
+
+#: Os de `parametros.yaml`; só a chave do E8 é usada, para comparar com o modelo.
+PARAMETROS = carregar_parametros("simulacao")
 
 
 def _disputa(
@@ -315,3 +320,88 @@ def test_execucoes_csv_ganha_as_tres_colunas_da_contagem(tmp_path: Path) -> None
     assert linha["eventos_conflito"] == "1"
     assert linha["eventos_conflito_decidiveis"] == "1"
     assert linha["passos_em_conflito"] == "2"
+
+
+# ---------------------------------------------------------------------------
+# Quem decidiu — consultas ao modelo, braço `PREEMPCAO_ML` (entrega 10.7)
+# ---------------------------------------------------------------------------
+
+
+def _consulta(evento: EventoConflito, escolhido: str) -> ConsultaModelo:
+    """O modelo decidiu a disputa do evento, escolhendo `escolhido`."""
+    por_id = {disputa.deteccao.id_veiculo: disputa for disputa in evento.disputas}
+    return ConsultaModelo(evento.t, evento.id_semaforo, evento.disputas, por_id[escolhido])
+
+
+def test_episodio_sem_consulta_nao_foi_decidido_pelo_modelo() -> None:
+    """É o caso dos braços sem política, e o padrão das colunas novas."""
+    coletor = _coletor()
+    coletor.registrar_conflitos([_evento(t=1.0)])
+
+    (episodio,) = _consolidar(coletor)
+    assert not episodio.decidida_pelo_modelo
+    assert not episodio.modelo_divergiu_do_e8
+
+
+def test_consulta_que_concorda_com_o_e8_marca_so_a_decisao() -> None:
+    """VEs iguais e ETAs iguais: o E8 fica com o primeiro, e o modelo também."""
+    coletor = _coletor()
+    evento = _evento(t=1.0)
+    coletor.registrar_conflitos([evento])
+    coletor.registrar_consultas([_consulta(evento, "AMB")], PARAMETROS)
+
+    (episodio,) = _consolidar(coletor)
+    assert episodio.decidida_pelo_modelo
+    assert not episodio.modelo_divergiu_do_e8
+
+
+def test_uma_consulta_divergente_em_qualquer_passo_marca_o_episodio() -> None:
+    coletor = _coletor()
+    for passo, escolhido in enumerate(("AMB", "BMB", "AMB")):
+        evento = _evento(t=round(1.0 + passo * PASSO_S, 1))
+        coletor.registrar_conflitos([evento])
+        coletor.registrar_consultas([_consulta(evento, escolhido)], PARAMETROS)
+
+    (episodio,) = _consolidar(coletor)
+    assert episodio.decidida_pelo_modelo
+    assert episodio.modelo_divergiu_do_e8
+
+
+def test_consulta_marca_o_episodio_do_seu_cruzamento() -> None:
+    coletor = _coletor()
+    no_1 = _evento(t=5.0, id_semaforo="CRUZ_TESTE_1")
+    no_2 = _evento(t=5.0, id_semaforo="CRUZ_TESTE_2")
+    coletor.registrar_conflitos([no_1, no_2])
+    coletor.registrar_consultas([_consulta(no_2, "BMB")], PARAMETROS)
+
+    marcados = {e.id_semaforo: e.decidida_pelo_modelo for e in _consolidar(coletor)}
+    assert marcados == {"CRUZ_TESTE_1": False, "CRUZ_TESTE_2": True}
+
+
+def test_consulta_sem_conflito_no_mesmo_passo_e_defeito() -> None:
+    """Perder uma consulta em silêncio mudaria o n que H4 declara."""
+    coletor = _coletor()
+    antigo = _evento(t=1.0)
+    coletor.registrar_conflitos([antigo])
+
+    with pytest.raises(ValueError, match="sem conflito no mesmo passo"):
+        coletor.registrar_consultas([_consulta(_evento(t=9.0), "AMB")], PARAMETROS)
+
+
+def test_csv_de_conflitos_traz_quem_decidiu(tmp_path: Path) -> None:
+    coletor = _coletor()
+    evento = _evento(t=1.0)
+    coletor.registrar_conflitos([evento, _evento(t=1.0, id_semaforo="CRUZ_TESTE_2")])
+    coletor.registrar_consultas([_consulta(evento, "BMB")], PARAMETROS)
+    resultado = coletor.consolidar(
+        tripinfo=Path("nao_existe.xml"), duracao_s=60.0, veiculos_planejados=0
+    )
+
+    gravar_csv(resultado, diretorio=tmp_path)
+
+    with (tmp_path / ARQUIVO_CONFLITOS).open(encoding="utf-8", newline="") as arquivo:
+        linhas = {linha["id_semaforo"]: linha for linha in csv.DictReader(arquivo)}
+    assert linhas["CRUZ_TESTE_1"]["decidida_pelo_modelo"] == "1"
+    assert linhas["CRUZ_TESTE_1"]["modelo_divergiu_do_e8"] == "1"
+    assert linhas["CRUZ_TESTE_2"]["decidida_pelo_modelo"] == "0"
+    assert linhas["CRUZ_TESTE_2"]["modelo_divergiu_do_e8"] == "0"

@@ -58,7 +58,8 @@ CREATE TYPE estado_sinal    AS ENUM ('VERDE', 'AMARELO', 'VERMELHO');
 CREATE TYPE tipo_veiculo    AS ENUM ('AMBULANCIA', 'BOMBEIRO', 'POLICIA');
 CREATE TYPE status_operacao AS ENUM ('ATIVO', 'INATIVO', 'MANUTENCAO', 'FALHA');
 CREATE TYPE status_execucao AS ENUM ('SUCESSO', 'FALHA', 'TIMEOUT', 'CONFLITO_ADIADO', 'ABORTADO_SEGURANCA');
-CREATE TYPE modo_controle   AS ENUM ('FIXO', 'PREEMPCAO', 'PREEMPCAO_COMPENSADA');
+CREATE TYPE modo_controle   AS ENUM ('FIXO', 'PREEMPCAO', 'PREEMPCAO_COMPENSADA',
+                                     'PREEMPCAO_ML');  -- braço de H4, migration 9d3e6b1f4a27 (10.7)
 
 CREATE TABLE semaforo (
     id_semaforo     SERIAL PRIMARY KEY,
