@@ -1,0 +1,25 @@
+\begin{table}[htbp]
+\centering
+\caption{Tempo de deslocamento do VE por cenário e braço}
+\label{tab:t1}
+\small
+\begin{tabular}{llrrrrrrrr}
+\toprule
+Cenário & Modo & n & Mediana (s) & IQR (s) & Redução vs. FIXO & IC 95\% da redução & p Wilcoxon & p Holm & Cliff's $\delta$ \\
+\midrule
+leve (v/c 0,18) & FIXO & 50 & 456,9 & 17,4 & — & — & — & — & — \\
+leve (v/c 0,18) & PREEMPCAO & 50 & 270,8 & 13,3 & 40,5\% & [39,8\%; 41,2\%] & $<$ 0,001 & $<$ 0,001 & -1,00 (grande) \\
+leve (v/c 0,18) & PREEMPCAO\_COMPENSADA & 50 & 266,9 & 8,3 & 41,1\% & [40,5\%; 41,7\%] & $<$ 0,001 & $<$ 0,001 & -1,00 (grande) \\
+moderado (v/c 0,42) & FIXO & 50 & 492,6 & 14,5 & — & — & — & — & — \\
+moderado (v/c 0,42) & PREEMPCAO & 50 & 320,2 & 14,1 & 35,0\% & [34,4\%; 35,7\%] & $<$ 0,001 & $<$ 0,001 & -1,00 (grande) \\
+moderado (v/c 0,42) & PREEMPCAO\_COMPENSADA & 50 & 315,8 & 18,7 & 35,6\% & [34,9\%; 36,4\%] & $<$ 0,001 & $<$ 0,001 & -1,00 (grande) \\
+intenso (v/c 0,73) & FIXO & 50 & 528,9 & 21,6 & — & — & — & — & — \\
+intenso (v/c 0,73) & PREEMPCAO & 50 & 381,0 & 16,6 & 28,1\% & [27,3\%; 29,0\%] & $<$ 0,001 & $<$ 0,001 & -1,00 (grande) \\
+intenso (v/c 0,73) & PREEMPCAO\_COMPENSADA & 50 & 389,1 & 22,9 & 26,5\% & [25,5\%; 27,5\%] & $<$ 0,001 & $<$ 0,001 & -1,00 (grande) \\
+multiplas\_emergencias (v/c 0,42) & FIXO & 50 & 368,5 & 8,2 & — & — & — & — & — \\
+multiplas\_emergencias (v/c 0,42) & PREEMPCAO & 50 & 253,0 & 7,7 & 31,8\% & [31,3\%; 32,4\%] & $<$ 0,001 & $<$ 0,001 & -1,00 (grande) \\
+multiplas\_emergencias (v/c 0,42) & PREEMPCAO\_COMPENSADA & 50 & 250,2 & 9,1 & 32,0\% & [31,5\%; 32,6\%] & $<$ 0,001 & $<$ 0,001 & -1,00 (grande) \\
+multiplas\_emergencias (v/c 0,42) & PREEMPCAO\_ML & 50 & 255,0 & 9,1 & 30,9\% & [30,3\%; 31,5\%] & $<$ 0,001 & $<$ 0,001 & -1,00 (grande) \\
+\bottomrule
+\end{tabular}
+\end{table}

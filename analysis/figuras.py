@@ -23,7 +23,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from matplotlib.patches import Patch
-from matplotlib.ticker import FuncFormatter, ScalarFormatter
+from matplotlib.ticker import FuncFormatter, MaxNLocator, ScalarFormatter
 
 #: Largura útil da página A4 com as margens da ABNT (3 cm + 2 cm), em polegadas.
 LARGURA_PAGINA_POL = 16.0 / 2.54
@@ -162,10 +162,14 @@ def f1_travessia(por_cenario: Mapping[str, pd.DataFrame], destino: Path) -> Path
             )
             for m in modos
         ],
-        loc="upper left",
+        # Fora do eixo, acima: dentro dele a legenda cobria o bigode do FIXO
+        # no `intenso`, o ponto mais alto do gráfico.
+        loc="lower center",
+        bbox_to_anchor=(0.5, 1.0),
         ncols=2,
         frameon=False,
     )
+    figura.tight_layout()
     return _salvar(figura, destino)
 
 
@@ -224,8 +228,9 @@ def f2_latencia(latencias: pd.DataFrame, destino: Path) -> Path:
         eixo.axvline(200, color="black", linestyle=":", linewidth=0.8)
     eixo_c.text(100, 0.05, " 100 ms (RNF01)", rotation=90, va="bottom", ha="right", fontsize=7)
     eixo_c.text(200, 0.05, " 200 ms (H3)", rotation=90, va="bottom", ha="left", fontsize=7)
-    eixo_c.legend(loc="upper left", frameon=False)
-    figura.tight_layout()
+    # Abaixo dos dois painéis: dentro da CDF a legenda cobria as curvas.
+    figura.legend(*eixo_c.get_legend_handles_labels(), loc="lower center", ncols=3, frameon=False)
+    figura.tight_layout(rect=(0, 0.1, 1, 1))
     return _salvar(figura, destino)
 
 
@@ -357,6 +362,7 @@ def f4_fila_transversal(
     eixo.set_xlim(*janela)
     eixo.set_xlabel("Tempo de simulação (s)")
     eixo.set_ylabel(f"Veículos parados nas transversais de {id_semaforo}")
+    eixo.yaxis.set_major_locator(MaxNLocator(integer=True))
     eixo.legend(
         handles=[
             *eixo.get_legend_handles_labels()[0],
@@ -493,7 +499,12 @@ def f5_reducao_saturacao(
             facecolors="0.5" if unico else "none",
             edgecolors="black",
             linewidths=0.4,
-            label=None if unico else ROTULO_CENARIO.get(cenario, cenario).replace("\n", " "),
+            label=(
+                # Os círculos também vão para a legenda, uma vez só.
+                (None if xs else "um VE (" + ", ".join(cenarios_da_tendencia) + ")")
+                if unico
+                else ROTULO_CENARIO.get(cenario, cenario).replace("\n", " ")
+            ),
         )
         if unico:
             xs.extend([vc[cenario]] * y.size)
@@ -517,5 +528,7 @@ def f5_reducao_saturacao(
     )
     eixo.set_xlabel("Grau de saturação medido (v/c)")
     eixo.set_ylabel("Redução da travessia do VE (%)")
-    eixo.legend(loc="best", frameon=False)
+    # Abaixo do eixo: dentro dele, qualquer canto cobre pontos ou a linha da meta.
+    eixo.legend(loc="upper center", bbox_to_anchor=(0.5, -0.18), ncols=2, frameon=False)
+    figura.tight_layout()
     return _salvar(figura, destino)
