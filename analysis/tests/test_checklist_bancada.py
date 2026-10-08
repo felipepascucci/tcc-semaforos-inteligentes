@@ -7,17 +7,20 @@ gravador da própria ponte: testa a conta, não mede nada.
 
 from __future__ import annotations
 
+import csv
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from adapters.hardware.simulado import Entrada, UnoSimulado, config_da_bancada
 from analysis.checklist_bancada import (
     LISTA_VOLTA_MAX_S,
+    LeituraEmissor,
     Resultado,
     avaliar,
     ler_sessoes,
     main,
 )
+from bridge.latencia import COLUNAS_DESFECHOS
 from bridge.protocolo import Autorizacao, Deteccao
 from bridge.registro import Direcao, GravadorTelemetria
 from core.modelos import TipoVeiculo
@@ -281,3 +284,133 @@ def test_lixo_de_boot_fica_de_fora_e_e_contado(tmp_path: Path) -> None:
     assert linhas[0].texto == "\\xff\\x00lixo"
     assert linhas[0].resposta is None
     assert {r.item: r for r in avaliar(linhas)}["1"].detalhes[0].startswith("Arranque 1")
+
+
+# ---------------------------------------------------------------------------
+# Item 5: tag fora do mapa
+# ---------------------------------------------------------------------------
+
+
+def _leitura(t_s: float, rua: int = 1, uid: str = "F39BD606", desfecho: str = "PREEMP_INI"):  # type: ignore[no-untyped-def]
+    return LeituraEmissor(T0 + timedelta(seconds=t_s), rua, uid, desfecho)
+
+
+def _item_5(caminho: Path, leituras: list[LeituraEmissor]) -> Resultado:
+    linhas = next(iter(ler_sessoes(caminho).values()))
+    return {r.item: r for r in avaliar(linhas, leituras=leituras)}["5"]
+
+
+def _sessao_do_item_5(caminho: Path, controle_s: float = 60.0) -> Ensaio:
+    """Ambulância em ocorrência, a tag fora do mapa passando (sem rastro) e o controle."""
+    ensaio = Ensaio(caminho)
+    ensaio.ate(0.5)
+    ensaio.central(AMBULANCIA=1)
+    ensaio.ate(controle_s)
+    # O controle na tag da RUA1: o emissor imprime e, seis passos depois, o UNO decide.
+    ensaio.esperar(0.3)
+    ensaio.passagem(1, AMB)
+    ensaio.esperar(20)
+    return ensaio
+
+
+def test_item_5_janela_em_silencio_e_controle_que_preempta(tmp_path: Path) -> None:
+    caminho = tmp_path / "telemetria.csv"
+    _sessao_do_item_5(caminho)
+    r = _item_5(caminho, [_leitura(60.0)])
+
+    assert r.ok is True, r.detalhes
+    assert "Eventos do UNO na janela: 0" in r.detalhes
+    assert any(d.startswith("Ciclos puros inteiros na janela: 4") for d in r.detalhes)
+    assert "Controle: F39BD606 (RUA1) → PREEMP_INI — ok" in r.detalhes
+
+
+def test_item_5_uid_fora_do_mapa_no_emissor_nao_atende(tmp_path: Path) -> None:
+    caminho = tmp_path / "telemetria.csv"
+    _sessao_do_item_5(caminho)
+    r = _item_5(caminho, [_leitura(30.0, uid="DEADBEEF"), _leitura(60.0)])
+
+    assert r.ok is False
+    assert "DEADBEEF" in r.detalhes[0]
+
+
+def test_item_5_evento_na_janela_nao_atende(tmp_path: Path) -> None:
+    """Uma detecção que chegou ao UNO sem o emissor imprimir é o envio que não podia haver."""
+    caminho = tmp_path / "telemetria.csv"
+    ensaio = Ensaio(caminho)
+    ensaio.ate(0.5)
+    ensaio.central(AMBULANCIA=1)
+    ensaio.ate(30)
+    ensaio.passagem(3, AMB)
+    ensaio.ate(90)
+    ensaio.passagem(1, AMB)
+    ensaio.esperar(5)
+    r = _item_5(caminho, [_leitura(89.9)])
+
+    assert r.ok is False
+    assert any(
+        d.startswith("Eventos do UNO na janela: ") and "PREEMP_INI,3" in d for d in r.detalhes
+    )
+
+
+def test_item_5_controle_que_nao_chega_ao_uno_nao_atende(tmp_path: Path) -> None:
+    caminho = tmp_path / "telemetria.csv"
+    ensaio = Ensaio(caminho)
+    ensaio.ate(0.5)
+    ensaio.central(AMBULANCIA=1)
+    ensaio.ate(60)
+    r = _item_5(caminho, [_leitura(50.0, desfecho="SEM_DECISAO")])
+
+    assert r.ok is False
+    assert any(d.endswith("SEM_DECISAO — FALHA") for d in r.detalhes)
+
+
+def test_item_5_sem_ocorrencia_sem_controle_ou_janela_curta_nao_julga(tmp_path: Path) -> None:
+    sem_ocorrencia = tmp_path / "a.csv"
+    Ensaio(sem_ocorrencia).ate(60)
+    assert _item_5(sem_ocorrencia, [_leitura(50.0)]).ok is None
+
+    sem_controle = tmp_path / "b.csv"
+    _sessao_do_item_5(sem_controle)
+    assert _item_5(sem_controle, []).ok is None
+
+    curta = tmp_path / "c.csv"
+    _sessao_do_item_5(curta, controle_s=8.0)
+    r = _item_5(curta, [_leitura(8.0)])
+    assert r.ok is None
+    assert "Ciclos puros inteiros na janela: 0" in r.detalhes
+
+
+def test_item_5_so_entra_com_a_opcao(tmp_path: Path, capsys) -> None:  # type: ignore[no-untyped-def]
+    caminho = tmp_path / "telemetria.csv"
+    _sessao_do_item_5(caminho)
+    deteccoes = tmp_path / "deteccoes.csv"
+    with deteccoes.open("w", encoding="utf-8", newline="") as arquivo:
+        escritor = csv.writer(arquivo)
+        escritor.writerow(COLUNAS_DESFECHOS)
+        t = (T0 + timedelta(seconds=60)).isoformat()
+        escritor.writerow(
+            [
+                T0.isoformat(),
+                t,
+                1,
+                "F39BD606",
+                "PREEMP_INI",
+                t,
+                "25.0",
+                "AMBULANCIA",
+                60300,
+                "teste",
+            ]
+        )
+        # Outra sessão no mesmo arquivo não entra na conta.
+        escritor.writerow(
+            ["2026-10-07T16:18:08+00:00", t, 2, "DEADBEEF", "PREEMP_INI", t, "", "", "", "x"]
+        )
+
+    main(["--telemetria", str(caminho)])
+    assert "| 5 |" not in capsys.readouterr().out
+
+    main(["--telemetria", str(caminho), "--item5", "--deteccoes", str(deteccoes)])
+    assert "| 5 | Tag fora das 4 ruas: sem envio e sem mexer no semáforo | **atende** |" in (
+        capsys.readouterr().out
+    )
