@@ -468,6 +468,8 @@ resultado (mesma execução com e sem, `context/06` §2).
 
 > **Bloqueado pelo Bloco 10.** ~~P16~~ foi resolvida em 2026-08-31 corrigindo o mecanismo, ~~P18~~ em 2026-09-10 sem teto numérico, e ~~P17~~ em 2026-10-01, com `K` e `n_ciclos_compensacao` calibrados e congelados. **P19 / Bloco 10** acrescenta um braço à matriz, com a mesma consequência. As 600 rodam com o código de `d63f774` em diante — o piloto de 2026-08-26 foi produzido pelo código anterior e **não** se mistura com elas.
 
+> ✅ **Rodado em 2026-10-08:** 650 execuções em 3h36, 0 descarte (`context/09`).
+>
 > **Comando decidido em 2026-10-07** (`context/09`): 650 pontos, consolidados
 > numa pasta própria, longe dos CSV do piloto, que ficam em `analysis/data/`. As
 > 60 linhas do piloto já saíram do banco. Rodar a partir de uma `main` limpa: a
@@ -581,7 +583,7 @@ desempate determinístico.
 | Fim do Bloco 5 | ✅ **2026-10-07.** O protótipo físico funciona fim-a-fim, com transição segura, fim da emergência por duração e teto, e H3 medida: p95 31,6 ms em 100 passagens, RNF05 100 de 100, 33 min sem reinício |
 | **Entrega 10.1** | ✅ **2026-09-10, remedida em 2026-10-05.** Sabe-se **quantos eventos de conflito entre VEs existem por execução** — é o que define se há dado suficiente para treinar, e nenhuma decisão de modelagem é tomada antes disso |
 | Fim do Bloco 10 | Existe uma política aprendida, exportada como dado e comparada estatisticamente contra o desempate determinístico. Veredito favorável **ou** nulo, ambos reportáveis |
-| Fim do Bloco 8 | Os dados do capítulo 5 existem e são reprodutíveis |
+| Fim do Bloco 8 | ✅ **2026-10-08:** os dados do capítulo 5 existem, 650 execuções do mesmo commit, 0 descarte (`analysis/data/bloco8/`, `context/09`) |
 
 ## Pendências que continuam abertas
 
