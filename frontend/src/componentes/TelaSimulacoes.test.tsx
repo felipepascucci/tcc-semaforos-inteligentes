@@ -2,9 +2,14 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
-import type { PedidoSimulacao } from "../api/tipos";
+import type { FaixaSeedReservada, PedidoSimulacao } from "../api/tipos";
 import { fetchFalso } from "../testes/http";
-import { ESPERA_ATENDENTE_MS, pedidoParado, TelaSimulacoes, textoDoResumo } from "./TelaSimulacoes";
+import { ESPERA_ATENDENTE_MS, faixaDaSeed, pedidoParado, TelaSimulacoes, textoDoResumo } from "./TelaSimulacoes";
+
+const FAIXAS: FaixaSeedReservada[] = [
+  { inicio: 1, fim: 50, uso: "Experimento de teste" },
+  { inicio: 201, fim: 250, uso: "Treino de teste" },
+];
 
 function pedido(campos: Partial<PedidoSimulacao>): PedidoSimulacao {
   return {
@@ -63,9 +68,40 @@ describe("textoDoResumo", () => {
   });
 });
 
+describe("faixaDaSeed", () => {
+  it("acha a faixa pelos dois extremos, e nada fora delas ou com o campo vazio", () => {
+    expect(faixaDaSeed("1", FAIXAS)?.uso).toBe("Experimento de teste");
+    expect(faixaDaSeed("250", FAIXAS)?.uso).toBe("Treino de teste");
+    expect(faixaDaSeed("51", FAIXAS)).toBeNull();
+    expect(faixaDaSeed("900", FAIXAS)).toBeNull();
+    expect(faixaDaSeed("", FAIXAS)).toBeNull();
+  });
+});
+
 describe("TelaSimulacoes", () => {
+  it("lista as faixas reservadas e bloqueia o pedido com seed do experimento", async () => {
+    const chamadas = fetchFalso({ corpo: FAIXAS }, { corpo: [] });
+    const usuario = userEvent.setup();
+    render(<TelaSimulacoes />);
+
+    expect(await screen.findByText(/Treino de teste/)).toBeInTheDocument();
+    expect(chamadas[0]?.url).toContain("/simulacoes/seeds-reservadas");
+
+    const campo = screen.getByLabelText("Seed");
+    await usuario.clear(campo);
+    await usuario.type(campo, "210");
+    expect(screen.getByRole("alert")).toHaveTextContent("A seed 210 é do experimento (201..250: Treino de teste)");
+    expect(screen.getByRole("button", { name: "Pedir" })).toBeDisabled();
+
+    await usuario.clear(campo);
+    await usuario.type(campo, "900");
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.getByRole("button", { name: "Pedir" })).toBeEnabled();
+  });
+
   it("manda a velocidade escolhida, e a máxima vai como nula", async () => {
     const chamadas = fetchFalso(
+      { corpo: FAIXAS },
       { corpo: [] },
       { status: 201, corpo: pedido({ id_pedido: 5, velocidade: 5 }) },
       { corpo: [pedido({ id_pedido: 5, velocidade: 5 })] },
@@ -78,24 +114,24 @@ describe("TelaSimulacoes", () => {
     await usuario.selectOptions(screen.getByLabelText("Velocidade"), "5");
     await usuario.click(screen.getByRole("button", { name: "Pedir" }));
     expect(await screen.findByText(/Pedido 5 na fila/)).toBeInTheDocument();
-    expect(chamadas[1]?.corpo).toEqual({ cenario: "moderado", modo: "PREEMPCAO", seed: 900, duracao_s: null, velocidade: 5 });
+    expect(chamadas[2]?.corpo).toEqual({ cenario: "moderado", modo: "PREEMPCAO", seed: 900, duracao_s: null, velocidade: 5 });
     expect(await screen.findByText(/seed 900 · 5x/)).toBeInTheDocument();
 
     await usuario.selectOptions(screen.getByLabelText("Velocidade"), "");
     await usuario.click(screen.getByRole("button", { name: "Pedir" }));
     expect(await screen.findByText(/Pedido 6 na fila/)).toBeInTheDocument();
-    expect(chamadas[3]?.corpo).toMatchObject({ velocidade: null });
+    expect(chamadas[4]?.corpo).toMatchObject({ velocidade: null });
   });
 
   it("pedido parado avisa que o atendente não está rodando", async () => {
-    fetchFalso({ corpo: [pedido({ criado_em: "2020-01-01T00:00:00Z" })] });
+    fetchFalso({ corpo: FAIXAS }, { corpo: [pedido({ criado_em: "2020-01-01T00:00:00Z" })] });
     render(<TelaSimulacoes />);
 
     expect(await screen.findByRole("alert")).toHaveTextContent("o atendente não está rodando");
   });
 
   it("pedido recém-criado não dispara o aviso", async () => {
-    fetchFalso({ corpo: [pedido({})] });
+    fetchFalso({ corpo: FAIXAS }, { corpo: [pedido({})] });
     render(<TelaSimulacoes />);
 
     expect(await screen.findByText(/seed 900 · 1x/)).toBeInTheDocument();

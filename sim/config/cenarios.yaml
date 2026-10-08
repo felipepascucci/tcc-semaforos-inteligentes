@@ -100,8 +100,15 @@ execucao:
   # Uma execução pedida pelo dashboard ocuparia em execucao_simulacao o ponto
   # (cenário, modo, seed) do lote, que rodaria aquele ponto sem registro no banco
   # (decisão de 2026-10-05, Bloco 6). 201..250 são as do treino do modelo de
-  # P19 (entrega 10.2). Intervalos fechados.
-  seeds_reservadas: [[1, 50], [101, 105], [201, 250]]
+  # P19 (entrega 10.2). Intervalos fechados. O `uso` é o texto que o dashboard
+  # mostra ao lado do campo de seed (GET /simulacoes/seeds-reservadas).
+  seeds_reservadas:
+    - faixa: [1, 50]
+      uso: Experimento do Bloco 8 (capítulo 5)
+    - faixa: [101, 105]
+      uso: Calibração da antecipação (P16) e da compensação (P17)
+    - faixa: [201, 250]
+      uso: Treino (201..240) e validação (241..250) do modelo de ML (P19)
   # Divisão por seed do cenário de treino (P19, decidida em 2026-10-05, antes de
   # qualquer treino). Fora de 1..50 (Bloco 8, onde H4 é testada), de 101..105
   # (calibração de P16 e P17) e de 101..110 (contagem da 10.1). A validação serve

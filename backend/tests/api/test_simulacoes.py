@@ -30,7 +30,18 @@ def test_pedido_valido_fica_pendente(cliente: TestClient) -> None:
     ]
 
 
-@pytest.mark.parametrize("seed", [1, 50, 101, 105])
+def test_seeds_reservadas_vem_com_o_uso_de_cada_faixa(cliente: TestClient) -> None:
+    """O dashboard explica cada faixa com o texto de `cenarios.yaml`, sem cópia própria."""
+    resposta = cliente.get("/api/v1/simulacoes/seeds-reservadas")
+
+    assert resposta.status_code == 200
+    faixas = resposta.json()
+    assert [(f["inicio"], f["fim"]) for f in faixas] == [(1, 50), (101, 105), (201, 250)]
+    assert all(f["uso"] for f in faixas)
+    assert "Bloco 8" in faixas[0]["uso"]
+
+
+@pytest.mark.parametrize("seed", [1, 50, 101, 105, 201, 250])
 def test_seed_do_experimento_e_recusada(cliente: TestClient, seed: int) -> None:
     """Um pedido do dashboard não pode ocupar o ponto do lote do Bloco 8 (2026-10-05)."""
     resposta = cliente.post(

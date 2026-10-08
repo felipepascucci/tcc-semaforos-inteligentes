@@ -386,7 +386,7 @@ def test_seeds_do_treino_nao_tocam_as_do_experimento() -> None:
     assert validacao
     assert not treino & validacao
     assert not (treino | validacao) & (set(range(1, 51)) | set(range(101, 111)))
-    reservadas = configuracao["execucao"]["seeds_reservadas"]
+    reservadas = [item["faixa"] for item in configuracao["execucao"]["seeds_reservadas"]]
     assert all(any(a <= s <= b for a, b in reservadas) for s in treino | validacao)
 
 

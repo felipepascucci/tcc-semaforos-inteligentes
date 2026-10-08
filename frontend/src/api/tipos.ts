@@ -184,3 +184,10 @@ export interface PedidoSimulacao {
   finalizado_em: string | null;
   execucao: { id_execucao: number } | null;
 }
+
+/** Faixa de seeds do experimento, que a API recusa num pedido (intervalo fechado). */
+export interface FaixaSeedReservada {
+  inicio: number;
+  fim: number;
+  uso: string;
+}

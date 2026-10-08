@@ -1,14 +1,15 @@
 // Pedidos de simulação (POST /simulacoes, Bloco 6). O backend não roda o SUMO:
 // grava o pedido, e o atendente no host o executa com transmissão ao vivo. As
-// seeds 1..50 e 101..105 são do experimento e a API as recusa com 422; a tela
-// mostra o motivo que veio do backend.
+// seeds do experimento são recusadas pela API com 422. A tela lista as faixas e
+// o uso de cada uma (GET /simulacoes/seeds-reservadas, lidas de cenarios.yaml) e
+// avisa antes de enviar; o 422 continua sendo a regra.
 import { useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
 
 import { mensagemDeErro } from "../api/cliente";
 import { api } from "../api/rotas";
 import { MODOS_CONTROLE } from "../api/tipos";
-import type { ModoControle, PedidoSimulacao } from "../api/tipos";
+import type { FaixaSeedReservada, ModoControle, PedidoSimulacao } from "../api/tipos";
 import { dataHora } from "./formato";
 import { Aviso, Botao, Campo, Cartao, ESTILO_ENTRADA } from "./ui";
 
@@ -30,6 +31,13 @@ export const ESPERA_ATENDENTE_MS = 10_000;
 
 export function pedidoParado(pedido: PedidoSimulacao, agora: number): boolean {
   return pedido.status === "PENDENTE" && agora - Date.parse(pedido.criado_em) > ESPERA_ATENDENTE_MS;
+}
+
+/** A faixa reservada que contém a seed digitada, ou nula (também para campo vazio). */
+export function faixaDaSeed(seed: string, faixas: FaixaSeedReservada[]): FaixaSeedReservada | null {
+  if (seed.trim() === "") return null;
+  const valor = Number(seed);
+  return faixas.find((f) => f.inicio <= valor && valor <= f.fim) ?? null;
 }
 
 export function rotuloVelocidade(velocidade: number | null): string {
@@ -73,6 +81,17 @@ export function TelaSimulacoes() {
   const [resultado, setResultado] = useState<{ tipo: "sucesso" | "erro"; texto: string } | null>(null);
   const [erroCarga, setErroCarga] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
+  const [faixas, setFaixas] = useState<FaixaSeedReservada[]>([]);
+
+  // Antes da lista de pedidos: as faixas não mudam durante a sessão.
+  useEffect(() => {
+    api
+      .seedsReservadas()
+      .then(setFaixas)
+      .catch(() => setFaixas([]));
+  }, []);
+
+  const reservada = faixaDaSeed(seed, faixas);
 
   const carregar = useCallback(async () => {
     try {
@@ -136,7 +155,7 @@ export function TelaSimulacoes() {
               ))}
             </select>
           </Campo>
-          <Campo rotulo="Seed (fora de 1..50 e 101..105)">
+          <Campo rotulo="Seed">
             <input
               className={ESTILO_ENTRADA}
               type="number"
@@ -146,6 +165,33 @@ export function TelaSimulacoes() {
               required
             />
           </Campo>
+          {reservada && (
+            <Aviso tipo="erro">
+              A seed {seed} é do experimento ({reservada.inicio}..{reservada.fim}: {reservada.uso}). Use
+              uma seed fora das faixas abaixo.
+            </Aviso>
+          )}
+          <div className="text-xs text-slate-600">
+            <p className="font-medium">Seeds reservadas ao experimento (recusadas):</p>
+            {faixas.length === 0 ? (
+              <p>não foi possível carregar a lista; a API recusa as reservadas de qualquer forma.</p>
+            ) : (
+              <ul className="list-disc pl-4">
+                {faixas.map((f) => (
+                  <li key={f.inicio}>
+                    <strong>
+                      {f.inicio}..{f.fim}
+                    </strong>{" "}
+                    — {f.uso}
+                  </li>
+                ))}
+              </ul>
+            )}
+            <p className="mt-1">
+              Qualquer outra é livre para demonstração. A mesma seed gera o mesmo tráfego, então repetir
+              uma seed repete a execução.
+            </p>
+          </div>
           <Campo rotulo="Velocidade">
             <select className={ESTILO_ENTRADA} value={velocidade} onChange={(e) => setVelocidade(e.target.value)}>
               {VELOCIDADES.map((v) => (
@@ -166,7 +212,7 @@ export function TelaSimulacoes() {
             />
           </Campo>
           <div>
-            <Botao type="submit" disabled={ocupado}>
+            <Botao type="submit" disabled={ocupado || reservada !== null}>
               Pedir
             </Botao>
           </div>

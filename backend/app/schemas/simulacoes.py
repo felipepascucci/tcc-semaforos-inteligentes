@@ -33,6 +33,14 @@ class PedidoSimulacaoEntrada(BaseModel):
     )
 
 
+class FaixaSeedReservada(BaseModel):
+    """Uma faixa de seeds que a API recusa, e para que ela é usada."""
+
+    inicio: int = Field(examples=[1])
+    fim: int = Field(examples=[50], description="Intervalo fechado")
+    uso: str = Field(examples=["Experimento do Bloco 8 (capítulo 5)"])
+
+
 class ExecucaoResumo(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
