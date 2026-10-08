@@ -13,8 +13,9 @@
  * MAC desta placa: 40:91:51:58:A8:E1. É o endereço gravado no emissor
  *   (veiculo_ambulancia.ino, enderecoReceptor[]).
  *
- * Tipo do veículo: não é decidido aqui. Repassa o que o emissor mandar (hoje,
- *   sempre AMBULANCIA).
+ * Tipo do veículo: não é decidido aqui. Repassa o que o emissor mandar. Desde
+ *   2026-10-08 são três emissores (ambulância, bombeiro e polícia), todos com
+ *   este MAC; o ESP-NOW sem criptografia aceita qualquer remetente.
  *
  * Mapa UID -> rua: não existe aqui. A rua chega resolvida pelo emissor; o mapa
  *   está no cabeçalho de veiculo_ambulancia.ino.

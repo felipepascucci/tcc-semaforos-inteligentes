@@ -6,7 +6,7 @@ O pré-projeto define uma arquitetura híbrida **Edge + Nuvem**. Mapeamento conc
 
 | Camada conceitual | O que é na prática | Onde roda |
 | --- | --- | --- |
-| **Dispositivo / Veículo** | NodeMCU emissor + RC522 (lê a tag da rua, envia por ESP-NOW) | Bancada, no carrinho |
+| **Dispositivo / Veículo** | NodeMCU emissor + RC522 (lê a tag da rua, envia por ESP-NOW), um por carrinho: ambulância, bombeiro e polícia | Bancada, nos 3 carrinhos |
 | **Borda (Edge)** | NodeMCU receptor + Arduino UNO, que **decide** e atua; LCD 16x2 | Bancada, no cruzamento |
 | **Observação local** | Processo `bridge` (escuta o UNO e lhe leva a lista da Central) + instância local do backend | Notebook junto ao protótipo |
 | **Nuvem** | PostgreSQL, API, dashboard, análise histórica | Docker local; AWS como arquitetura-alvo documentada |
@@ -152,7 +152,7 @@ SUMO_HOME=/usr/share/sumo
 SUMO_BINARY=sumo                     # ou sumo-gui
 SERIAL_PORT=COM3                     # UNO
 SERIAL_BAUDRATE=9600                 # a do NodeMCU receptor; o UNO tem uma UART só
-SERIAL_PORT_VEICULO=COM4             # NodeMCU emissor, só na medição de H3
+SERIAL_PORT_VEICULO=COM4             # NodeMCU emissor no USB, só na medição de H3
 PONTE_URL=http://localhost:8001      # o backend lê GET /estado da ponte (vazio desliga)
 PONTE_URL_CONTEINER=http://host.docker.internal:8001   # a mesma, vista do compose
 BACKEND_URL=http://localhost:8000    # para onde o executor e o atendente transmitem
@@ -174,20 +174,20 @@ DASHBOARD_PORT=8443                  # porta HTTPS do nginx no host (opcional)
 
 ## 5. Rede do protótipo
 
-**Não há rede** (decisão de 2026-10-05). Os dois NodeMCUs se falam por
-**ESP-NOW**: rádio de 2,4 GHz direto, MAC a MAC, sem roteador nem ponto de
+**Não há rede** (decisão de 2026-10-05). Os NodeMCUs (os três emissores e o
+receptor, desde 2026-10-08) se falam por **ESP-NOW**: rádio de 2,4 GHz direto, MAC a MAC, sem roteador nem ponto de
 acesso. O notebook se liga ao UNO só por USB.
 
 ```
-[NodeMCU emissor] --ESP-NOW--> [NodeMCU receptor] --serial 9600, A0--> [Arduino UNO R3] <--USB--> [Notebook]
+[3 NodeMCU emissores] -ESP-NOW-> [NodeMCU receptor] --serial 9600, A0--> [Arduino UNO R3] <--USB--> [Notebook]
    (veículo)                       (cruzamento)                                                ├── bridge (escuta; leva a Central)
                                                                                                ├── backend :8000
                                                                                                ├── postgres :5432
                                                                                                └── frontend :8443 (nginx, HTTPS)
 ```
 
-O MAC do receptor está fixo no sketch do emissor (`40:91:51:58:A8:E1`). Trocar
-a placa receptora exige regravar o emissor.
+O MAC do receptor está fixo no sketch dos emissores (`40:91:51:58:A8:E1`).
+Trocar a placa receptora exige regravar os três.
 
 Rede da faculdade, SSID 2,4 GHz e IP fixo do backend deixaram de ser
 preocupação: nada na bancada usa Wi-Fi.

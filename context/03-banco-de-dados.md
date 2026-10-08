@@ -323,7 +323,10 @@ Consequência para o coletor: ele mantém a fase corrente de cada TLS em memóri
 - Dispositivos IoT: `EMISSOR_VE_01` (NodeMCU + RC522, no veículo, tipo
   `EMISSOR_V2I`, **sem** `fk_semaforo`), `RECEPTOR_CRUZ_01` (NodeMCU do
   cruzamento, `RECEPTOR_V2I`) e `CTRL_PROTO_01` (UNO, `CONTROLADOR_SEMAFORO`).
-  Substituíram o `LEITOR_CRUZ_01` em 2026-10-05 (entrega 5.8). Nenhum deles
+  Substituíram o `LEITOR_CRUZ_01` em 2026-10-05 (entrega 5.8). Em 2026-10-08
+  entraram `EMISSOR_VE_02` e `EMISSOR_VE_03`, os carrinhos do bombeiro e da
+  polícia (`05` §1); o `01` é o da ambulância. Os seeds só acrescentam, então
+  um banco já semeado os ganha na próxima carga, sem migration. Nenhum deles
   chama a API, então `token_hash` não é exercitado pela bancada.
 - **Nenhuma ocorrência** — de propósito (P20). O sistema sobe sem VE em
   serviço. *(A demonstração na bancada não passa mais por aqui: desde

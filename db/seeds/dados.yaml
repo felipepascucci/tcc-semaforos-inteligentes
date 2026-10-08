@@ -98,7 +98,7 @@ tags:
   - { uid: PLACEHOLDER02, placa: BMB2B02, ativo: false }
 
 dispositivos:
-  # As três placas da bancada (context/05 §1). Desde 2026-10-05 nenhuma delas
+  # As placas da bancada (context/05 §1): três emissores, o receptor e o UNO. Desde 2026-10-05 nenhuma delas
   # chama a API: os NodeMCUs se falam por ESP-NOW, e o UNO só escreve na serial
   # que a ponte escuta. O `token_hash` existe porque a coluna é obrigatória, mas
   # não é exercitado pela bancada.
@@ -108,10 +108,18 @@ dispositivos:
   # ambiente: TOKEN_<CODIGO> (ex.: TOKEN_CTRL_PROTO_01). TROCAR antes da
   # apresentação (context/02 §6).
   #
-  # O emissor vai no veículo, não num cruzamento: fica sem `semaforo`.
+  # O emissor vai no veículo, não num cruzamento: fica sem `semaforo`. Um por
+  # carrinho, e cada carrinho é um tipo (desde 2026-10-08, context/05 §1):
+  # 01 ambulância, 02 bombeiro, 03 polícia.
   - codigo: EMISSOR_VE_01
     tipo: EMISSOR_V2I
     token_dev: dev-somente-local-emissor
+  - codigo: EMISSOR_VE_02
+    tipo: EMISSOR_V2I
+    token_dev: dev-somente-local-emissor-02
+  - codigo: EMISSOR_VE_03
+    tipo: EMISSOR_V2I
+    token_dev: dev-somente-local-emissor-03
   - codigo: RECEPTOR_CRUZ_01
     tipo: RECEPTOR_V2I
     semaforo: PROTO_CRUZ_01
