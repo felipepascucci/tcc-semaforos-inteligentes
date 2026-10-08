@@ -21,7 +21,7 @@ Duas frentes de validação, com papéis diferentes:
 | Frente | O que é | Papel |
 | --- | --- | --- |
 | **A — Simulação** | SUMO + TraCI, malha de 8 cruzamentos, 600 execuções, controlada pelo **motor de decisão** em Python | Produz os números de H1, H2 e H4, e o objeto do experimento é o motor |
-| **B — Protótipo físico** | Arduino UNO + 2 NodeMCU + RC522 + LCD, 4 semáforos | Demonstra a camada V2I por rádio e a atuação segura em hardware real, e produz a medida de H3 |
+| **B — Protótipo físico** | Arduino UNO + 4 NodeMCU (3 emissores, um por tipo de veículo, e o receptor) + 3 RC522 + LCD, 4 semáforos | Demonstra a camada V2I por rádio e a atuação segura em hardware real, e produz a medida de H3 |
 
 Consequência prática: uma falha de bancada na véspera não derruba o capítulo de resultados.
 
@@ -91,7 +91,7 @@ LEDs acendem com `HIGH`. LCD I2C `0x27` em A4/A5, a 5 V. **A0 ← TX do NodeMCU 
 
 > **Por que o receptor saiu do RX (0).** O conversor USB e o NodeMCU disputavam o mesmo pino, e o NodeMCU prevalecia: o upload falhava com o fio ligado, e o notebook não conseguia escrever no UNO. Com o receptor no A0, a ponte manda a lista da Central e as injeções de teste com a bancada montada, e gravar não pede fio solto.
 
-### NodeMCU emissor (veículo) · RC522
+### NodeMCU emissor (veículo) · RC522 — três, um por carrinho
 
 | RC522 | NodeMCU |
 | --- | --- |
@@ -101,7 +101,7 @@ LEDs acendem com `HIGH`. LCD I2C `0x27` em A4/A5, a 5 V. **A0 ← TX do NodeMCU 
 | MISO / MOSI / SCK | D6 / D7 / D5 |
 | SDA/SS | D8 |
 
-Tipo do veículo fixo no código (`AMBULANCIA`); MAC do receptor fixo (`40:91:51:58:A8:E1`).
+Tipo do veículo fixo no código de cada um (`AMBULANCIA`, `BOMBEIRO` e `POLICIA`, desde 2026-10-08); MAC do receptor fixo (`40:91:51:58:A8:E1`), o mesmo nos três. A mesma pinagem nos três.
 
 ### Tags
 
@@ -129,7 +129,7 @@ ASCII, linhas com `\r\n`, **9600 baud** — a velocidade do receptor.
 
 **Não há comandos do notebook.** O protocolo da v2 (`PING`, `PRE`, `CLR`, `CFG`, `ST?`, `SAFE`, `TESTMODE`, `TEST`) deixou de existir. A lista da Central é um dado contra o qual o UNO decide sozinho, não um comando.
 
-**Teste sem o veículo:** a ponte escreve no UNO, pelo USB, a mesma linha que o receptor escreveria (`POST /injecao`), com a bancada montada. É também assim que se demonstra a prioridade entre VEs diferentes, já que o emissor físico é sempre ambulância.
+**Teste sem o veículo:** a ponte escreve no UNO, pelo USB, a mesma linha que o receptor escreveria (`POST /injecao`), com a bancada montada. É também assim que o roteiro da demonstração mostra a prioridade entre VEs diferentes, com o intervalo entre as chegadas controlado. Desde 2026-10-08 há também um carrinho por tipo (ambulância, bombeiro e polícia), então a disputa pode ser feita com os carrinhos.
 
 ### Saída (TX → USB)
 
@@ -245,6 +245,8 @@ Passa igual contra o dublê (`adapters/hardware/simulado.py`) e contra a placa.
 
 **Ficam como estão** (entrega 5.6 só os versiona em `firmware/nodemcu/`). O emissor já deduplica (3 s entre envios), já ignora tag que não é de rua e já imprime `Tag <UID> lida -> Enviando RUAn`, que é a linha que H3 carimba. O receptor repassa sem interpretar.
 
+Os emissores do bombeiro e da polícia (2026-10-08) são o sketch da ambulância com só a linha do tipo trocada (`firmware/nodemcu/veiculo_bombeiro/` e `veiculo_policia/`).
+
 Saem da v2: Wi-Fi, HTTP, `secrets.h`, `sequencia`, `X-Device-Token`, `mensagem_lcd` e `SEM CONEXAO`.
 
 ---
@@ -285,7 +287,7 @@ A ponte carimba o **primeiro byte** das duas linhas (`Tag … lida` e `EV,…,PR
 
 ## §11 — Rede do protótipo
 
-**Não há rede.** ESP-NOW entre os dois NodeMCUs (rádio 2,4 GHz, MAC a MAC), USB entre o UNO e o notebook. Sem roteador, sem SSID, sem IP.
+**Não há rede.** ESP-NOW entre os NodeMCUs, dos três emissores ao receptor (rádio 2,4 GHz, MAC a MAC), USB entre o UNO e o notebook. Sem roteador, sem SSID, sem IP.
 
 **Limitação a declarar:** o ESP-NOW está sem criptografia nos sketches, então qualquer ESP8266 que conheça o MAC do receptor pode preemptar o cruzamento. Chave por par (CCMP) é trabalho futuro.
 
@@ -297,7 +299,7 @@ A ponte carimba o **primeiro byte** das duas linhas (`Tag … lida` e `EV,…,PR
 - ✅ **P9** — não se aplica: o LCD está no UNO, de 5 V.
 - ✅ **P10** — resistores integrados nos módulos.
 - **Fotos da bancada** — pendentes (questionário, seção 7).
-- **Versões das bibliotecas e do pacote `esp8266`** — informadas pelo Felipe em 2026-10-07: `MFRC522` 1.4.12 (GithubCommunity) e `LiquidCrystal I2C` 1.1.2 (Frank de Brabander). **Falta o número de versão do pacote `esp8266`** (ESP8266 Community), que traz também o `ESP8266WiFi` e o `espnow` dos dois NodeMCUs. O firmware novo do UNO foi compilado com `arduino:avr` 1.8.8 e a mesma `LiquidCrystal I2C` 1.1.2.
+- **Versões das bibliotecas e do pacote `esp8266`** — informadas pelo Felipe em 2026-10-07: `MFRC522` 1.4.12 (GithubCommunity) e `LiquidCrystal I2C` 1.1.2 (Frank de Brabander). **Falta o número de versão do pacote `esp8266`** (ESP8266 Community) com que a equipe gravou o emissor da ambulância e o receptor; ele traz também o `ESP8266WiFi` e o `espnow`. Os emissores do bombeiro e da polícia (2026-10-08) foram gravados com o `esp8266` **3.1.2** e a `MFRC522` 1.4.12. O firmware novo do UNO foi compilado com `arduino:avr` 1.8.8 e a mesma `LiquidCrystal I2C` 1.1.2.
 
 ---
 

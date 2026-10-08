@@ -39,7 +39,7 @@ O **motor de decisão é único e agnóstico ao mundo**. Ele recebe um estado no
 | C3 | **Adaptador SUMO** | Python + TraCI | Loop de simulação, leitura de estado, aplicação de fases |
 | C4 | **Ponte / Adaptador Hardware** | Python + pyserial | Escuta a telemetria e os eventos do UNO, carimba no relógio do notebook, mede H3, leva ao UNO a lista da Central (desde 2026-10-06) e injeta VEs em teste (`05` §6) |
 | C5 | **Firmware controlador** | C++ / Arduino UNO R3 | Decide a preempção (regra local, `05` §3), máquina de estados dos 4 semáforos com transição segura, LCD |
-| C6 | **Firmware V2I** | C++ / 2 × NodeMCU ESP8266 | Emissor no veículo: lê a tag da rua e envia por ESP-NOW. Receptor no cruzamento: repassa ao UNO pela serial |
+| C6 | **Firmware V2I** | C++ / 4 × NodeMCU ESP8266 | Emissor no veículo (três carrinhos: ambulância, bombeiro e polícia, desde 2026-10-08): lê a tag da rua e envia por ESP-NOW. Receptor no cruzamento: repassa ao UNO pela serial |
 | C7 | **Banco de dados** | PostgreSQL 16 | Persistência de cadastros, logs e métricas |
 | C8 | **Dashboard** | React + Vite + TS | Monitoramento em tempo real e relatórios |
 | C9 | **Pipeline de análise** | Python (pandas, scipy) | Estatística, tabelas e figuras do TCC |

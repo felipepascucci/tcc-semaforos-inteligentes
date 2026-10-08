@@ -14,14 +14,22 @@
 > USB, e a ponte passa a mandar ao UNO a lista da Central (quem tem ocorrência
 > ativa, e com que criticidade). O UNO continua decidindo sozinho, e o notebook
 > continua fora do caminho da decisão.
+>
+> **Revisto em 2026-10-08 — um carrinho por tipo** (`09`, decisão de
+> 2026-10-08). Chegaram mais dois NodeMCUs com RC522, e a bancada passa a ter
+> **três emissores**: ambulância, bombeiro e polícia. Os dois novos levam o
+> sketch da ambulância com só a linha do tipo trocada; receptor, UNO, protocolo
+> e regra não mudam, porque o UNO já aceitava os três tipos (§3.2).
 
 ## 1. Inventário do hardware montado
 
-Três placas. A única ligação que mudou desde o questionário é a do receptor,
-do RX (0) para o A0 (decisão de 2026-10-06).
+Cinco placas: três emissores (um por carrinho), o receptor e o UNO. A única
+ligação do cruzamento que mudou desde o questionário é a do receptor, do RX (0)
+para o A0 (decisão de 2026-10-06).
 
 ```
- VEÍCULO (carrinho)                       CRUZAMENTO
+ VEÍCULOS (3 carrinhos: ambulância,       CRUZAMENTO
+           bombeiro e polícia)
 ┌──────────────────────────┐   ESP-NOW   ┌────────────────────┐  TX→A0   ┌──────────────────────┐
 │ NodeMCU EMISSOR + RC522  │ ──rádio──▶  │ NodeMCU RECEPTOR   │ ──9600──▶│ Arduino UNO R3       │
 │ bateria 9 V (VIN)        │  MAC a MAC  │ 5 V vindo do UNO   │          │ 4 semáforos + LCD    │
@@ -102,11 +110,32 @@ Livres: **A2 e A3**.
 > receptor, que tem picos de ~200–300 mA ao usar o rádio; pelo USB isso cabe nos
 > 500 mA da porta.
 
-### Subsistema B — Veículo (NodeMCU 1.0 ESP-12E "emissor" + RC522)
+### Subsistema B — Veículos (NodeMCU 1.0 ESP-12E "emissor" + RC522, um por tipo)
 
-Bateria de 9 V em VIN/GND. Lê a tag a **2–5 cm**. Sketch:
-`firmware/nodemcu/veiculo_ambulancia/` (o original da equipe está em
-`docs/hardware/`).
+Bateria de 9 V em VIN/GND. Lê a tag a **2–5 cm**. Desde 2026-10-08 são três
+carrinhos, com a mesma placa, a mesma pinagem e o mesmo sketch, que só difere
+na linha do tipo (§5):
+
+| Carrinho | Sketch | Conversor USB | MAC | Gravado |
+| --- | --- | --- | --- | --- |
+| Ambulância | `firmware/nodemcu/veiculo_ambulancia/` | CP2102 (`10C4:EA60`) | não lido | pela equipe, Arduino IDE |
+| Bombeiro | `firmware/nodemcu/veiculo_bombeiro/` | CH340 (`1A86:7523`) | `BC:DD:C2:08:7A:D0` | 2026-10-08, `arduino-cli` |
+| Polícia | `firmware/nodemcu/veiculo_policia/` | CH340 (`1A86:7523`) | `4C:EB:D6:1F:F7:F2` | 2026-10-08, `arduino-cli` |
+
+**Polícia: o RST do RC522 vai ao 3V3, e não ao D3** (2026-10-08, decisão do
+Felipe). O pino D3 desse NodeMCU não leva o nível ao fio: com o RST no D3, o
+RC522 lia a versão (`0x92`) mas não guardava nenhuma escrita, nem a 100 kHz, e
+a antena nunca ligava, porque o chip reiniciava o tempo todo. O mesmo aconteceu
+com o RC522 do bombeiro no lugar e com um jumper novo; com o RST no 3V3, a
+escrita pegou. O código não muda: com o D3 solto, a placa o mantém em nível alto
+(é o *strap* de boot do GPIO 0), e a `MFRC522` faz só o reset por software. A
+pinagem desse carrinho difere das outras nesse fio; ressoldar o D3 a devolveria
+à tabela abaixo. A gravação nessa placa só funcionou a 57600 baud
+(`esp8266:esp8266:nodemcuv2:baud=57600`); a 115200 deu ruído duas vezes.
+
+O original da equipe está em `docs/hardware/veiculo_ambulancia.ino`. Cada
+emissor está cadastrado em `dispositivo_iot` (`EMISSOR_VE_01`, `_02` e `_03`,
+`03` §5).
 
 | RC522 | NodeMCU | Função |
 | --- | --- | --- |
@@ -118,8 +147,11 @@ Bateria de 9 V em VIN/GND. Lê a tag a **2–5 cm**. Sketch:
 | SCK | D5 (GPIO 14) | SPI clock |
 | SDA/SS | D8 (GPIO 15) | Chip select |
 
-O tipo do veículo é **fixo no código** (`"AMBULANCIA"`), assim como o MAC do
-receptor (`40:91:51:58:A8:E1`). Há **um** emissor: a bancada tem um veículo.
+O tipo do veículo é **fixo no código** de cada emissor, assim como o MAC do
+receptor (`40:91:51:58:A8:E1`), o mesmo nos três. O receptor não precisa
+conhecer os emissores: o ESP-NOW sem criptografia entrega a mensagem de
+qualquer remetente. Até 2026-10-07 havia **um** emissor, o da ambulância, e
+bombeiro e polícia só entravam por injeção (§6).
 
 ### Subsistema C — Cruzamento (NodeMCU 1.0 ESP-12E "receptor")
 
@@ -318,7 +350,8 @@ vista. Quando o verde do VE atendido acaba (`PREEMP_FIM`), o da fila é atendido
 se não há fila, volta o ciclo.
 
 A identidade do veículo é o tipo (§1). Dois veículos do mesmo tipo são
-indistinguíveis — limitação da bancada, a declarar no texto. Pelo mesmo motivo,
+indistinguíveis — limitação da bancada, a declarar no texto. Com um carrinho por
+tipo (desde 2026-10-08), dois carrinhos diferentes nunca se confundem. Pelo mesmo motivo,
 **o mesmo carrinho lido em duas ruas vira dois VEs**: na captura de 2026-10-06,
 o carrinho passou pela RUA1 e depois pela RUA3, e o UNO pôs a "segunda
 ambulância" na fila. "Autorizar o veículo" na bancada é autorizar o tipo.
@@ -555,6 +588,12 @@ emissor), que não se cancelam por serem chips diferentes, e até ~27 ms a mais
 se uma `ST` estiver saindo do UNO quando o VE chega (erro para cima, contra a
 hipótese).
 
+**H3 foi medida com o carrinho da ambulância** (2026-10-07), antes de existirem
+os outros dois. Eles rodam o mesmo sketch, com o mesmo caminho (ESP-NOW,
+receptor, A0, decisão), e só o texto do tipo muda (8 ou 7 caracteres contra 10,
+~3 ms a menos na serial do receptor ao UNO). A medida não foi refeita com eles,
+e isso se declara assim.
+
 **`t_decisao` não existe na bancada.** A decisão acontece dentro do UNO, em
 microssegundos, e não é observável à parte. A latência de decisão (RNF01) é
 medida na simulação, sobre o motor (`00` §5, decisão P2).
@@ -572,6 +611,29 @@ do receptor, tipo do veículo, mapa UID → rua e pinagem.
 ao original, que o cabeçalho diz o que o código faz (MAC, tipo, mapa e pinos do
 RC522), que o mapa bate com a tabela de §1 e que a linha `Tag … lida` impressa
 pelo emissor é a que a ponte interpreta para H3.
+
+**Emissores do bombeiro e da polícia (2026-10-08).** São o sketch da ambulância
+com **uma** linha trocada, `String tipoVeiculoAtual = "BOMBEIRO";` (ou
+`"POLICIA"`), em `firmware/nodemcu/veiculo_bombeiro/` e `veiculo_policia/`. O
+teste confere, para cada um, que o corpo é o original com essa linha e nenhuma
+outra diferença. Foram compilados e gravados com o `arduino-cli`, pacote
+`esp8266` **3.1.2** e `MFRC522` 1.4.12; o esptool confere o hash da flash depois
+de gravar, então o defeito do avrdude com o UNO (§3.7) não se aplica:
+
+```powershell
+arduino-cli compile --fqbn esp8266:esp8266:nodemcuv2 firmware/nodemcu/veiculo_bombeiro
+arduino-cli upload  --fqbn esp8266:esp8266:nodemcuv2 -p COM4 firmware/nodemcu/veiculo_bombeiro
+```
+
+O pacote `esp8266` com que a equipe gravou a ambulância continua sem número
+informado (`docs/contrato-hardware-software.md` §12); 3.1.2 é o dos dois novos.
+
+**Aceitação na placa, 2026-10-08.** Cada emissor novo, no USB do notebook e com
+o seu tipo em serviço na lista do UNO (`AUT,<tipo>,1` pelo COM3), passou pelas
+quatro tags: as quatro leituras viraram `PREEMP_INI` na rua certa com o tipo
+certo, e o `PREEMP_FIM` veio ao fim do verde do tipo. Bombeiro: 4 de 4.
+Polícia: 4 de 4, com o RST do RC522 no 3V3 (§1); antes disso, nenhuma leitura,
+e uma rodada perdida por mau contato desse jumper com o carrinho em movimento.
 
 O que eles já fazem e o protótipo usa:
 
@@ -732,13 +794,27 @@ ponte encerrada com Ctrl+C no passo 6.
 4. **O carrinho passa de novo** → amarelo no eixo principal, all-red, verde só
    no S3. O LCD mostra `AMBULANCIA na R3`, e o dashboard mostra o evento. Ao fim
    do verde, o ciclo volta pelo eixo principal, que ficou esperando.
-5. **Prioridade pela criticidade** — com a ambulância em `RISCO_COLETIVO` e um
-   bombeiro em `RISCO_VIDA` na Central, a ponte injeta a ambulância na Rua 3 e,
-   logo depois, o bombeiro na Rua 1: o bombeiro interrompe a ambulância (pelo
-   amarelo e pelo all-red), e ela vai para a fila. Com as criticidades
-   trocadas, quem interrompe é a ambulância. O emissor físico é sempre
-   ambulância, então o segundo VE vem da injeção — que, desde 2026-10-06,
-   funciona com a bancada montada.
+5. **Prioridade pela criticidade, com os carrinhos** (desde 2026-10-08) — duas
+   disputas. Na primeira, com a ambulância em `RISCO_COLETIVO` e o bombeiro em
+   `RISCO_VIDA` na Central, o carrinho da ambulância passa pela Rua 3 e, quando
+   o roteiro diz **AGORA** (3 s depois do `PREEMP_INI` dela), o do bombeiro
+   passa pela Rua 1: o bombeiro interrompe a ambulância (pelo amarelo e pelo
+   all-red), e ela vai para a fila. Na segunda, com a ambulância em
+   `RISCO_VIDA` e a polícia em `RISCO_COLETIVO`, a polícia passa no AGORA e
+   espera na fila. Aparecem os três carrinhos e os dois desfechos, e a primeira
+   disputa mostra a criticidade vencendo a ordem antiga dos tipos. O roteiro
+   só aceita, como chegada, a decisão do tipo daquele carrinho (uma releitura
+   do outro não conta) e segue com a rua que o carrinho leu. Se o segundo
+   carrinho chega depois do fim do verde do primeiro, não houve disputa, e o
+   roteiro diz isso e pede para repetir com `--passos 5`. Com `--sem-carrinho`,
+   os VEs vêm da injeção, com o intervalo exato. Até 2026-10-07 o passo era
+   só por injeção (ambulância × bombeiro, criticidades trocadas), porque o
+   único emissor físico era a ambulância. **Ensaiado na placa em 2026-10-08:
+   11 de 11** (`--passos 5`, os três carrinhos, a ponte com `--telemetria`,
+   sessão `2026-10-08T20:40:56Z`): o bombeiro interrompeu a ambulância (verde
+   exclusivo dele 4,7 s depois da decisão) e ela saiu da fila; a polícia foi
+   para a fila e saiu depois da ambulância; o ciclo voltou pelo eixo que
+   esperou nas duas; I1 a I4 em 840 telemetrias, nenhuma violação.
 6. **Autonomia do cruzamento** — encerrar a ponte. O semáforo continua, e o
    carrinho continua preemptando com a última lista; só o dashboard e a Central
    param de alcançar o UNO. O cruzamento não depende do notebook para decidir.

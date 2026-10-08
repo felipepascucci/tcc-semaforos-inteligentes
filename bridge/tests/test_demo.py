@@ -10,8 +10,11 @@ from typing import Any
 
 import pytest
 
+from bridge import demo as demo_modulo
 from bridge.demo import (
+    DISPUTAS,
     Demo,
+    DemoInterrompidaError,
     Opcoes,
     central_esperada,
     descrever,
@@ -152,3 +155,162 @@ def test_encerra_no_fim_so_as_que_o_roteiro_abriu() -> None:
     demo.definir_central({"AMBULANCIA": 1})
     demo.encerrar_as_minhas()
     assert backend.abertas == [alheia]
+
+
+# ---------------------------------------------------------------------------
+# Passo 5 com os carrinhos (2026-10-08): a chegada e a disputa
+# ---------------------------------------------------------------------------
+
+AMB, BOMB, POL = "AMBULANCIA", "BOMBEIRO", "POLICIA"
+
+
+class ObservadorRoteiro(ObservadorFalso):
+    """Telemetria e eventos de uma disputa inteira, já chegados."""
+
+    def __init__(
+        self, backend: BackendFalso, luzes: list[tuple[int, str, str]], eventos: list[Ev]
+    ) -> None:
+        super().__init__(backend)
+        self.luzes = luzes
+        self.eventos = eventos
+
+    def copia(self) -> tuple[list[Amostra], list[Ev]]:
+        lista = tuple(sorted(central_esperada(self.backend.abertas, TIPOS).items()))
+        amostras = [
+            Amostra(ms, cores, regime, None, None, lista) for ms, cores, regime in self.luzes
+        ]
+        return amostras, list(self.eventos)
+
+    def primeira(self, condicao: Any, desde_ms: int) -> Amostra | None:
+        return next((a for a in self.copia()[0] if a.ms >= desde_ms and condicao(a)), None)
+
+    def entre(self, inicio_ms: int, fim_ms: int) -> list[Amostra]:
+        return [a for a in self.copia()[0] if inicio_ms <= a.ms <= fim_ms]
+
+
+class PonteFalsa:
+    def __init__(self) -> None:
+        self.injecoes: list[tuple[int, str]] = []
+
+    def injetar(self, rua: int, veiculo: str) -> tuple[int, dict[str, Any]]:
+        self.injecoes.append((rua, veiculo))
+        return 200, {"decisao_t_dispositivo_ms": 2000, "decisao": "PREEMP_INI"}
+
+
+def _demo_roteiro(
+    eventos: list[Ev], luzes: list[tuple[int, str, str]] | None = None, **opcoes: Any
+) -> tuple[Demo, PonteFalsa]:
+    backend = BackendFalso([])
+    ponte = PonteFalsa()
+    observador = ObservadorRoteiro(backend, luzes or [(1000, "GGRR", "C")], eventos)
+    demo = Demo(ponte, observador, backend, Opcoes(pausa=False, **opcoes))  # type: ignore[arg-type]
+    demo.carregar_cadastro()
+    return demo, ponte
+
+
+def test_a_chegada_e_a_decisao_do_tipo_do_carrinho() -> None:
+    """A releitura do outro carrinho no meio não é tomada pela chegada."""
+    demo, _ = _demo_roteiro([Ev(2000, "RENOVADO", 3, AMB), Ev(2100, "PREEMP_INI", 1, BOMB)])
+    assert demo.chegada(BOMB, 1, 1500) == Ev(2100, "PREEMP_INI", 1, BOMB)
+
+
+def test_a_chegada_segue_a_rua_que_o_carrinho_leu() -> None:
+    demo, _ = _demo_roteiro([Ev(2000, "PREEMP_INI", 2, POL)])
+    assert demo.chegada(POL, 1, 1500).rua == 2
+
+
+def test_sem_carrinho_a_chegada_e_injetada() -> None:
+    demo, ponte = _demo_roteiro([], sem_carrinho=True)
+    assert demo.chegada(BOMB, 1, 1000) == Ev(2000, "PREEMP_INI", 1, BOMB)
+    assert ponte.injecoes == [(1, BOMB)]
+
+
+def test_o_cadastro_precisa_dos_tres_tipos() -> None:
+    backend = BackendFalso([])
+    backend.veiculos = lambda: [  # type: ignore[method-assign]
+        {"id_veiculo": 1, "tipo": AMB, "placa": "P1", "status_operacional": "ATIVO"},
+        {"id_veiculo": 2, "tipo": BOMB, "placa": "P2", "status_operacional": "ATIVO"},
+    ]
+    demo = Demo(None, ObservadorFalso(backend), backend, Opcoes(pausa=False))  # type: ignore[arg-type]
+    with pytest.raises(DemoInterrompidaError, match="POLICIA"):
+        demo.carregar_cadastro()
+
+
+@pytest.fixture
+def sem_intervalo(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(demo_modulo, "INTERVALO_SEGUNDO_VE_S", 0.0)
+
+
+#: Ambulância na Rua 3; bombeiro na Rua 1 3 s depois, mais crítico.
+_INTERROMPE = [
+    Ev(2000, "PREEMP_INI", 3, AMB),
+    Ev(5000, "PREEMP_INI", 1, BOMB),
+    Ev(5000, "FILA", 3, AMB),
+    Ev(16000, "PREEMP_FIM", 1, BOMB),
+    Ev(16000, "PREEMP_INI", 3, AMB),
+    Ev(28000, "PREEMP_FIM", 3, AMB),
+]
+_LUZES = [
+    (1000, "GGRR", "C"),
+    (8000, "GRRR", "E"),
+    (19000, "RRGR", "E"),
+    (28000, "RRYR", "C"),
+    (31000, "GGRR", "C"),
+]
+
+
+@pytest.mark.usefixtures("sem_intervalo")
+def test_disputa_com_os_carrinhos_o_mais_critico_interrompe() -> None:
+    demo, ponte = _demo_roteiro(_INTERROMPE, _LUZES)
+    demo._disputa(AMB, BOMB, {AMB: 2, BOMB: 1, POL: 0})
+    assert ponte.injecoes == []
+    assert [r.nome for r in demo.resultados if not r.ok] == []
+    assert any("interrompe" in r.nome for r in demo.resultados)
+    assert any("AMBULANCIA sai da fila" in r.nome for r in demo.resultados)
+
+
+@pytest.mark.usefixtures("sem_intervalo")
+def test_disputa_com_os_carrinhos_o_menos_critico_espera() -> None:
+    eventos = [
+        Ev(2000, "PREEMP_INI", 3, AMB),
+        Ev(5000, "FILA", 1, POL),
+        Ev(14000, "PREEMP_FIM", 3, AMB),
+        Ev(14000, "PREEMP_INI", 1, POL),
+        Ev(24000, "PREEMP_FIM", 1, POL),
+    ]
+    luzes = [
+        (1000, "GGRR", "C"),
+        (5000, "RRGR", "E"),
+        (17000, "GRRR", "E"),
+        (24000, "YRRR", "C"),
+        (27000, "RRGG", "C"),
+    ]
+    demo, _ = _demo_roteiro(eventos, luzes)
+    demo._disputa(AMB, POL, {AMB: 1, BOMB: 0, POL: 2})
+    assert [r.nome for r in demo.resultados if not r.ok] == []
+    assert any("espera na fila" in r.nome for r in demo.resultados)
+    assert any("POLICIA sai da fila" in r.nome for r in demo.resultados)
+
+
+@pytest.mark.usefixtures("sem_intervalo")
+def test_segundo_carrinho_atrasado_nao_e_disputa() -> None:
+    """Passou depois do fim do verde do primeiro: o roteiro diz isso, e não 'sem FILA'."""
+    eventos = [
+        Ev(2000, "PREEMP_INI", 3, AMB),
+        Ev(14000, "PREEMP_FIM", 3, AMB),
+        Ev(20000, "PREEMP_INI", 1, BOMB),
+    ]
+    demo, _ = _demo_roteiro(eventos)
+    demo._disputa(AMB, BOMB, {AMB: 2, BOMB: 1, POL: 0})
+    [falha] = [r for r in demo.resultados if not r.ok]
+    assert "não houve disputa" in falha.detalhe
+
+
+def test_as_disputas_mostram_os_tres_carrinhos_e_os_dois_desfechos() -> None:
+    assert {tipo for primeiro, segundo, _ in DISPUTAS for tipo in (primeiro, segundo)} == {
+        AMB,
+        BOMB,
+        POL,
+    }
+    desfechos = {central[segundo] < central[primeiro] for primeiro, segundo, central in DISPUTAS}
+    assert desfechos == {True, False}

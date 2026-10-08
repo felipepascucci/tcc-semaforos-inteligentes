@@ -197,7 +197,7 @@ def test_seeds_criam_o_cadastro_de_context_03_secao_5(sessao: Session) -> None:
     assert criados["fase_semaforo"] == 2
     assert criados["veiculo"] == 3
     assert criados["tag"] == 2
-    assert criados["dispositivo"] == 3
+    assert criados["dispositivo"] == 5  # 3 emissores, receptor e UNO
 
 
 def test_seeds_sao_idempotentes(sessao: Session) -> None:
@@ -247,14 +247,15 @@ def _verificar_prototipo_da_bancada(sessao: Session) -> None:
     assert buscar_semaforo_por_codigo(sessao, "PROTO_S1") is None
 
     dispositivos = {d.codigo: d for d in sessao.query(DispositivoIot).all()}
-    assert set(dispositivos) == {"EMISSOR_VE_01", "RECEPTOR_CRUZ_01", "CTRL_PROTO_01"}
-    # O emissor vai no veículo; os outros dois ficam no cruzamento.
-    assert dispositivos["EMISSOR_VE_01"].fk_semaforo is None
+    emissores = {"EMISSOR_VE_01", "EMISSOR_VE_02", "EMISSOR_VE_03"}  # um por tipo, 2026-10-08
+    assert set(dispositivos) == emissores | {"RECEPTOR_CRUZ_01", "CTRL_PROTO_01"}
+    # Os emissores vão nos veículos; os outros dois ficam no cruzamento.
+    assert all(dispositivos[codigo].fk_semaforo is None for codigo in emissores)
     assert dispositivos["RECEPTOR_CRUZ_01"].fk_semaforo == proto.id_semaforo
     assert dispositivos["CTRL_PROTO_01"].fk_semaforo == proto.id_semaforo
 
 
-def test_prototipo_tem_um_cruzamento_com_duas_fases_e_tres_placas(sessao: Session) -> None:
+def test_prototipo_tem_um_cruzamento_com_duas_fases_e_cinco_placas(sessao: Session) -> None:
     """A bancada como está montada (decisão de 2026-10-05), verificada no dado."""
     aplicar(sessao, carregar_dados())
     sessao.commit()

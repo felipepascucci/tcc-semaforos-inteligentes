@@ -1,23 +1,23 @@
 /*
- * NodeMCU EMISSOR — vai no veículo (entrega 5.6; context/05 §1, §4.3 e §5).
+ * NodeMCU EMISSOR do POLICIA — vai no veículo (context/05 §1, §4.3 e §5).
  *
- * VERSIONADO COMO ESTÁ. Abaixo deste cabeçalho está o sketch da equipe de
- * hardware, byte a byte igual a docs/hardware/veiculo_ambulancia.ino: os
- * sketches dos NodeMCUs não mudam (decisão de 2026-10-05). Só este comentário
- * foi acrescentado, e tests/firmware/test_sketches_nodemcu.py confere as duas
- * coisas: o corpo idêntico e este cabeçalho de acordo com o código.
+ * CÓPIA DO EMISSOR DA AMBULÂNCIA COM O TIPO TROCADO. Abaixo deste cabeçalho
+ * está docs/hardware/veiculo_ambulancia.ino, o sketch da equipe de hardware,
+ * byte a byte, exceto UMA linha: tipoVeiculoAtual = "POLICIA". Os sketches dos
+ * NodeMCUs não mudam (decisão de 2026-10-05); desde 2026-10-08 a bancada tem
+ * três carrinhos, um por tipo (context/09), e cada um leva esta cópia.
+ * tests/firmware/test_sketches_nodemcu.py confere as duas coisas: o corpo
+ * igual ao original salvo essa linha, e este cabeçalho de acordo com o código.
  *
- * Placa: NodeMCU 1.0 (ESP-12E Module), pacote de placas "esp8266".
+ * Placa: NodeMCU 1.0 (ESP-12E Module), pacote de placas "esp8266" 3.1.2.
  * Bibliotecas: MFRC522 1.4.12 (GithubCommunity); ESP8266WiFi e espnow vêm
- * com o pacote esp8266, de versão não informada (contrato §12). Gravado com
- * a Arduino IDE 2.3.10.
+ * com o pacote esp8266. Gravado com o arduino-cli (context/05 §5).
  *
  * MAC do receptor (o NodeMCU do cruzamento): 40:91:51:58:A8:E1
- *   Está em enderecoReceptor[]. Trocar a placa do receptor exige trocar aqui.
+ *   Está em enderecoReceptor[]. Trocar a placa do receptor exige trocar aqui,
+ *   e nos outros dois emissores.
  *
- * Tipo do veículo: AMBULANCIA, fixo no código (tipoVeiculoAtual). Desde
- *   2026-10-08 há um carrinho por tipo: veiculo_bombeiro/ e veiculo_policia/
- *   são este sketch com só essa linha trocada (context/09).
+ * Tipo do veículo: POLICIA, fixo no código (tipoVeiculoAtual).
  *
  * Mapa UID -> rua. As tags ficam na pista e identificam a aproximação:
  *   F39BD606 -> RUA1 (S1, eixo principal)
@@ -26,20 +26,21 @@
  *   97ABAFA0 -> RUA4 (S4, eixo transversal)
  *   Tag fora da lista é ignorada aqui mesmo, sem envio.
  *
- * Pinagem do RC522 (3,3 V; nunca 5 V):
+ * Pinagem do RC522 (3,3 V; nunca 5 V), a mesma do emissor da ambulância:
  *   3.3V   -> 3V3
- *   RST    -> D3 (GPIO 0)   P8 fechada: o boot funciona em 5 de 5 resets
+ *   RST    -> D3 (GPIO 0) no código. NESTE CARRINHO o RST do RC522 vai ao 3V3,
+ *             e o D3 fica sem fio: o pino D3 desta placa não leva o nível ao
+ *             fio (2026-10-08), e o RC522 ficava reiniciando. Com o D3 solto, a
+ *             placa o mantém em nível alto, e a MFRC522 faz só o reset por
+ *             software, que não depende dele. O código não muda (context/05 §1).
  *   GND    -> GND
  *   MISO   -> D6 (GPIO 12)
  *   MOSI   -> D7 (GPIO 13)
  *   SCK    -> D5 (GPIO 14)
  *   SDA/SS -> D8 (GPIO 15)
- * Alimentação: bateria de 9 V em VIN/GND. Na medição de H3, USB do notebook,
- * com a bateria desconectada.
  *
  * Serial a 9600 baud. Depois de cada esp_now_send imprime
- * "Tag <UID> lida -> Enviando RUAn": o primeiro byte dessa linha é o
- * t_deteccao de H3 (context/05 §4.3). No máximo um envio a cada 3 s.
+ * "Tag <UID> lida -> Enviando RUAn" (sem o tipo). No máximo um envio a cada 3 s.
  *
  * Limitação a declarar: o ESP-NOW vai sem criptografia (contrato §11).
  */
@@ -57,7 +58,7 @@ MFRC522 mfrc522(SS_PIN, RST_PIN);
 // Substitua pelo MAC Address do NodeMCU receptor do semáforo
 uint8_t enderecoReceptor[] = {0x40, 0x91, 0x51, 0x58, 0xA8, 0xE1}; 
 
-String tipoVeiculoAtual = "AMBULANCIA"; 
+String tipoVeiculoAtual = "POLICIA"; 
 
 typedef struct struct_mensagem {
   char rua[10];
