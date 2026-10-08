@@ -93,10 +93,10 @@ Além do código, o TCC exige (pré-projeto §2.7):
 | Diagrama de Componentes | PlantUML | `docs/diagramas/componentes.puml` |
 | Diagrama de Sequência (fluxo de preempção) | PlantUML | `docs/diagramas/sequencia_preempcao.puml` |
 | DER | eralchemy2, a partir do banco | `docs/diagramas/der.pdf` |
-| Diagrama de Infraestrutura | draw.io | `docs/diagramas/infraestrutura.png` |
+| Diagrama de Infraestrutura | PlantUML (decisão de 2026-10-08, era draw.io) | `docs/diagramas/infraestrutura.puml` |
 | Máquina de estados do semáforo | PlantUML | `docs/diagramas/maquina_estados.puml` |
-| Especificação de casos de teste | Markdown | `docs/casos_de_teste.md` |
-| Relatório de validação | Gerado | `docs/relatorios/` |
+| Especificação de casos de teste | Gerada (`python -m analysis.gerar_casos_de_teste`) | `docs/casos_de_teste.md` |
+| Relatório de validação | Gerado (`python -m analysis.gerar_relatorio_validacao`) | `docs/relatorios/` |
 | Esquema elétrico do protótipo | Fritzing | `docs/hardware/esquema.fzz` |
 
 Preferir PlantUML a diagrama desenhado à mão: fica versionado, regenerável e consistente com o código. Um diagrama que diverge do sistema é passivo, não ativo.
@@ -106,8 +106,25 @@ Preferir PlantUML a diagrama desenhado à mão: fica versionado, regenerável e 
 > `eralchemy2`**, que não está em `02` §2 e exige o Graphviz: `python -m db.der`
 > escreve `docs/diagramas/der.puml` a partir do mesmo `Base.metadata` do Alembic,
 > e `tests/diagramas/test_der.py` falha se o arquivo ficar para trás de um model.
-> Os `.puml` são a fonte. Renderizá-los em PDF exige o PlantUML (Java), que não
-> está instalado. A infraestrutura continua no draw.io (`02` §8), por fazer.
+> Os `.puml` são a fonte. ~~Renderizá-los em PDF exige o PlantUML (Java), que não
+> está instalado. A infraestrutura continua no draw.io (`02` §8), por fazer.~~
+>
+> **Feito em 2026-10-08:** `infraestrutura.puml` (implantação local e
+> arquitetura-alvo em AWS, dois diagramas num arquivo), em PlantUML por decisão
+> do Felipe, com `tests/diagramas/test_infraestrutura.py` conferindo que todo
+> serviço do `docker-compose.yml` está nele. O render sai de
+> `python docs/diagramas/renderizar.py`, pela imagem Docker oficial
+> `plantuml/plantuml:1.2026.8` (nada instalado no Windows): um `.pdf` e um
+> `.png` ao lado de cada `.puml`. A especificação de casos de teste é gerada de
+> `06` e da suíte, com teste de atualização como o do DER.
+>
+> **Legibilidade conferida em 2026-10-08, PNG e PDF** (pedido do Felipe): os
+> rótulos que caíam em cima de outras linhas, bordas e títulos foram tirados
+> do caminho (mais espaçamento, notas soltas em vez de ligadas, informação
+> dentro da caixa quando o rótulo não tinha onde ficar, e o DER em polilinha em
+> vez de `ortho`). **O PDF do PlantUML só desenha caracteres do conjunto WinAnsi
+> (cp1252)**: `→`, `≤`, `≥` e `≠` sumiam sem aviso. Os `.puml` usam `->`, `<=`,
+> `>=` e `!=`, e `tests/diagramas/test_caracteres_do_pdf.py` barra a volta.
 
 > **P20 (2026-09-29) — o que os diagramas precisam mostrar quando forem feitos.**
 > Casos de uso: o ator **Central de despacho** (simulada), com "abrir ocorrência"

@@ -5,16 +5,19 @@
 ' e que o firmware do UNO reimplementa em C++ (context/04 §8).
 skinparam monochrome true
 hide empty description
+' Os dois comandos que não trocam de estado ficam como ações internas do verde
+' (dentro da caixa), e não como laços: os rótulos de dois laços no mesmo estado
+' se sobrepunham no render (revisão de legibilidade, 2026-10-08).
 
 [*] --> Verde : estado_inicial()\nfase 1 em verde
 
 state "Verde da fase corrente" as Verde
+Verde : ESTENDER_VERDE / verde_ate <= início + verde_max
+Verde : IR_PARA_FASE / marca fase_alvo e preempção
 state "Amarelo" as Amarelo
 state "All-red" as AllRed
 
-Verde --> Verde : ESTENDER_VERDE\n(verde_ate ≤ início + verde_max)
-Verde --> Verde : IR_PARA_FASE\n(marca fase_alvo e preempção)
-Verde --> Amarelo : [tempo no verde ≥ verde_min]\ne (fim do verde ou fase_alvo ≠ corrente)
+Verde --> Amarelo : [tempo no verde >= verde_min]\ne (fim do verde ou fase_alvo != corrente)
 Amarelo --> AllRed : [amarelo_s cumprido]
 AllRed --> Verde : [all_red_s cumprido]\nverde da fase_alvo,\nou da próxima do ciclo
 

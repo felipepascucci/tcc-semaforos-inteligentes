@@ -70,7 +70,11 @@ def gerar(metadata: MetaData | None = None) -> str:
         "@startuml der",
         "' GERADO por `python -m db.der` a partir de app.models. Não editar à mão.",
         "hide circle",
-        "skinparam linetype ortho",
+        # Polilinha e espaço largo: com `ortho` o PlantUML soltava os rótulos das
+        # FKs longe da linha e em cima das bordas (revisão de 2026-10-08).
+        "skinparam linetype polyline",
+        "skinparam nodesep 100",
+        "skinparam ranksep 90",
         "skinparam monochrome true",
         "",
     ]

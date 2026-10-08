@@ -264,7 +264,7 @@ Descrever no TCC, implantar somente se sobrar tempo:
 | Logs/métricas | CloudWatch | Auditoria |
 | Segredos | Secrets Manager | Substitui `.env` |
 
-Deixar claro no texto que a implementação local em Docker é **equivalente funcional** da arquitetura-alvo, e que a migração é uma troca de provedor de infraestrutura, não de arquitetura. Diagrama obrigatório em `docs/diagramas/infraestrutura.drawio`.
+Deixar claro no texto que a implementação local em Docker é **equivalente funcional** da arquitetura-alvo, e que a migração é uma troca de provedor de infraestrutura, não de arquitetura. Diagrama obrigatório em `docs/diagramas/infraestrutura.puml` (desde 2026-10-08, em PlantUML e não no draw.io; o segundo diagrama do arquivo, `infraestrutura_aws`, é esta tabela).
 
 ## 9. Estratégia de branches
 

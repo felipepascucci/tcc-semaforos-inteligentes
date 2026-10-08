@@ -16,9 +16,12 @@ from analysis.checklist_bancada import (
     LISTA_VOLTA_MAX_S,
     LeituraEmissor,
     Resultado,
+    _sem_nada_gravado,
     avaliar,
+    item_15,
     ler_sessoes,
     main,
+    trechos,
 )
 from bridge.latencia import COLUNAS_DESFECHOS
 from bridge.protocolo import Autorizacao, Deteccao
@@ -263,15 +266,76 @@ def test_sessao_que_termina_em_emergencia(tmp_path: Path) -> None:
     assert "encerrada no meio de uma emergência" in r["14"].detalhes[0]
 
 
-def test_lista_que_demora_a_voltar_nao_atende_o_15(tmp_path: Path) -> None:
-    caminho = tmp_path / "telemetria.csv"
+def _item_15_com_a_central(caminho: Path, lista_no_boot: tuple[int, ...]) -> Resultado:
+    linhas = next(iter(ler_sessoes(caminho).values()))
+    consultas: list[datetime] = []
+
+    def central(instante: datetime) -> tuple[int, ...]:
+        consultas.append(instante)
+        return lista_no_boot
+
+    resultado = item_15(linhas, trechos(linhas), central)
+    assert consultas == [T0]  # perguntou pela lista no instante do BOOT
+    return resultado
+
+
+def _lista_tardia(caminho: Path) -> None:
     ensaio = Ensaio(caminho)
     ensaio.ate(LISTA_VOLTA_MAX_S + 1)
     ensaio.central(AMBULANCIA=1)
     ensaio.esperar(2)
+
+
+def test_lista_tardia_sem_o_banco_fica_sem_veredito_no_15(tmp_path: Path) -> None:
+    """Sem o banco, "nada a reenviar" e "não voltou" são indistinguíveis (2026-10-08)."""
+    caminho = tmp_path / "telemetria.csv"
+    _lista_tardia(caminho)
     r = _resultados(caminho)
 
-    assert r["15"].ok is False
+    assert r["15"].ok is None
+    assert "--banco" in r["15"].detalhes[0]
+
+
+def test_lista_da_central_que_nao_volta_em_2_s_nao_atende_o_15(tmp_path: Path) -> None:
+    caminho = tmp_path / "telemetria.csv"
+    _lista_tardia(caminho)
+    r = _item_15_com_a_central(caminho, (1, 0, 0))
+
+    assert r.ok is False
+    assert "era 100" in r.detalhes[0]
+
+
+def test_central_sem_ocorrencia_no_boot_nao_tem_o_que_reenviar(tmp_path: Path) -> None:
+    """O caso das sessões do item 5 e dos três carrinhos: a ocorrência abre depois."""
+    caminho = tmp_path / "telemetria.csv"
+    _lista_tardia(caminho)
+    r = _item_15_com_a_central(caminho, (0, 0, 0))
+
+    assert r.ok is None
+    assert "nada a reenviar" in r.detalhes[0]
+
+
+def test_sem_nenhum_envio_e_central_com_lista_nao_atende_o_15(tmp_path: Path) -> None:
+    caminho = tmp_path / "telemetria.csv"
+    Ensaio(caminho).ate(30)
+    r = _item_15_com_a_central(caminho, (0, 2, 0))
+
+    assert r.ok is False
+    assert "não escreveu" in r.detalhes[0]
+
+
+def test_lista_que_volta_logo_nao_consulta_a_central(tmp_path: Path) -> None:
+    caminho = tmp_path / "telemetria.csv"
+    ensaio = Ensaio(caminho)
+    ensaio.ate(0.5)
+    ensaio.central(AMBULANCIA=1)
+    ensaio.esperar(3)
+    linhas = next(iter(ler_sessoes(caminho).values()))
+
+    def central(instante: datetime) -> tuple[int, ...]:
+        raise AssertionError("não devia consultar")
+
+    assert item_15(linhas, trechos(linhas), central).ok is True
 
 
 def test_lixo_de_boot_fica_de_fora_e_e_contado(tmp_path: Path) -> None:
@@ -414,3 +478,48 @@ def test_item_5_so_entra_com_a_opcao(tmp_path: Path, capsys) -> None:  # type: i
     assert "| 5 | Tag fora das 4 ruas: sem envio e sem mexer no semáforo | **atende** |" in (
         capsys.readouterr().out
     )
+
+
+# ---------------------------------------------------------------------------
+# Item 9 sem nenhuma linha gravada (mesmo tratamento do 15, 2026-10-08)
+# ---------------------------------------------------------------------------
+
+
+def _item_9_sem_nada(caminho: Path, lista_no_banco: tuple[int, ...]) -> Resultado:
+    linhas = next(iter(ler_sessoes(caminho).values()))
+    resultado = Resultado("9", "Log", None)
+    return _sem_nada_gravado(resultado, linhas, 1, lambda _instante: lista_no_banco)
+
+
+def _com_lista(caminho: Path) -> None:
+    ensaio = Ensaio(caminho)
+    ensaio.ate(0.5)
+    ensaio.central(AMBULANCIA=1)
+    ensaio.esperar(3)
+
+
+def test_item_9_lista_posta_a_mao_fica_sem_veredito(tmp_path: Path) -> None:
+    """O caso das sessões do item 5: compose parado, lista por PUT /autorizacoes."""
+    caminho = tmp_path / "telemetria.csv"
+    _com_lista(caminho)
+    r = _item_9_sem_nada(caminho, (0, 0, 0))
+
+    assert r.ok is None
+    assert "veio de fora do backend" in r.detalhes[-1]
+
+
+def test_item_9_backend_no_caminho_sem_gravar_nao_atende(tmp_path: Path) -> None:
+    caminho = tmp_path / "telemetria.csv"
+    _com_lista(caminho)
+    r = _item_9_sem_nada(caminho, (1, 0, 0))
+
+    assert r.ok is False
+
+
+def test_item_9_lista_sempre_nula_nao_separa(tmp_path: Path) -> None:
+    caminho = tmp_path / "telemetria.csv"
+    Ensaio(caminho).ate(5)
+    r = _item_9_sem_nada(caminho, (0, 0, 0))
+
+    assert r.ok is None
+    assert "000 a sessão inteira" in r.detalhes[-1]

@@ -496,10 +496,23 @@ resultado (mesma execução com e sem, `context/06` §2).
 > F5 a partir dos CSV do lote, e F3, F4 e F6 a partir de
 > `python -m sim.controlador.traco`, que roda uma (cenário, seed) com o laço do
 > executor e grava as séries no tempo. Mais a análise de H4 (10.8). Testado com
-> dado sintético e conferido contra os números do piloto. Ficam para o grupo:
-> as regras de veredito (`context/07` §3.5) e a T4 adaptada (`context/07` §4).
+> dado sintético e conferido contra os números do piloto. As regras de veredito
+> (`context/07` §3.5) e a T4 adaptada (`context/07` §4) foram **confirmadas pelo
+> grupo em 2026-10-08**, depois dos dados e sem alteração; a ordem está
+> registrada em `context/09`.
+>
+> ✅ **Relatório de validação, casos de teste e diagramas, em 2026-10-08**
+> (branch `docs/relatorio-validacao`): `python -m analysis.gerar_relatorio_validacao
+> --rodar-testes --banco` → `docs/relatorios/validacao_AAAAMMDD.md` (as nove seções
+> de `context/06` §5, todo número de dado versionado ou do banco); `python -m
+> analysis.gerar_casos_de_teste` → `docs/casos_de_teste.md`; `infraestrutura.puml`
+> e o render dos `.puml` em PDF e PNG (`python docs/diagramas/renderizar.py`, imagem
+> Docker do PlantUML). Os quatro arquivos de teste que `context/06` §2 citava e não
+> existiam (RF02/H3, RF03, RF07, RNF02) foram escritos; o RF03 sai FALHOU no
+> Bloco 8 (`context/09`). Falta: o PDF do relatório (decisão do grupo), as fotos e
+> o vídeo, a assinatura do checklist e o esquema Fritzing, com a maquete.
 
-Em paralelo: diagramas PlantUML do `context/08` §5, DER via eralchemy2, relatório de validação, checklist assinado do protótipo.
+Em paralelo: diagramas PlantUML do `context/08` §5, DER (`python -m db.der`, sem eralchemy2), relatório de validação, checklist assinado do protótipo.
 
 ---
 

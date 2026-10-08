@@ -25,7 +25,7 @@ loop a cada passo de 0,1 s
   Adaptador -> Motor : avaliar(EstadoMalha)
   activate Motor
   note right of Motor : cronometrado: latência de decisão (RNF01)
-  Motor -> Motor : E1 detecção (≤ 500 m pela rota)\nE2 ETA · E3 janela de ativação\nE4 seleção da fase · E6 timeout
+  Motor -> Motor : E1 detecção (<= 500 m pela rota)\nE2 ETA · E3 janela de ativação\nE4 seleção da fase · E6 timeout
   opt dois VEs pedem fases distintas no mesmo cruzamento (E8)
     Motor -> Motor : criticidade (regra)
     Motor -> Politica : escolher(disputas, estado)
@@ -34,7 +34,7 @@ loop a cada passo de 0,1 s
   end
   Motor --> Adaptador : Comandos\n(IR_PARA_FASE, ESTENDER_VERDE,\nLIBERAR, COMPENSAR)
   deactivate Motor
-  Adaptador -> Adaptador : máquina de estados (E5):\nverde mínimo → amarelo → all-red → verde
+  Adaptador -> Adaptador : máquina de estados (E5):\nverde mínimo -> amarelo -> all-red -> verde
   Adaptador -> SUMO : setRedYellowGreenState()
   Adaptador -> Verificador : verificar(transições)
   alt violação de invariante
@@ -45,7 +45,7 @@ loop a cada passo de 0,1 s
   Adaptador -> Coletor : latência, transições,\nconflitos, filas
 end
 
-Coletor -> Coletor : consolidar(tripinfo.xml)\n→ CSV de analysis/data
+Coletor -> Coletor : consolidar(tripinfo.xml)\n-> CSV de analysis/data
 
 note over SUMO, Coletor
   No modo FIXO o motor não é chamado e o adaptador não escreve no SUMO,

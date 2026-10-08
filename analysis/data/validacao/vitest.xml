@@ -1,0 +1,207 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<testsuites name="vitest tests" tests="74" failures="0" errors="0" time="4.7236584">
+    <testsuite name="src/App.test.tsx" timestamp="2026-10-08T22:52:26.691Z" hostname="DESKTOP-BMHJAAR" tests="2" failures="0" errors="0" skipped="0" time="0.5318051">
+        <testcase classname="src/App.test.tsx" name="App &gt; monta logado e percorre todas as abas" time="0.4149601">
+            <system-err>
+The width(0) and height(0) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/App.test.tsx" name="App &gt; Sair volta ao login e apaga a sessão" time="0.1142528">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/api/cliente.test.ts" timestamp="2026-10-08T22:52:26.692Z" hostname="DESKTOP-BMHJAAR" tests="10" failures="0" errors="0" skipped="0" time="0.0235827">
+        <testcase classname="src/api/cliente.test.ts" name="textoDoDetalhe &gt; devolve o detail do FastAPI como veio" time="0.0040885">
+        </testcase>
+        <testcase classname="src/api/cliente.test.ts" name="textoDoDetalhe &gt; 422 do Pydantic vira uma linha por campo, sem o &apos;body&apos;" time="0.0005508">
+        </testcase>
+        <testcase classname="src/api/cliente.test.ts" name="textoDoDetalhe &gt; sem detail fica o código HTTP" time="0.0004407">
+        </testcase>
+        <testcase classname="src/api/cliente.test.ts" name="montarConsulta &gt; omite vazios e nulos" time="0.0004851">
+        </testcase>
+        <testcase classname="src/api/cliente.test.ts" name="requisitar &gt; manda o token no Authorization quando há sessão" time="0.0062754">
+        </testcase>
+        <testcase classname="src/api/cliente.test.ts" name="requisitar &gt; sem sessão não manda Authorization" time="0.0010456">
+        </testcase>
+        <testcase classname="src/api/cliente.test.ts" name="requisitar &gt; erro do backend vira ErroApi com o status e o detail" time="0.0021772">
+        </testcase>
+        <testcase classname="src/api/cliente.test.ts" name="requisitar &gt; 401 com token avisa a sessão; 401 sem token (senha errada) não" time="0.0017757">
+        </testcase>
+        <testcase classname="src/api/cliente.test.ts" name="requisitar &gt; 204 devolve undefined" time="0.001505">
+        </testcase>
+        <testcase classname="src/api/cliente.test.ts" name="requisitar &gt; falha de rede vira status 0 com mensagem legível" time="0.0008226">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/auth/sessao.test.tsx" timestamp="2026-10-08T22:52:26.694Z" hostname="DESKTOP-BMHJAAR" tests="4" failures="0" errors="0" skipped="0" time="1.0190544">
+        <testcase classname="src/auth/sessao.test.tsx" name="sessão do operador &gt; credencial errada mostra o motivo e continua no login" time="0.5951422">
+        </testcase>
+        <testcase classname="src/auth/sessao.test.tsx" name="sessão do operador &gt; login certo guarda a sessão, e as requisições seguintes levam o token" time="0.383577">
+        </testcase>
+        <testcase classname="src/auth/sessao.test.tsx" name="sessão do operador &gt; sessão salva e válida abre direto, e o token recusado volta ao login com aviso" time="0.0292463">
+            <system-err>
+Warning: An update to ProvedorSessao inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() =&gt; {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you&apos;re testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at ProvedorSessao (C:/Users/User/Desktop/tcc/frontend/src/auth/sessao.tsx:36:27)
+Warning: An update to ProvedorSessao inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() =&gt; {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you&apos;re testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at ProvedorSessao (C:/Users/User/Desktop/tcc/frontend/src/auth/sessao.tsx:36:27)
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/auth/sessao.test.tsx" name="sessão do operador &gt; sessão salva vencida é ignorada" time="0.0077948">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/componentes/MapaMalha.test.ts" timestamp="2026-10-08T22:52:26.696Z" hostname="DESKTOP-BMHJAAR" tests="5" failures="0" errors="0" skipped="0" time="0.0097203">
+        <testcase classname="src/componentes/MapaMalha.test.ts" name="sinalDaAproximacao &gt; a fase corrente em verde: arterial verde, transversal vermelha" time="0.003321">
+        </testcase>
+        <testcase classname="src/componentes/MapaMalha.test.ts" name="sinalDaAproximacao &gt; o amarelo é só da fase que está saindo" time="0.0005511">
+        </testcase>
+        <testcase classname="src/componentes/MapaMalha.test.ts" name="sinalDaAproximacao &gt; no all-red, todas vermelhas" time="0.0004413">
+        </testcase>
+        <testcase classname="src/componentes/MapaMalha.test.ts" name="sinalDaAproximacao &gt; sem estado, ou estado velho, fica sem dado em vez de inventar uma cor" time="0.0003795">
+        </testcase>
+        <testcase classname="src/componentes/MapaMalha.test.ts" name="malha.json &gt; traz os oito cruzamentos da simulação, cada um com as duas fases" time="0.0015115">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/componentes/PainelBancada.test.tsx" timestamp="2026-10-08T22:52:26.697Z" hostname="DESKTOP-BMHJAAR" tests="7" failures="0" errors="0" skipped="0" time="0.1578922">
+        <testcase classname="src/componentes/PainelBancada.test.tsx" name="PainelBancada &gt; mostra cada aproximação com a cor da telemetria" time="0.0938191">
+        </testcase>
+        <testcase classname="src/componentes/PainelBancada.test.tsx" name="PainelBancada &gt; em emergência mostra o regime, a rua atendida e a fila" time="0.0230295">
+        </testcase>
+        <testcase classname="src/componentes/PainelBancada.test.tsx" name="PainelBancada &gt; no ciclo mostra o eixo aberto e a fila vazia" time="0.0145472">
+        </testcase>
+        <testcase classname="src/componentes/PainelBancada.test.tsx" name="PainelBancada &gt; mostra quem a Central pôs em serviço no UNO" time="0.0082173">
+        </testcase>
+        <testcase classname="src/componentes/PainelBancada.test.tsx" name="PainelBancada &gt; com a lista vazia avisa que nenhum VE preempta" time="0.0005836">
+        </testcase>
+        <testcase classname="src/componentes/PainelBancada.test.tsx" name="PainelBancada &gt; telemetria velha é marcada como parada" time="0.0097548">
+        </testcase>
+        <testcase classname="src/componentes/PainelBancada.test.tsx" name="PainelBancada &gt; sem telemetria explica como subir a ponte" time="0.0039738">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/componentes/PainelCentral.test.tsx" timestamp="2026-10-08T22:52:26.698Z" hostname="DESKTOP-BMHJAAR" tests="4" failures="0" errors="0" skipped="0" time="1.0654042">
+        <testcase classname="src/componentes/PainelCentral.test.tsx" name="PainelCentral &gt; só oferece para despacho o veículo ativo e livre, e mostra quem está em serviço" time="0.2646643">
+        </testcase>
+        <testcase classname="src/componentes/PainelCentral.test.tsx" name="PainelCentral &gt; abre a ocorrência com o veículo e a criticidade escolhidos" time="0.5372362">
+        </testcase>
+        <testcase classname="src/componentes/PainelCentral.test.tsx" name="PainelCentral &gt; recusa do backend aparece com o motivo" time="0.1675778">
+        </testcase>
+        <testcase classname="src/componentes/PainelCentral.test.tsx" name="PainelCentral &gt; encerra a ocorrência" time="0.0926206">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/componentes/PainelMetricas.test.ts" timestamp="2026-10-08T22:52:26.699Z" hostname="DESKTOP-BMHJAAR" tests="3" failures="0" errors="0" skipped="0" time="0.008724">
+        <testcase classname="src/componentes/PainelMetricas.test.ts" name="ms &gt; abaixo de 1 ms mostra três casas: a decisão do motor fica no centésimo" time="0.0040501">
+        </testcase>
+        <testcase classname="src/componentes/PainelMetricas.test.ts" name="ms &gt; de 1 ms para cima, uma casa" time="0.000621">
+        </testcase>
+        <testcase classname="src/componentes/PainelMetricas.test.ts" name="ms &gt; sem valor, travessão" time="0.0005751">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/componentes/PreempcaoManual.test.tsx" timestamp="2026-10-08T22:52:26.700Z" hostname="DESKTOP-BMHJAAR" tests="4" failures="0" errors="0" skipped="0" time="0.6340561">
+        <testcase classname="src/componentes/PreempcaoManual.test.tsx" name="PreempcaoManual &gt; na bancada mostra a decisão do UNO e manda rua e veículo" time="0.3857728">
+        </testcase>
+        <testcase classname="src/componentes/PreempcaoManual.test.tsx" name="PreempcaoManual &gt; num CRUZ_xx mostra o 409 com o motivo do backend" time="0.135294">
+        </testcase>
+        <testcase classname="src/componentes/PreempcaoManual.test.tsx" name="PreempcaoManual &gt; o cancelamento recusado mostra o motivo de I6" time="0.0630763">
+        </testcase>
+        <testcase classname="src/componentes/PreempcaoManual.test.tsx" name="PreempcaoManual &gt; 504 da ponte vira a explicação do fio do RX" time="0.0463171">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/componentes/TelaLogs.test.tsx" timestamp="2026-10-08T22:52:26.701Z" hostname="DESKTOP-BMHJAAR" tests="3" failures="0" errors="0" skipped="0" time="0.3369693">
+        <testcase classname="src/componentes/TelaLogs.test.tsx" name="filtros dos logs &gt; datetime-local, que é hora local, vai à API como instante UTC" time="0.0036597">
+        </testcase>
+        <testcase classname="src/componentes/TelaLogs.test.tsx" name="filtros dos logs &gt; campo vazio não vira filtro" time="0.0012716">
+        </testcase>
+        <testcase classname="src/componentes/TelaLogs.test.tsx" name="TelaLogs &gt; lista, filtra pela correlação clicada e pagina" time="0.328311">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/componentes/TelaSimulacoes.test.tsx" timestamp="2026-10-08T22:52:26.701Z" hostname="DESKTOP-BMHJAAR" tests="8" failures="0" errors="0" skipped="0" time="0.8430022">
+        <testcase classname="src/componentes/TelaSimulacoes.test.tsx" name="pedidoParado &gt; só o pendente há mais que a espera do atendente" time="0.0044079">
+        </testcase>
+        <testcase classname="src/componentes/TelaSimulacoes.test.tsx" name="textoDoResumo &gt; resume o que o executor mediu" time="0.000822">
+        </testcase>
+        <testcase classname="src/componentes/TelaSimulacoes.test.tsx" name="textoDoResumo &gt; no singular, e sem travessia quando nenhuma viagem concluiu" time="0.0004724">
+        </testcase>
+        <testcase classname="src/componentes/TelaSimulacoes.test.tsx" name="faixaDaSeed &gt; acha a faixa pelos dois extremos, e nada fora delas ou com o campo vazio" time="0.0005692">
+        </testcase>
+        <testcase classname="src/componentes/TelaSimulacoes.test.tsx" name="TelaSimulacoes &gt; lista as faixas reservadas e bloqueia o pedido com seed do experimento" time="0.5427579">
+        </testcase>
+        <testcase classname="src/componentes/TelaSimulacoes.test.tsx" name="TelaSimulacoes &gt; manda a velocidade escolhida, e a máxima vai como nula" time="0.2419498">
+        </testcase>
+        <testcase classname="src/componentes/TelaSimulacoes.test.tsx" name="TelaSimulacoes &gt; pedido parado avisa que o atendente não está rodando" time="0.0168224">
+        </testcase>
+        <testcase classname="src/componentes/TelaSimulacoes.test.tsx" name="TelaSimulacoes &gt; pedido recém-criado não dispara o aviso" time="0.03098">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/stream/estado.test.ts" timestamp="2026-10-08T22:52:26.703Z" hostname="DESKTOP-BMHJAAR" tests="20" failures="0" errors="0" skipped="0" time="0.0319179">
+        <testcase classname="src/stream/estado.test.ts" name="estado_semaforo &gt; da bancada guarda as quatro aproximações, o regime, a rua ativa e a fila" time="0.0055755">
+        </testcase>
+        <testcase classname="src/stream/estado.test.ts" name="estado_semaforo &gt; da simulação é reconhecida pela falta de aproximações e guarda o t simulado" time="0.0009696">
+        </testcase>
+        <testcase classname="src/stream/estado.test.ts" name="estado_semaforo &gt; a mensagem mais nova substitui a anterior do mesmo cruzamento" time="0.0008582">
+        </testcase>
+        <testcase classname="src/stream/estado.test.ts" name="estado_semaforo &gt; sinal fora de VERDE, AMARELO e VERMELHO é recusado sem quebrar o estado" time="0.0004958">
+        </testcase>
+        <testcase classname="src/stream/estado.test.ts" name="posicao_ve &gt; guarda o id do SUMO, lat/lon e a velocidade em m/s" time="0.0005555">
+        </testcase>
+        <testcase classname="src/stream/estado.test.ts" name="posicao_ve &gt; id numérico do cadastro também serve" time="0.0003279">
+        </testcase>
+        <testcase classname="src/stream/estado.test.ts" name="posicao_ve &gt; sem coordenada a posição é recusada" time="0.0003904">
+        </testcase>
+        <testcase classname="src/stream/estado.test.ts" name="posicao_ve &gt; um VE sem posição nova há mais que a validade sai do mapa" time="0.0017056">
+        </testcase>
+        <testcase classname="src/stream/estado.test.ts" name="evento &gt; entra no topo, com a origem" time="0.00072">
+        </testcase>
+        <testcase classname="src/stream/estado.test.ts" name="evento &gt; a lista é limitada, e as chaves não se repetem" time="0.0137183">
+        </testcase>
+        <testcase classname="src/stream/estado.test.ts" name="metrica &gt; cada transmissão da simulação é uma amostra de latência" time="0.0005088">
+        </testcase>
+        <testcase classname="src/stream/estado.test.ts" name="metrica &gt; a bancada repete a última amostra de H3 em toda telemetria: só a diferente conta" time="0.0002749">
+        </testcase>
+        <testcase classname="src/stream/estado.test.ts" name="metrica &gt; latência nula, como no modo FIXO, não vira amostra" time="0.0001957">
+        </testcase>
+        <testcase classname="src/stream/estado.test.ts" name="trafego (Bloco 7) &gt; guarda a fotografia inteira e a substitui na próxima" time="0.0002203">
+        </testcase>
+        <testcase classname="src/stream/estado.test.ts" name="trafego (Bloco 7) &gt; descarta posição malformada sem perder as boas" time="0.0001772">
+        </testcase>
+        <testcase classname="src/stream/estado.test.ts" name="trafego (Bloco 7) &gt; fotografia velha sai do mapa, como o VE" time="0.0003424">
+        </testcase>
+        <testcase classname="src/stream/estado.test.ts" name="trafego (Bloco 7) &gt; a métrica da simulação traz o tempo simulado e a velocidade" time="0.0002383">
+        </testcase>
+        <testcase classname="src/stream/estado.test.ts" name="mensagens inválidas &gt; não é json só conta como inválida" time="0.0001888">
+        </testcase>
+        <testcase classname="src/stream/estado.test.ts" name="mensagens inválidas &gt; {&quot;tipo&quot;:&quot;estado_semaforo&quot;} só conta como inválida" time="0.0001734">
+        </testcase>
+        <testcase classname="src/stream/estado.test.ts" name="mensagens inválidas &gt; {&quot;tipo&quot;:&quot;desconhecido&quot;,&quot;dados&quot;:{}} só conta como inválida" time="0.0001901">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/stream/useStream.test.tsx" timestamp="2026-10-08T22:52:26.707Z" hostname="DESKTOP-BMHJAAR" tests="4" failures="0" errors="0" skipped="0" time="0.06153">
+        <testcase classname="src/stream/useStream.test.tsx" name="useStream &gt; estado do semáforo e posição do VE chegam à tela a cada mensagem" time="0.0444389">
+        </testcase>
+        <testcase classname="src/stream/useStream.test.tsx" name="useStream &gt; conexão que cai é refeita, com espera crescente" time="0.0089215">
+        </testcase>
+        <testcase classname="src/stream/useStream.test.tsx" name="useStream &gt; ao desmontar fecha o socket e não reconecta" time="0.0039149">
+        </testcase>
+        <testcase classname="src/stream/useStream.test.tsx" name="urlDoStream &gt; segue o protocolo da página: wss atrás do nginx com HTTPS" time="0.000582">
+        </testcase>
+    </testsuite>
+</testsuites>

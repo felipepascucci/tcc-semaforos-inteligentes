@@ -1,0 +1,7 @@
+% Cabeçalho do PDF do relatório de validação (pandoc + LuaLaTeX).
+% A imagem do pandoc só traz a Latin Modern, que não tem ≥, ≤, ≈, λ nem →.
+% Esses glifos vêm da Latin Modern Math, como fallback, sem trocar a fonte do texto.
+\directlua{luaotfload.add_fallback("simbolos", {"latinmodern-math.otf:mode=node;"})}
+\setmainfont{Latin Modern Roman}[RawFeature={fallback=simbolos}]
+\setsansfont{Latin Modern Sans}[RawFeature={fallback=simbolos}]
+\setmonofont{Latin Modern Mono}[RawFeature={fallback=simbolos}]
