@@ -1,0 +1,209 @@
+@startuml der
+' GERADO por `python -m db.der` a partir de app.models. Não editar à mão.
+hide circle
+skinparam linetype ortho
+skinparam monochrome true
+
+entity deteccao {
+  * id_deteccao : BIGINT <<PK>>
+  --
+  * id_correlacao : UUID
+  * origem : VARCHAR(20)
+  fk_dispositivo : INTEGER <<FK>>
+  fk_veiculo : INTEGER <<FK>>
+  uid_bruto : VARCHAR(32)
+  * reconhecido : BOOLEAN
+  * autorizado : BOOLEAN
+  fk_ocorrencia : INTEGER <<FK>>
+  rssi : SMALLINT
+  sequencia : INTEGER
+  * recebido_em : TIMESTAMP
+}
+
+entity dispositivo_iot {
+  * id_dispositivo : INTEGER <<PK>>
+  --
+  * codigo : VARCHAR(50) <<UQ>>
+  * tipo : VARCHAR(30)
+  fk_semaforo : INTEGER <<FK>>
+  * token_hash : VARCHAR(128)
+  ultimo_contato : TIMESTAMP
+  firmware_versao : VARCHAR(20)
+  * status : ENUM status_operacao
+}
+
+entity estado_semaforo_amostra {
+  * id_amostra : BIGINT <<PK>>
+  --
+  * fk_execucao : INTEGER <<FK>>
+  * fk_semaforo : INTEGER <<FK>>
+  * t_simulacao : NUMERIC(10, 2)
+  fase_anterior : INTEGER
+  * fase : INTEGER
+  * estado : ENUM estado_sinal
+  * em_preempcao : BOOLEAN
+  * fila_total : INTEGER
+  duracao_fase_anterior_s : NUMERIC(8, 2)
+}
+
+entity execucao_simulacao {
+  * id_execucao : INTEGER <<PK>>
+  --
+  * nome_cenario : VARCHAR(50)
+  * modo : ENUM modo_controle
+  * seed : INTEGER
+  * duracao_s : INTEGER
+  * arquivo_rede : VARCHAR(120)
+  versao_codigo : VARCHAR(40)
+  * parametros : JSONB
+  * exemplar : BOOLEAN
+  * iniciada_em : TIMESTAMP
+  finalizada_em : TIMESTAMP
+}
+
+entity fase_semaforo {
+  * id_fase : INTEGER <<PK>>
+  --
+  * fk_semaforo : INTEGER <<FK>>
+  * indice_fase : INTEGER
+  * descricao : VARCHAR(80)
+  * movimentos : ARRAY
+  * duracao_base : INTEGER
+  * verde_min : INTEGER
+  * verde_max : INTEGER
+}
+
+entity log_prioridade {
+  * id_log : INTEGER <<PK>>
+  --
+  fk_veiculo : INTEGER <<FK>>
+  * fk_semaforo : INTEGER <<FK>>
+  fk_metrica : INTEGER <<FK>>
+  fk_execucao : INTEGER <<FK>>
+  * id_correlacao : UUID
+  * timestamp_inicio : TIMESTAMP
+  timestamp_fim : TIMESTAMP
+  ganho_tempo_segundos : INTEGER
+  * status_execucao : ENUM status_execucao
+  motivo : VARCHAR(200)
+  fase_anterior : INTEGER
+  fase_aplicada : INTEGER
+}
+
+entity metrica_latencia {
+  * id_latencia : BIGINT <<PK>>
+  --
+  * id_correlacao : UUID
+  fk_log : INTEGER <<FK>>
+  * t_deteccao : TIMESTAMP
+  t_decisao : TIMESTAMP
+  t_atuacao : TIMESTAMP
+  latencia_decisao_ms : INTEGER
+  latencia_total_ms : INTEGER
+  * ambiente : VARCHAR(20)
+}
+
+entity metrica_simulacao {
+  * id_metrica : INTEGER <<PK>>
+  --
+  id_execucao : INTEGER <<FK>>
+  * tempo_medio_resposta : NUMERIC(8, 2)
+  * tempo_espera : NUMERIC(8, 2)
+  * percentual_reducao : NUMERIC(5, 2)
+  * latencia_ia : NUMERIC(8, 2)
+  * cenario_simulado : VARCHAR(50)
+  * criado_em : TIMESTAMP
+}
+
+entity metrica_via_transversal {
+  * id_metrica_tv : INTEGER <<PK>>
+  --
+  * fk_execucao : INTEGER <<FK>>
+  * fk_semaforo : INTEGER <<FK>>
+  * tempo_espera_medio : NUMERIC(8, 2)
+  * fila_maxima : INTEGER
+  * veiculos_processados : INTEGER
+  * janela : VARCHAR(20)
+}
+
+entity ocorrencia {
+  * id_ocorrencia : INTEGER <<PK>>
+  --
+  * fk_veiculo : INTEGER <<FK>>
+  * criticidade : SMALLINT
+  descricao : VARCHAR(200)
+  * origem : VARCHAR(20)
+  * aberta_em : TIMESTAMP
+  encerrada_em : TIMESTAMP
+}
+
+entity pedido_simulacao {
+  * id_pedido : INTEGER <<PK>>
+  --
+  * nome_cenario : VARCHAR(50)
+  * modo : ENUM modo_controle
+  * seed : INTEGER
+  duracao_s : INTEGER
+  velocidade : SMALLINT
+  * status : VARCHAR(12)
+  fk_execucao : INTEGER <<FK>>
+  mensagem : VARCHAR(200)
+  resumo : JSONB
+  * criado_em : TIMESTAMP
+  iniciado_em : TIMESTAMP
+  finalizado_em : TIMESTAMP
+}
+
+entity semaforo {
+  * id_semaforo : INTEGER <<PK>>
+  --
+  * codigo_externo : VARCHAR(50) <<UQ>>
+  descricao : VARCHAR(120)
+  * latitude : NUMERIC(10, 8)
+  * longitude : NUMERIC(11, 8)
+  * estado_atual : ENUM estado_sinal
+  * tempo_ciclo : INTEGER
+  * status_operacao : ENUM status_operacao
+  * atualizado_em : TIMESTAMP
+  * criado_em : TIMESTAMP
+}
+
+entity tag_rfid {
+  * id_tag : INTEGER <<PK>>
+  --
+  * uid : VARCHAR(32) <<UQ>>
+  * fk_veiculo : INTEGER <<FK>>
+  * ativo : BOOLEAN
+  * criado_em : TIMESTAMP
+}
+
+entity veiculo_emergencia {
+  * id_veiculo : INTEGER <<PK>>
+  --
+  * placa : VARCHAR(7) <<UQ>>
+  * tipo : ENUM tipo_veiculo
+  identificacao : VARCHAR(60)
+  * status_operacional : ENUM status_operacao
+  * criado_em : TIMESTAMP
+}
+
+dispositivo_iot ||--o{ deteccao : fk_dispositivo
+execucao_simulacao ||--|{ estado_semaforo_amostra : fk_execucao
+execucao_simulacao ||--o{ log_prioridade : fk_execucao
+execucao_simulacao ||--o{ metrica_simulacao : id_execucao
+execucao_simulacao ||--|{ metrica_via_transversal : fk_execucao
+execucao_simulacao ||--o{ pedido_simulacao : fk_execucao
+log_prioridade ||--o{ metrica_latencia : fk_log
+metrica_simulacao ||--o{ log_prioridade : fk_metrica
+ocorrencia ||--o{ deteccao : fk_ocorrencia
+semaforo ||--o{ dispositivo_iot : fk_semaforo
+semaforo ||--|{ estado_semaforo_amostra : fk_semaforo
+semaforo ||--|{ fase_semaforo : fk_semaforo
+semaforo ||--|{ log_prioridade : fk_semaforo
+semaforo ||--|{ metrica_via_transversal : fk_semaforo
+veiculo_emergencia ||--o{ deteccao : fk_veiculo
+veiculo_emergencia ||--o{ log_prioridade : fk_veiculo
+veiculo_emergencia ||--|{ ocorrencia : fk_veiculo
+veiculo_emergencia ||--|{ tag_rfid : fk_veiculo
+
+@enduml

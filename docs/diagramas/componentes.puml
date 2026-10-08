@@ -1,0 +1,61 @@
+@startuml componentes
+' Diagrama de componentes — context/08 §5.
+' Fontes: context/01 §2 (C1..C9), §1 (motor agnóstico), §4 (bancada, 2026-10-05),
+' context/02 §3 (serviços do compose) e §5 (rede do protótipo).
+skinparam monochrome true
+skinparam componentStyle rectangle
+
+package "Simulação (host)" {
+  [SUMO 1.27] as SUMO
+  component "C3 · Adaptador SUMO\nbackend/adapters/sumo" as AdSumo
+  component "Executor e lote\nsim/controlador" as Executor
+}
+
+package "Núcleo (Python puro, sem I/O)" {
+  component "C1 · Motor de decisão\nbackend/core/priorizacao\nE1..E8 + política aprendida (P19)" as Motor
+  component "Invariantes I1..I5\nbackend/core/seguranca.py" as Seguranca
+  component "Autorização (P20)\nbackend/core/autorizacao.py" as Autorizacao
+}
+
+package "docker compose" {
+  component "C2 · API / Orquestrador\nFastAPI" as API
+  database "C7 · PostgreSQL 16" as Banco
+  component "C8 · Dashboard\nReact + nginx (HTTPS)" as Dashboard
+}
+
+package "Bancada (protótipo)" {
+  component "C6 · NodeMCU emissor\n(veículo, RC522)" as Emissor
+  component "C6 · NodeMCU receptor\n(cruzamento)" as Receptor
+  component "C5 · Arduino UNO\ndecide e atua (regra local)" as UNO
+  component "C4 · Ponte serial\nbridge/" as Ponte
+}
+
+component "C9 · Pipeline de análise\nanalysis/" as Analise
+artifact "CSV do lote\nanalysis/data/" as CSV
+file "config\nparametros.yaml\npolitica_desempate.yaml" as Config
+
+SUMO <--> AdSumo : TraCI
+Executor --> AdSumo
+Executor --> Motor : EstadoMalha → Comandos
+Motor --> Seguranca
+Config ..> Motor : lido em adapters/
+Executor --> Banco : execucao_simulacao
+Executor --> CSV
+Executor ..> API : estado ao vivo (5 Hz)
+CSV --> Analise
+
+Emissor --> Receptor : ESP-NOW
+Receptor --> UNO : serial 9600 (A0)
+UNO <--> Ponte : USB
+API --> Ponte : GET /estado\nPUT /autorizacoes
+API --> Autorizacao : POST /deteccoes
+API --> Banco : SQLAlchemy
+Dashboard --> API : REST + WebSocket
+
+note right of UNO
+  Desde 2026-10-05 o protótipo não roda o motor:
+  o UNO decide sozinho, com os invariantes no
+  firmware, e o notebook só observa (context/00 §3).
+end note
+
+@enduml

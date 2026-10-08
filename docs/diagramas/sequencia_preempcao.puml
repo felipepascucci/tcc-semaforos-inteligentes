@@ -1,0 +1,57 @@
+@startuml sequencia_preempcao
+' Diagrama de sequência da preempção, na simulação — context/08 §5.
+' Fontes: sim/controlador/executor.py (decidir_e_aplicar), context/01 §3 e §5.2,
+' context/04 §8, P20 (só VE em serviço chega ao motor).
+skinparam monochrome true
+autonumber
+
+participant "SUMO" as SUMO
+participant "Adaptador SUMO" as Adaptador
+participant "Motor de decisão" as Motor
+participant "Política aprendida\n(só PREEMPCAO_ML)" as Politica
+participant "Verificador\nI1..I5" as Verificador
+participant "Coletor" as Coletor
+
+loop a cada passo de 0,1 s
+  Adaptador -> SUMO : simulationStep()
+  Adaptador -> SUMO : ler assinaturas\n(VEs, filas E2, fases)
+  group montagem do EstadoMalha (P20)
+    alt VE com o parâmetro `criticidade` (ocorrência ativa)
+      Adaptador -> Adaptador : entra em veiculos_emergencia
+    else VE sem ocorrência
+      Adaptador -> Adaptador : fica de fora: trafega como veículo\ncomum, sem preempção (aviso na execução)
+    end
+  end
+  Adaptador -> Motor : avaliar(EstadoMalha)
+  activate Motor
+  note right of Motor : cronometrado: latência de decisão (RNF01)
+  Motor -> Motor : E1 detecção (≤ 500 m pela rota)\nE2 ETA · E3 janela de ativação\nE4 seleção da fase · E6 timeout
+  opt dois VEs pedem fases distintas no mesmo cruzamento (E8)
+    Motor -> Motor : criticidade (regra)
+    Motor -> Politica : escolher(disputas, estado)
+    Politica --> Motor : proposta (guarda de oscilação\nantes do modelo)
+    Motor -> Motor : resolver(): aceita só proposta\nde criticidade máxima
+  end
+  Motor --> Adaptador : Comandos\n(IR_PARA_FASE, ESTENDER_VERDE,\nLIBERAR, COMPENSAR)
+  deactivate Motor
+  Adaptador -> Adaptador : máquina de estados (E5):\nverde mínimo → amarelo → all-red → verde
+  Adaptador -> SUMO : setRedYellowGreenState()
+  Adaptador -> Verificador : verificar(transições)
+  alt violação de invariante
+    Verificador --> Adaptador : violações
+    Adaptador -> Motor : abortar(cruzamento)
+    Motor --> Adaptador : FALLBACK_SEGURO\n(volta ao ciclo fixo)
+  end
+  Adaptador -> Coletor : latência, transições,\nconflitos, filas
+end
+
+Coletor -> Coletor : consolidar(tripinfo.xml)\n→ CSV de analysis/data
+
+note over SUMO, Coletor
+  No modo FIXO o motor não é chamado e o adaptador não escreve no SUMO,
+  mas a máquina de estados, o verificador e o coletor rodam iguais.
+  Na API, POST /deteccoes faz a mesma checagem da ocorrência ativa por
+  core/autorizacao.autorizar() antes de registrar a priorização (context/01 §7).
+end note
+
+@enduml
