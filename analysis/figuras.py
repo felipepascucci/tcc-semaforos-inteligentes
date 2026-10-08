@@ -2,9 +2,11 @@
 
 Padrão (`context/07` §5): PDF vetorial, fonte serifada, legível quando reduzida
 à largura da página, **distinguível em escala de cinza** (o TCC pode ser
-impresso em preto e branco) e eixos com unidade. Por isso nenhuma figura
-depende só de cor: os braços se distinguem por tom de cinza **e** por hachura,
-marcador ou tipo de linha.
+impresso em preto e branco) e eixos com unidade. As figuras são coloridas, mas
+nenhuma depende só de cor: os braços se distinguem por cor **e** por hachura,
+marcador ou tipo de linha, e as cores têm claridades diferentes. A paleta dos
+braços é a dos três primeiros tons categóricos de referência (azul, laranja,
+verde-água), validada para daltonismo; o `FIXO`, que é o controle, fica neutro.
 
 Cada função recebe dado já organizado e um caminho, e não calcula estatística:
 o que a figura mostra é o mesmo dado que as tabelas testam.
@@ -28,32 +30,49 @@ from matplotlib.ticker import FuncFormatter, MaxNLocator, ScalarFormatter
 #: Largura útil da página A4 com as margens da ABNT (3 cm + 2 cm), em polegadas.
 LARGURA_PAGINA_POL = 16.0 / 2.54
 
-#: Aparência de cada braço: tom de cinza, hachura (caixas e barras), marcador e
-#: tipo de linha. Os quatro recursos juntos é o que garante a leitura sem cor.
+#: Aparência de cada braço: cor de linha e marcador, preenchimento (caixas),
+#: hachura, marcador e tipo de linha. Hachura, marcador e linha garantem a
+#: leitura sem cor.
 ESTILO_MODO: Mapping[str, Mapping[str, object]] = {
-    "FIXO": {"cinza": "0.95", "hachura": "", "marcador": "o", "linha": "-", "rotulo": "Fixo"},
+    "FIXO": {
+        "cor": "0.15",
+        "preenchimento": "0.85",
+        "hachura": "",
+        "marcador": "o",
+        "linha": "-",
+        "rotulo": "Fixo",
+    },
     "PREEMPCAO": {
-        "cinza": "0.70",
+        "cor": "#2a78d6",
+        "preenchimento": "#2a78d6",
         "hachura": "///",
         "marcador": "s",
         "linha": "--",
         "rotulo": "Preempção",
     },
     "PREEMPCAO_COMPENSADA": {
-        "cinza": "0.45",
+        "cor": "#eb6834",
+        "preenchimento": "#eb6834",
         "hachura": "...",
         "marcador": "^",
         "linha": "-.",
         "rotulo": "Preempção + compensação",
     },
     "PREEMPCAO_ML": {
-        "cinza": "0.20",
+        "cor": "#1baf7a",
+        "preenchimento": "#1baf7a",
         "hachura": "xx",
         "marcador": "D",
         "linha": ":",
         "rotulo": "Preempção + política aprendida",
     },
 }
+
+#: Faixa "sob preempção": o azul mais claro da rampa do braço Preempção.
+COR_PREEMPCAO_FUNDO = "#cde2fb"
+
+#: Cores do semáforo na F6 (verde, amarelo, vermelho), validadas como paleta.
+COR_VERDE, COR_AMARELO, COR_VERMELHO = "#008300", "#eda100", "#e34948"
 
 ROTULO_CENARIO = {
     "leve": "leve",
@@ -145,9 +164,9 @@ def f1_travessia(por_cenario: Mapping[str, pd.DataFrame], destino: Path) -> Path
                 medianprops={"color": "black", "linewidth": 1.0},
             )
             for corpo in caixa["boxes"]:
-                corpo.set_facecolor(str(estilo["cinza"]))
+                corpo.set_facecolor(str(estilo["preenchimento"]))
                 corpo.set_hatch(str(estilo["hachura"]))
-                corpo.set_edgecolor("black")
+                corpo.set_edgecolor("0.15")
                 corpo.set_linewidth(0.6)
     eixo.set_xticks(range(len(por_cenario)))
     eixo.set_xticklabels([ROTULO_CENARIO.get(c, c) for c in por_cenario])
@@ -155,9 +174,9 @@ def f1_travessia(por_cenario: Mapping[str, pd.DataFrame], destino: Path) -> Path
     eixo.legend(
         handles=[
             Patch(
-                facecolor=str(ESTILO_MODO[m]["cinza"]),
+                facecolor=str(ESTILO_MODO[m]["preenchimento"]),
                 hatch=str(ESTILO_MODO[m]["hachura"]),
-                edgecolor="black",
+                edgecolor="0.15",
                 label=_rotulo(m),
             )
             for m in modos
@@ -197,7 +216,7 @@ def f2_latencia(latencias: pd.DataFrame, destino: Path) -> Path:
     limites = (minimo, 400.0)
     bins = np.logspace(np.log10(limites[0]), np.log10(limites[1]), 80)
 
-    eixo_h.hist(valores, bins=bins, color="0.6", edgecolor="0.3", linewidth=0.3)
+    eixo_h.hist(valores, bins=bins, color="#2a78d6", edgecolor="white", linewidth=0.3)
     eixo_h.set_xscale("log")
     eixo_h.set_yscale("log")
     eixo_h.set_xlabel("Latência de decisão (ms)")
@@ -208,13 +227,13 @@ def f2_latencia(latencias: pd.DataFrame, destino: Path) -> Path:
         ordenados = np.sort(grupo["latencia_ms"].to_numpy(dtype=float))
         if ordenados.size == 0:
             continue
-        estilo = ESTILO_MODO.get(str(modo), {"linha": "-"})
+        estilo = ESTILO_MODO.get(str(modo), {"linha": "-", "cor": "black"})
         eixo_c.plot(
             ordenados,
             np.arange(1, ordenados.size + 1) / ordenados.size,
             linestyle=str(estilo["linha"]),
-            color="black",
-            linewidth=1.0,
+            color=str(estilo["cor"]),
+            linewidth=1.2,
             label=_rotulo(str(modo)),
         )
     eixo_c.set_xscale("log")
@@ -277,7 +296,7 @@ def f3_espaco_tempo(traco_ve: pd.DataFrame, id_veiculo: str, destino: Path) -> P
             serie["t_s"] - serie["t_s"].iloc[0],
             serie["distancia_m"],
             linestyle=str(estilo["linha"]),
-            color="black" if modo == "FIXO" else str(estilo["cinza"]),
+            color=str(estilo["cor"]),
             linewidth=1.2,
             label=_rotulo(modo),
         )
@@ -352,13 +371,13 @@ def f4_fila_transversal(
             serie.to_numpy(),
             where="post",
             linestyle=str(estilo["linha"]),
-            color="black" if modo == "FIXO" else str(estilo["cinza"]),
+            color=str(estilo["cor"]),
             linewidth=1.0,
             label=_rotulo(modo),
         )
     for inicio, fim in intervalos_de_preempcao(traco_sinal, "PREEMPCAO", id_semaforo):
         if fim >= janela[0] and inicio <= janela[1]:
-            eixo.axvspan(inicio, fim, color="0.88", zorder=0, linewidth=0)
+            eixo.axvspan(inicio, fim, color=COR_PREEMPCAO_FUNDO, zorder=0, linewidth=0)
     eixo.set_xlim(*janela)
     eixo.set_xlabel("Tempo de simulação (s)")
     eixo.set_ylabel(f"Veículos parados nas transversais de {id_semaforo}")
@@ -366,7 +385,7 @@ def f4_fila_transversal(
     eixo.legend(
         handles=[
             *eixo.get_legend_handles_labels()[0],
-            Patch(color="0.88", label="Sob preempção (braço Preempção)"),
+            Patch(color=COR_PREEMPCAO_FUNDO, label="Sob preempção (braço Preempção)"),
         ],
         loc="upper center",
         bbox_to_anchor=(0.5, -0.2),
@@ -377,7 +396,7 @@ def f4_fila_transversal(
 
 
 #: Tons do Gantt: verde escuro, amarelo claro com hachura. Vermelho é fundo.
-_GANTT = {"VERDE": ("0.25", ""), "AMARELO": ("0.80", "////")}
+_GANTT = {"VERDE": (COR_VERDE, ""), "AMARELO": (COR_AMARELO, "////")}
 
 
 def f6_fases(
@@ -418,20 +437,22 @@ def f6_fases(
             continue
         inicio, fim = max(inicio, janela[0]), min(fim, janela[1])
         if linha["sinal"] == "VERMELHO":
-            eixo.broken_barh([(inicio, fim - inicio)], (faixa_all_red - 0.35, 0.7), color="black")
+            eixo.broken_barh(
+                [(inicio, fim - inicio)], (faixa_all_red - 0.35, 0.7), color=COR_VERMELHO
+            )
             continue
-        cinza, hachura = _GANTT[str(linha["sinal"])]
+        cor, hachura = _GANTT[str(linha["sinal"])]
         eixo.broken_barh(
             [(inicio, fim - inicio)],
             (faixas[int(linha["fase"])] - 0.35, 0.7),
-            facecolors=cinza,
+            facecolors=cor,
             hatch=hachura,
             edgecolor="black",
             linewidth=0.4,
         )
     for inicio, fim in intervalos_de_preempcao(traco_sinal, modo, id_semaforo):
         if fim >= janela[0] and inicio <= janela[1]:
-            eixo.axvspan(inicio, fim, color="0.92", zorder=0, linewidth=0)
+            eixo.axvspan(inicio, fim, color=COR_PREEMPCAO_FUNDO, zorder=0, linewidth=0)
     eixo.set_yticks([*faixas.values(), faixa_all_red])
     eixo.set_yticklabels([*(f"Fase {f}" for f in fases), "All-red"])
     eixo.set_ylim(-0.6, faixa_all_red + 0.6)
@@ -441,10 +462,10 @@ def f6_fases(
     eixo.grid(axis="y", visible=False)
     eixo.legend(
         handles=[
-            Patch(facecolor="0.25", edgecolor="black", label="Verde"),
-            Patch(facecolor="0.80", hatch="////", edgecolor="black", label="Amarelo"),
-            Patch(facecolor="black", label="All-red"),
-            Patch(facecolor="0.92", label="Sob preempção"),
+            Patch(facecolor=COR_VERDE, edgecolor="0.15", label="Verde"),
+            Patch(facecolor=COR_AMARELO, hatch="////", edgecolor="0.15", label="Amarelo"),
+            Patch(facecolor=COR_VERMELHO, label="All-red"),
+            Patch(facecolor=COR_PREEMPCAO_FUNDO, label="Sob preempção"),
         ],
         loc="upper center",
         bbox_to_anchor=(0.5, -0.35),
@@ -496,8 +517,8 @@ def f5_reducao_saturacao(
             y,
             s=10,
             marker="o" if unico else "^",
-            facecolors="0.5" if unico else "none",
-            edgecolors="black",
+            facecolors="#2a78d6" if unico else "#eb6834",
+            edgecolors="0.15",
             linewidths=0.4,
             label=(
                 # Os círculos também vão para a legenda, uma vez só.
