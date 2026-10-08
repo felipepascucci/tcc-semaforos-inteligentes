@@ -89,9 +89,16 @@ diluiria o efeito do modelo com casos em que ele não atuou, pelo mesmo mecanism
 que P17 suspeita na métrica de H2.
 
 A análise de H4 reporta, portanto: (1) quantas disputas houve e **quantas eram de
-mesmo nível** (coluna `mesmo_nivel` de `conflitos_por_execucao.csv`), que é o n
-de escolhas em que o modelo de fato atuou; (2) o teste pareado sobre o tempo do VE
-mais prejudicado, com a unidade de análise do §3.1. Declarar o denominador é o que
+mesmo nível** (coluna `mesmo_nivel` de `conflitos_por_execucao.csv`); (2) dessas,
+no braço `PREEMPCAO_ML`, **quantas o modelo de fato decidiu**
+(`decidida_pelo_modelo`) e **em quantas ele escolheu diferente do E8**
+(`modelo_divergiu_do_e8`), as duas instrumentadas na entrega 10.7; (3) o teste
+pareado sobre o tempo do VE mais prejudicado, com a unidade de análise do §3.1.
+
+O item (2) existe porque mesmo nível não basta: a guarda de oscilação, o timeout
+de E6 e os pedidos pela mesma fase desviam parte das disputas antes do modelo.
+E um episódio em que o modelo concordou com o E8 em todo passo decorreu igual
+nos dois braços no que dependeu do modelo. Declarar o denominador é o que
 impede a pergunta "quantas vezes o modelo decidiu alguma coisa?" de ficar sem
 resposta na arguição.
 

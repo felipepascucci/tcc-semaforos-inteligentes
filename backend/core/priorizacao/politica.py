@@ -38,6 +38,17 @@ invicto é o de maior `s` e não há ciclo possível. Só há mais de um invicto
 **empate exato**, e aí o modelo não tem preferência: decide a chave do E8 entre
 os empatados (decisão da equipe, 2026-10-07). Seguir "senão B" ao pé da letra
 faria o resultado depender da ordem em que os pedidos chegam.
+
+QUEM DECIDIU (entrega 10.7)
+
+`context/07` §3.3.1 pede que a análise de H4 declare quantas disputas o modelo
+de fato decidiu. Nem toda disputa de mesmo nível chega ao modelo: a guarda de
+oscilação, o timeout de E6 e os pedidos pela mesma fase a desviam antes. Por
+isso `PoliticaAprendida` aceita um `observador`, chamado com uma
+`ConsultaModelo` **só** nos passos em que a decisão chegou ao passo 3. É a
+mesma forma do `observador_conflito` do motor: o motor só anexa a consulta a um
+buffer, dentro do trecho cronometrado, e quem compara a escolha com a do E8 é o
+coletor, depois que o cronômetro para (`sim/controlador/coletor.py`).
 """
 
 from __future__ import annotations
@@ -156,11 +167,44 @@ def invictos(pesos: PesosPolitica, atributos: Sequence[AtributosVE]) -> tuple[in
     return resultado or tuple(indices)
 
 
+@dataclass(frozen=True)
+class ConsultaModelo:
+    """Um passo em que o modelo decidiu a disputa de um cruzamento (entrega 10.7).
+
+    Attributes:
+        t: Instante do passo, em segundos.
+        id_semaforo: Cruzamento disputado.
+        candidatos: Os pedidos que chegaram ao modelo: os do nível mais crítico,
+            sem preempção em curso, por fases distintas.
+        escolhido: O pedido que o modelo escolheu, já com o desempate do E8
+            aplicado num empate exato.
+    """
+
+    t: float
+    id_semaforo: str
+    candidatos: tuple[Disputa, ...]
+    escolhido: Disputa
+
+    def escolha_do_e8(self, parametros: Parametros) -> Disputa:
+        """O pedido que o E8 determinístico daria no lugar do modelo.
+
+        Entre os candidatos basta: eles são os do nível mais crítico, e nenhum
+        detém preempção em curso, então a chave do E8 sobre todos os pedidos do
+        cruzamento escolheria um deles.
+        """
+        return min(self.candidatos, key=lambda disputa: chave_de_desempate(disputa, parametros))
+
+    def divergiu_do_e8(self, parametros: Parametros) -> bool:
+        """Se o modelo escolheu diferente do E8 neste passo."""
+        return self.escolhido != self.escolha_do_e8(parametros)
+
+
 def decidir(
     disputas: Sequence[Disputa],
     atributos_de: Callable[[Disputa], AtributosVE],
     pesos: PesosPolitica,
     parametros: Parametros,
+    ao_consultar: Callable[[Sequence[Disputa], Disputa], None] | None = None,
 ) -> Disputa | None:
     """O vencedor de E8 no braço `PREEMPCAO_ML`, ou `None` para o E8 decidir.
 
@@ -171,6 +215,8 @@ def decidir(
         pesos: Os pesos do modelo.
         parametros: Parâmetros do algoritmo, para o desempate do E8 num empate
             exato do modelo.
+        ao_consultar: Chamada com os candidatos e o escolhido, só quando quem
+            decide é o modelo (passo 3). As regras não a chamam.
 
     Returns:
         O pedido que deve vencer. `None` quando não há o que decidir — nenhum
@@ -196,12 +242,17 @@ def decidir(
 
     # 3. Modelo.
     topo = invictos(pesos, [atributos_de(disputa) for disputa in candidatos])
-    if len(topo) == 1:
-        return candidatos[topo[0]]
-    return min(
-        (candidatos[i] for i in topo),
-        key=lambda disputa: chave_de_desempate(disputa, parametros),
+    escolhido = (
+        candidatos[topo[0]]
+        if len(topo) == 1
+        else min(
+            (candidatos[i] for i in topo),
+            key=lambda disputa: chave_de_desempate(disputa, parametros),
+        )
     )
+    if ao_consultar is not None:
+        ao_consultar(candidatos, escolhido)
+    return escolhido
 
 
 @dataclass(frozen=True)
@@ -212,20 +263,32 @@ class PoliticaAprendida:
         pesos: Os pesos do modelo, lidos por `adapters.configuracao.carregar_politica`.
         topologia: A mesma topologia do motor, para calcular os atributos.
         parametros: Os mesmos parâmetros do motor, para o desempate num empate.
+        observador: Chamado com uma `ConsultaModelo` em cada passo e cruzamento
+            em que o modelo decidiu (entrega 10.7). Observação pura, como o
+            `observador_conflito` do motor: não muda decisão nenhuma.
     """
 
     pesos: PesosPolitica
     topologia: TopologiaMalha
     parametros: Parametros
+    observador: Callable[[ConsultaModelo], None] | None = None
 
     def escolher(
         self, id_semaforo: str, disputas: Sequence[Disputa], estado: EstadoMalha
     ) -> Disputa | None:
         """O pedido que deve vencer em `id_semaforo`, pelas regras e pelo modelo."""
-        del id_semaforo
+        observador = self.observador
+        ao_consultar = (
+            None
+            if observador is None
+            else lambda candidatos, escolhido: observador(
+                ConsultaModelo(estado.t, id_semaforo, tuple(candidatos), escolhido)
+            )
+        )
         return decidir(
             disputas,
             lambda disputa: atributos_do_ve(disputa, estado, self.topologia),
             self.pesos,
             self.parametros,
+            ao_consultar,
         )

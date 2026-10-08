@@ -9,7 +9,7 @@ export type StatusExecucao =
   | "TIMEOUT"
   | "CONFLITO_ADIADO"
   | "ABORTADO_SEGURANCA";
-export type ModoControle = "FIXO" | "PREEMPCAO" | "PREEMPCAO_COMPENSADA";
+export type ModoControle = "FIXO" | "PREEMPCAO" | "PREEMPCAO_COMPENSADA" | "PREEMPCAO_ML";
 export type Sinal = "VERDE" | "AMARELO" | "VERMELHO";
 
 export const TIPOS_VEICULO: TipoVeiculo[] = ["AMBULANCIA", "BOMBEIRO", "POLICIA"];
@@ -20,7 +20,12 @@ export const STATUS_EXECUCAO: StatusExecucao[] = [
   "CONFLITO_ADIADO",
   "ABORTADO_SEGURANCA",
 ];
-export const MODOS_CONTROLE: ModoControle[] = ["FIXO", "PREEMPCAO", "PREEMPCAO_COMPENSADA"];
+export const MODOS_CONTROLE: ModoControle[] = [
+  "FIXO",
+  "PREEMPCAO",
+  "PREEMPCAO_COMPENSADA",
+  "PREEMPCAO_ML",
+];
 
 /** Criticidade da ocorrência (P20): menor é mais crítico. */
 export const CRITICIDADES = [

@@ -247,14 +247,30 @@ declarada para via urbana.
 | `FIXO` | Baseline: programa semafórico estático do `.tll.xml`, sem TraCI intervindo | Controle |
 | `PREEMPCAO` | Preempção sem compensação pós-evento | H1 e H3 |
 | `PREEMPCAO_COMPENSADA` | Preempção + compensação (E7) | H1, H2, H3 |
+| `PREEMPCAO_ML` | `PREEMPCAO` com a política aprendida em E8 (P19). Só nos cenários com mais de um VE | H4 |
 
-Rodar os três é o que permite isolar o efeito da compensação. Comparar apenas fixo vs. compensado não permite afirmar nada sobre H2.
+Rodar os três primeiros é o que permite isolar o efeito da compensação. Comparar apenas fixo vs. compensado não permite afirmar nada sobre H2.
+
+> **`PREEMPCAO_ML` é o quarto braço, desde a entrega 10.7** (2026-10-07). Três
+> decisões da equipe, registradas em `09` P19:
+>
+> - **É o `PREEMPCAO` com o modelo, sem E7.** Mesmos parâmetros, e a única
+>   diferença é quem propõe o vencedor de E8. É o que permite atribuir ao modelo
+>   a diferença contra o `PREEMPCAO`, que é o baseline de H4.
+> - **Só roda nos cenários com mais de um VE simultâneo**, hoje o
+>   `multiplas_emergencias`. Com um VE só não há disputa, o modelo nunca é
+>   consultado, e a execução repetiria a do `PREEMPCAO`. Quem corta é
+>   `lote.matriz()`, lendo `ves_simultaneos` de `cenarios.yaml`, e o lote avisa
+>   na tela; o Bloco 8 continua sendo um comando só.
+> - **O coletor registra quem decidiu cada disputa**: as colunas
+>   `decidida_pelo_modelo` e `modelo_divergiu_do_e8` de
+>   `conflitos_por_execucao.csv` (§10).
 
 ## 7. Protocolo experimental
 
-**Matriz:** 4 cenários × 3 modos × 50 seeds = **600 execuções** de 3600 s de tempo simulado.
+**Matriz:** 4 cenários × 3 modos × 50 seeds = 600 execuções, mais o `PREEMPCAO_ML` no `multiplas_emergencias` × 50 seeds = **650 execuções** de 3600 s de tempo simulado (o quarto braço desde a entrega 10.7, §6).
 
-**Pareamento por seed — regra crítica.** A seed determina a geração do tráfego de fundo e os instantes de entrada dos VEs. A execução com `seed=17` no modo `FIXO` e no modo `PREEMPCAO` precisa ter **exatamente o mesmo tráfego**. Isso transforma a comparação em teste pareado, que tem muito mais poder estatístico e elimina a variância entre cenários de tráfego. Concretamente: gerar os arquivos de rota uma vez por (cenário, seed) e reutilizá-los nos três modos.
+**Pareamento por seed — regra crítica.** A seed determina a geração do tráfego de fundo e os instantes de entrada dos VEs. A execução com `seed=17` no modo `FIXO` e no modo `PREEMPCAO` precisa ter **exatamente o mesmo tráfego**. Isso transforma a comparação em teste pareado, que tem muito mais poder estatístico e elimina a variância entre cenários de tráfego. Concretamente: gerar os arquivos de rota uma vez por (cenário, seed) e reutilizá-los em todos os modos, inclusive no `PREEMPCAO_ML`.
 
 > **Como isso é garantido (Bloco 3).** `python -m sim.demanda.gerar_rotas --cenario X --seed N` materializa `sim/saida/rotas/X_N.rou.xml` com veículos **concretos**, cujos instantes de partida saem de um `random.Random(seed)` próprio — não do `--seed` do SUMO. A escolha é deliberada: deixar o simulador sortear amarraria a garantia mais importante do experimento a um detalhe interno dele (qual gerador alimenta qual sorteio, e se a ordem de consumo muda quando o TraCI intervém). Com o arquivo materializado, a garantia é verificável com `diff`, e há teste conferindo que a mesma seed produz o mesmo arquivo byte a byte.
 >
@@ -274,7 +290,7 @@ Rodar os três é o que permite isolar o efeito da compensação. Comparar apena
 ```bash
 python -m sim.controlador.lote \
     --cenarios leve,moderado,intenso,multiplas_emergencias \
-    --modos FIXO,PREEMPCAO,PREEMPCAO_COMPENSADA \
+    --modos FIXO,PREEMPCAO,PREEMPCAO_COMPENSADA,PREEMPCAO_ML \
     --seeds 1..50 \
     --duracao 3600 \
     --paralelo 4 \
@@ -401,7 +417,7 @@ Um arquivo por execução, mais um consolidado:
 analysis/data/
 ├── fluxo_saturacao.csv                # medição da entrega 3.0, por faixa
 ├── calibracao_cenarios.csv            # v/c derivado por cenário
-├── execucoes.csv                      # 1 linha por execução (600 linhas)
+├── execucoes.csv                      # 1 linha por execução (650 linhas)
 ├── ve_por_execucao.csv                # 1 linha por VE por execução
 ├── transversal_por_execucao.csv       # fila máxima por aproximação
 ├── latencias.csv                      # 1 linha por decisão — só execução exemplar
@@ -427,6 +443,17 @@ analysis/data/
 > coluna que a análise de H4 estratifica. Os dados de
 > `analysis/data/bloco10_conflitos/` são anteriores e não a têm; o resumo os lê
 > assim mesmo, marcando a informação como indisponível.
+>
+> **Mais duas colunas em 2026-10-07 (entrega 10.7):** `decidida_pelo_modelo`
+> (1 se o modelo de P19 decidiu a disputa em algum passo do episódio) e
+> `modelo_divergiu_do_e8` (1 se, em algum desses passos, ele escolheu diferente
+> do que o E8 determinístico escolheria). Só podem valer 1 no braço
+> `PREEMPCAO_ML`. São o denominador que `context/07` §3.3.1 pede: nem toda
+> disputa de mesmo nível chega ao modelo, porque a guarda de oscilação, o
+> timeout de E6 e os pedidos pela mesma fase a desviam antes. A comparação com o
+> E8 é feita pelo coletor, fora do trecho cronometrado. Com elas o cabeçalho
+> muda de novo, e os CSV de `analysis/data/bloco10_*` não aceitam linhas novas,
+> pela guarda abaixo.
 >
 > **Nenhum CSV aceita linhas com cabeçalho diferente do seu** (P20). Tanto o
 > coletor, ao escrever a pasta de uma execução, quanto `consolidar()`, ao juntar
@@ -506,7 +533,7 @@ Sem os detectores não há como medir o impacto transversal, e H2 fica sem evid�
 
 ## 12. Validação da malha antes de experimentar
 
-Antes de rodar as 600 execuções, verificar:
+Antes de rodar as 650 execuções, verificar:
 
 1. `netconvert` sem warnings de conexão inválida.
 2. Rodar 600 s com fluxo leve e `--collision.action warn` — zero colisões no baseline.

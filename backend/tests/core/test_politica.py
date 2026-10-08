@@ -27,6 +27,7 @@ from core.priorizacao.deteccao import DeteccaoVE
 from core.priorizacao.motor import MotorDecisao
 from core.priorizacao.politica import (
     ATRIBUTOS_DO_MODELO,
+    ConsultaModelo,
     PesosPolitica,
     PoliticaAprendida,
     decidir,
@@ -528,4 +529,168 @@ def test_no_motor_a_criticidade_vence_o_modelo(
 
     assert (
         _veiculo_no_cruzamento(_motor(topologia, parametros, PREFERE_ROTA_LONGA), estado) == "TRV"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Quem decidiu — a consulta ao modelo é observável (entrega 10.7)
+# ---------------------------------------------------------------------------
+
+
+class _Consultas:
+    """`ao_consultar` de teste: guarda os candidatos e o escolhido de cada chamada."""
+
+    def __init__(self) -> None:
+        self.chamadas: list[tuple[list[str], str]] = []
+
+    def __call__(self, candidatos: Sequence[Disputa], escolhido: Disputa) -> None:
+        self.chamadas.append(
+            ([d.deteccao.id_veiculo for d in candidatos], escolhido.deteccao.id_veiculo)
+        )
+
+
+def test_consulta_e_anunciada_quando_o_modelo_decide() -> None:
+    a = _disputa("A", FASE_ARTERIAL)
+    b = _disputa("B", FASE_TRANSVERSAL)
+    tabela = _Tabela(
+        {"A": _atributos(cruzamentos_restantes=1), "B": _atributos(cruzamentos_restantes=4)}
+    )
+    consultas = _Consultas()
+
+    vencedor = decidir([a, b], tabela, PREFERE_ROTA_LONGA, construir_parametros(), consultas)
+
+    assert vencedor == b
+    assert consultas.chamadas == [(["A", "B"], "B")]
+
+
+def test_consulta_traz_so_os_candidatos_do_nivel_mais_critico() -> None:
+    curto = _disputa("CURTO", FASE_ARTERIAL, criticidade=Criticidade.RISCO_VIDA)
+    longo = _disputa("LONGO", FASE_TRANSVERSAL, criticidade=Criticidade.RISCO_VIDA)
+    outro = _disputa("OUTRO", FASE_TRANSVERSAL, criticidade=Criticidade.RISCO_COLETIVO)
+    tabela = _Tabela(
+        {
+            "CURTO": _atributos(cruzamentos_restantes=1),
+            "LONGO": _atributos(cruzamentos_restantes=3),
+            "OUTRO": _atributos(cruzamentos_restantes=9),
+        }
+    )
+    consultas = _Consultas()
+
+    decidir([outro, curto, longo], tabela, PREFERE_ROTA_LONGA, construir_parametros(), consultas)
+
+    assert consultas.chamadas == [(["CURTO", "LONGO"], "LONGO")]
+
+
+@pytest.mark.parametrize(
+    "disputas",
+    [
+        pytest.param(
+            [
+                _disputa("VIDA", FASE_ARTERIAL, criticidade=Criticidade.RISCO_VIDA),
+                _disputa("URG", FASE_TRANSVERSAL, criticidade=Criticidade.URGENCIA),
+            ],
+            id="criticidade",
+        ),
+        pytest.param(
+            [
+                _disputa("EM_CURSO", FASE_ARTERIAL, ja_em_curso=True),
+                _disputa("DESAFIANTE", FASE_TRANSVERSAL),
+            ],
+            id="guarda-de-oscilacao",
+        ),
+        pytest.param(
+            [_disputa("A", FASE_ARTERIAL), _disputa("B", FASE_ARTERIAL)],
+            id="mesma-fase",
+        ),
+        pytest.param([], id="sem-pedidos"),
+    ],
+)
+def test_regra_que_decide_nao_conta_como_consulta(disputas: list[Disputa]) -> None:
+    """O n de `context/07` §3.3.1 é o de decisões do modelo, e não das regras."""
+    tabela = _Tabela({d.deteccao.id_veiculo: _atributos() for d in disputas})
+    consultas = _Consultas()
+
+    decidir(disputas, tabela, PREFERE_ROTA_LONGA, construir_parametros(), consultas)
+
+    assert consultas.chamadas == []
+
+
+def test_consulta_num_empate_traz_o_escolhido_pelo_e8() -> None:
+    """No empate exato o escolhido é o do E8, e a consulta registra esse."""
+    a = _disputa("A", FASE_ARTERIAL, eta_s=20.0)
+    b = _disputa("B", FASE_TRANSVERSAL, eta_s=10.0)
+    tabela = _Tabela({"A": _atributos(), "B": _atributos()})
+    consultas = _Consultas()
+
+    decidir([a, b], tabela, PREFERE_ROTA_LONGA, construir_parametros(), consultas)
+
+    assert consultas.chamadas == [(["A", "B"], "B")]
+
+
+def test_escolha_do_e8_e_a_chave_de_sempre_entre_os_candidatos() -> None:
+    perto = _disputa("PERTO", FASE_ARTERIAL, eta_s=5.0)
+    longe = _disputa("LONGE", FASE_TRANSVERSAL, eta_s=30.0)
+    parametros = construir_parametros()
+
+    concorda = ConsultaModelo(0.0, CRUZAMENTO, (perto, longe), perto)
+    diverge = ConsultaModelo(0.0, CRUZAMENTO, (perto, longe), longe)
+
+    assert concorda.escolha_do_e8(parametros) == perto
+    assert not concorda.divergiu_do_e8(parametros)
+    assert diverge.divergiu_do_e8(parametros)
+
+
+def _motor_observado(
+    topologia: TopologiaMalha, parametros: Parametros, pesos: PesosPolitica
+) -> tuple[MotorDecisao, list[ConsultaModelo]]:
+    consultas: list[ConsultaModelo] = []
+    politica = PoliticaAprendida(pesos, topologia, parametros, observador=consultas.append)
+    return MotorDecisao(parametros=parametros, topologia=topologia, politica=politica), consultas
+
+
+def test_no_motor_a_consulta_diz_se_o_modelo_divergiu_do_e8(
+    topologia: TopologiaMalha, parametros: Parametros
+) -> None:
+    """O mesmo cenário de `test_no_motor_o_modelo_troca_a_escolha_do_e8`.
+
+    O E8 dá a transversal (menor ETA). Preferindo a rota longa, o modelo diverge;
+    preferindo o menor ETA, concorda.
+    """
+    arterial = construir_ve("ART", TipoVeiculo.AMBULANCIA, n_vias=4, posicao_na_via_m=410.0)
+    estado = construir_estado(topologia, veiculos=(arterial, _transversal()))
+
+    motor, consultas = _motor_observado(topologia, parametros, PREFERE_ROTA_LONGA)
+    motor.avaliar(estado)
+    assert [(c.id_semaforo, c.escolhido.deteccao.id_veiculo) for c in consultas] == [
+        (CRUZAMENTO, "ART")
+    ]
+    assert consultas[0].t == estado.t
+    assert consultas[0].divergiu_do_e8(parametros)
+
+    motor, consultas = _motor_observado(topologia, parametros, PREFERE_MENOR_ETA)
+    motor.avaliar(estado)
+    assert [c.escolhido.deteccao.id_veiculo for c in consultas] == ["TRV"]
+    assert not consultas[0].divergiu_do_e8(parametros)
+
+
+def test_no_motor_com_a_guarda_o_modelo_nao_e_consultado(
+    topologia: TopologiaMalha, parametros: Parametros
+) -> None:
+    motor, consultas = _motor_observado(topologia, parametros, PREFERE_ROTA_CURTA)
+    arterial = construir_ve("ART", TipoVeiculo.AMBULANCIA, n_vias=4, posicao_na_via_m=410.0)
+    motor.avaliar(construir_estado(topologia, veiculos=(arterial,)))
+
+    arterial = construir_ve("ART", TipoVeiculo.AMBULANCIA, n_vias=4, posicao_na_via_m=411.0)
+    motor.avaliar(construir_estado(topologia, t=0.1, veiculos=(arterial, _transversal())))
+
+    assert consultas == []
+
+
+def test_observador_nao_muda_a_decisao(topologia: TopologiaMalha, parametros: Parametros) -> None:
+    arterial = construir_ve("ART", TipoVeiculo.AMBULANCIA, n_vias=4, posicao_na_via_m=410.0)
+    estado = construir_estado(topologia, veiculos=(arterial, _transversal()))
+    observado, _ = _motor_observado(topologia, parametros, PREFERE_ROTA_LONGA)
+
+    assert observado.avaliar(estado) == _motor(topologia, parametros, PREFERE_ROTA_LONGA).avaliar(
+        estado
     )

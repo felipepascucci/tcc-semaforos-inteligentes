@@ -81,7 +81,16 @@ VEs pedindo a mesma fase não são conflito, porque o mesmo verde serve os dois.
 
 **O modelo só atua entre VEs de mesmo nível de criticidade e sem preempção em
 curso.** Por isso H4 é analisada estratificada por `mesmo_nivel`, e a análise
-declara quantas disputas o modelo de fato decidiu (`07` §3.3.1).
+declara quantas disputas o modelo de fato decidiu (`07` §3.3.1). Desde a 10.7
+isso é medido, e não estimado: `conflitos_por_execucao.csv` traz, por episódio,
+`decidida_pelo_modelo` e `modelo_divergiu_do_e8` (§8).
+
+**A guarda de oscilação também separa os braços.** Na tabela acima, o
+`PREEMPCAO` só aplica "preempção em curso vence" depois de tipo e ETA, e o
+`PREEMPCAO_ML` a aplica antes do modelo. Numa disputa de mesmo nível que abre
+com preempção em curso, o E8 ainda pode trocar o verde de VE, e o braço de ML
+não troca. As colunas acima contam só as decisões do modelo. Como tratar essa
+diferença na análise de H4 é questão da 10.8.
 
 **A garantia é por construção, e não por disciplina.** A política só *propõe* um
 vencedor (`PoliticaDesempate`, em `core/priorizacao/conflito.py`). Quem decide é
@@ -328,12 +337,22 @@ há múltiplos VEs em rotas que se cruzam.
 
 - Formulada em 2026-09-10, **antes de qualquer treino** (`00` §5).
 - **Braço `PREEMPCAO_ML` contra `PREEMPCAO`**, pareado por seed (1..50), nos
-  cenários com múltiplos VEs, no lote do Bloco 8.
+  cenários com múltiplos VEs, no lote do Bloco 8. Hoje o único é o
+  `multiplas_emergencias`: são 50 execuções a mais, 650 no lote (decisão da
+  equipe, 2026-10-07).
+- **O braço é o `PREEMPCAO` com o modelo, sem E7** (decisão da equipe,
+  2026-10-07). A política é a única diferença entre os dois:
+  `executor.montar_motor()` dá a `PoliticaAprendida` só ao `PREEMPCAO_ML`, e
+  `parametros_do_modo()` o deixa com `n_ciclos_compensacao = 0`.
 - **Sem meta percentual.** É hipótese comparativa direcional. Inventar um
   percentual seria fabricar régua. A avaliação usa Wilcoxon pareado, Cliff's δ e
   IC 95% por bootstrap, com o mesmo rigor de H1.
 - **Estratificada por `mesmo_nivel`**, declarando quantas disputas o modelo de
-  fato decidiu (`07` §3.3.1).
+  fato decidiu (`07` §3.3.1). Por episódio, `decidida_pelo_modelo` diz se o
+  modelo decidiu em algum passo, e `modelo_divergiu_do_e8` se, em algum deles,
+  escolheu diferente do E8. Um episódio sem divergência decorreu igual nos dois
+  braços no que dependeu do modelo. A comparação com o E8 é feita pelo coletor,
+  fora do trecho cronometrado do RNF01.
 - **Veredito nulo é veredito.** Se o modelo não superar o E8, isso é reportado
   com tamanho de efeito e intervalo de confiança. O que não pode acontecer é o
   modelo entrar sem avaliação, só para cumprir a expectativa.
@@ -348,7 +367,7 @@ há múltiplos VEs em rotas que se cruzam.
 | 10.4 | Rotulagem por bifurcação | ✅ 517 / 135 exemplos |
 | 10.5 | Treino e exportação dos pesos | ✅ `politica_desempate.yaml` |
 | 10.6 | Inferência pura em `core/priorizacao/` | ✅ `politica.py` (2026-10-07); nenhum número dos braços existentes muda |
-| 10.7 | Braço `PREEMPCAO_ML` no executor e no lote | ⏳ por fazer |
+| 10.7 | Braço `PREEMPCAO_ML` no executor e no lote | ✅ 2026-10-07: só no `multiplas_emergencias` (650 execuções no Bloco 8), sem E7, com quem decidiu cada disputa registrado; nenhum número dos braços existentes muda |
 | 10.8 | Análise estatística de H4 | ⏳ por fazer (depois do Bloco 8) |
 
 Atualizar esta tabela no mesmo commit de cada entrega, junto com
@@ -378,7 +397,9 @@ Atualizar esta tabela no mesmo commit de cada entrega, junto com
 | --- | --- |
 | Decisões e justificativas completas | `09-pendencias-e-decisoes.md`, P19 e P20 |
 | E8 e o ponto de entrada da política | `backend/core/priorizacao/conflito.py` (`PoliticaDesempate`, `resolver`) |
-| Inferência e as regras acima do modelo | `backend/core/priorizacao/politica.py` (`PoliticaAprendida`, `decidir`) |
+| Inferência e as regras acima do modelo | `backend/core/priorizacao/politica.py` (`PoliticaAprendida`, `decidir`, `ConsultaModelo`) |
+| O braço `PREEMPCAO_ML` | `sim/controlador/executor.py` (`montar_motor`, `parametros_do_modo`), `sim/controlador/lote.py` (`matriz`) |
+| Quem decidiu cada disputa | `sim/controlador/coletor.py` (`registrar_consultas`), colunas de `conflitos_por_execucao.csv` |
 | Carga dos pesos | `backend/adapters/configuracao.py` (`carregar_politica`) |
 | Atributos do modelo | `backend/core/priorizacao/atributos.py` |
 | Cenário de treino | `sim/config/cenarios.yaml` (`cenarios_treino`), `sim/demanda/gerar_rotas.py` (`partidas_de_treino`) |
@@ -402,6 +423,9 @@ python -m sim.controlador.rotulagem --seeds 201..250 --paralelo 6 \
     --saida analysis/data/bloco10_rotulos
 # 10.5 — treino e pesos
 python -m analysis.treino_politica --relatorio analysis/data/bloco10_treino/relatorio.md
+# 10.7 — o braço, no lote do Bloco 8 (o lote tira o PREEMPCAO_ML dos cenários de um VE)
+python -m sim.controlador.lote --modos FIXO,PREEMPCAO,PREEMPCAO_COMPENSADA,PREEMPCAO_ML \
+    --seeds 1..50 --paralelo 6 --saida <pasta própria do Bloco 8>
 ```
 
 ## 12. Perguntas prováveis da banca

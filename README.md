@@ -193,8 +193,8 @@ make demo         # o corredor verde na sumo-gui
 
 | Opção | Para quê |
 | --- | --- |
-| `--modo` | `FIXO` (baseline, sem intervenção), `PREEMPCAO`, `PREEMPCAO_COMPENSADA` |
-| `--seed` | escolhe o arquivo de rotas — **o mesmo nos três modos** (pareamento) |
+| `--modo` | `FIXO` (baseline, sem intervenção), `PREEMPCAO`, `PREEMPCAO_COMPENSADA`, `PREEMPCAO_ML` (o `PREEMPCAO` com a política aprendida, braço de H4) |
+| `--seed` | escolhe o arquivo de rotas — **o mesmo em todos os modos** (pareamento) |
 | `--gui` | roda na `sumo-gui`, para ver o corredor e gravar a demonstração |
 | `--libsumo` | ~10x mais rápido, sem GUI — implementado, mas **não** é o modo do lote (P15) |
 | `--exemplar` | persiste transições no banco e latências detalhadas (decisão P5) |
@@ -455,9 +455,9 @@ silenciosamente.
 2. **P4 / P12** — correções e registros pendentes no texto do TCC. **Abertas.**
 3. **P11** — fechada em 2026-10-01 (o método foi aprovado), mas a redação da
    metodologia depende das referências que o orientador ficou de devolver.
-4. **P19 / Bloco 10** — o modelo está treinado (10.5); faltam a inferência em
-   `core/` (10.6), o braço `PREEMPCAO_ML` (10.7) e a análise de H4 (10.8). Bloqueia
-   o Bloco 8.
+4. **P19 / Bloco 10** — o modelo está treinado (10.5), a inferência está em
+   `core/` (10.6) e o braço `PREEMPCAO_ML` está no executor e no lote (10.7).
+   Falta a análise de H4 (10.8), sobre as execuções do Bloco 8.
 
 **Fechadas em 2026-10-05:** P8 (boot normal com o RC522 no D3) e P9 (não se
 aplica: o LCD está no UNO, de 5 V). **Bancada, 2026-10-07:** checklist de

@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from sim.controlador import lote
+from sim.controlador import executor, lote
 from sim.controlador.coletor import ARQUIVO_EXECUCOES, ARQUIVO_VE, CabecalhoDivergenteError
 
 
@@ -391,3 +391,35 @@ def test_mesmo_ponto_na_raiz_nao_bloqueia_a_combinacao(tmp_path: Path) -> None:
     ponto = lote.Ponto("leve", "PREEMPCAO_COMPENSADA", 1, _AJUSTE)
     grupos = lote._por_destino([ponto], tmp_path)
     assert all(lote.pontos_ja_no_csv(d, m) == () for d, m in grupos.items())
+
+
+# --- braço PREEMPCAO_ML só onde há disputa (entrega 10.7) --------------------
+
+
+def test_braco_ml_fica_de_fora_dos_cenarios_de_um_ve() -> None:
+    """Com um VE só não há disputa, e a execução repetiria a do `PREEMPCAO`."""
+    pontos = lote.matriz(
+        ("leve", "moderado", "intenso", "multiplas_emergencias"),
+        ("FIXO", "PREEMPCAO", "PREEMPCAO_COMPENSADA", "PREEMPCAO_ML"),
+        (1, 2),
+    )
+
+    assert {p.cenario for p in pontos if p.modo == "PREEMPCAO_ML"} == {"multiplas_emergencias"}
+    assert len(pontos) == 2 * (4 * 3 + 1)
+
+
+def test_matriz_do_bloco_8_tem_650_execucoes() -> None:
+    """4 cenários x 3 braços x 50 seeds, mais o `PREEMPCAO_ML` no de múltiplos VEs."""
+    pontos = lote.matriz(lote.CENARIOS_PADRAO, executor.MODOS, range(1, 51))
+    assert len(pontos) == 650
+
+
+def test_braco_ml_fica_ao_lado_dos_outros_da_mesma_seed() -> None:
+    pontos = lote.matriz(("multiplas_emergencias",), executor.MODOS, (7,))
+    assert [p.modo for p in pontos] == list(executor.MODOS)
+
+
+def test_sem_braco_ml_a_matriz_nao_le_os_cenarios() -> None:
+    """O corte só consulta `cenarios.yaml` quando o braço é pedido."""
+    pontos = lote.matriz(("cenario_que_nao_existe",), ("FIXO",), (1,))
+    assert [p.cenario for p in pontos] == ["cenario_que_nao_existe"]

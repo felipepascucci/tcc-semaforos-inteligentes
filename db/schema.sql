@@ -8,7 +8,7 @@
 --   docker compose exec -T db pg_dump -s -U tcc semaforo
 --
 -- Gerado de: PostgreSQL 16 (serviço `db` do docker-compose)
--- Revisão Alembic: e5a17c3d8b42
+-- Revisão Alembic: 9d3e6b1f4a27
 
 --
 -- PostgreSQL database dump
@@ -48,7 +48,8 @@ CREATE TYPE public.estado_sinal AS ENUM (
 CREATE TYPE public.modo_controle AS ENUM (
     'FIXO',
     'PREEMPCAO',
-    'PREEMPCAO_COMPENSADA'
+    'PREEMPCAO_COMPENSADA',
+    'PREEMPCAO_ML'
 );
 
 
