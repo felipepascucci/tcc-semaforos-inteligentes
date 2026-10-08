@@ -52,7 +52,8 @@ class ExecucaoSimulacao(Base):
     seed: Mapped[int] = mapped_column(Integer, nullable=False)
     duracao_s: Mapped[int] = mapped_column(Integer, nullable=False)
     arquivo_rede: Mapped[str] = mapped_column(String(120), nullable=False)
-    versao_codigo: Mapped[str | None] = mapped_column(String(40))  # git rev-parse --short HEAD
+    # `git rev-parse --short HEAD`, com `-suja` se há código fora do commit.
+    versao_codigo: Mapped[str | None] = mapped_column(String(40))
     parametros: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
 
     # P5: só execuções exemplares gravam transições no banco. Uma por par

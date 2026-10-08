@@ -185,7 +185,7 @@ CREATE TABLE execucao_simulacao (
     seed             INT NOT NULL,
     duracao_s        INT NOT NULL,
     arquivo_rede     VARCHAR(120) NOT NULL,
-    versao_codigo    VARCHAR(40),                 -- git rev-parse --short HEAD
+    versao_codigo    VARCHAR(40),                 -- git rev-parse --short HEAD, com -suja se há código fora do commit
     parametros       JSONB NOT NULL,              -- snapshot de parametros.yaml
     exemplar         BOOLEAN NOT NULL DEFAULT false,  -- P5: se true, grava transições no banco
     iniciada_em      TIMESTAMPTZ NOT NULL DEFAULT now(),

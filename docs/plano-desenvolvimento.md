@@ -468,6 +468,15 @@ resultado (mesma execução com e sem, `context/06` §2).
 
 > **Bloqueado pelo Bloco 10.** ~~P16~~ foi resolvida em 2026-08-31 corrigindo o mecanismo, ~~P18~~ em 2026-09-10 sem teto numérico, e ~~P17~~ em 2026-10-01, com `K` e `n_ciclos_compensacao` calibrados e congelados. **P19 / Bloco 10** acrescenta um braço à matriz, com a mesma consequência. As 600 rodam com o código de `d63f774` em diante — o piloto de 2026-08-26 foi produzido pelo código anterior e **não** se mistura com elas.
 
+> **Comando decidido em 2026-10-07** (`context/09`): 650 pontos, consolidados
+> numa pasta própria, longe dos CSV do piloto, que ficam em `analysis/data/`. As
+> 60 linhas do piloto já saíram do banco. Rodar a partir de uma `main` limpa: a
+> coluna `versao_codigo` marca `-suja` se houver código fora do commit.
+>
+> ```bash
+> python -m sim.controlador.lote --seeds 1..50 --paralelo 6 --saida analysis/data/bloco8
+> ```
+
 **Pareamento por seed é inegociável:** gerar as rotas uma vez por (cenário, seed) e reutilizar em **todos** os modos, inclusive no braço de ML. Sem isso a comparação deixa de ser pareada e perde poder estatístico.
 
 `validar_execucao()` do `context/06` §4 roda em toda execução; falha → descarte **documentado** e reexecução com a mesma seed.

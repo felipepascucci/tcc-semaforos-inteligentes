@@ -46,6 +46,7 @@ import yaml
 
 from adapters.terminal import saida_utf8
 from sim.ambiente import executavel, registrar_ferramentas
+from sim.controlador.executor import versao_do_codigo
 
 RAIZ = Path(__file__).resolve().parents[2]
 REDE = RAIZ / "sim" / "rede" / "malha.net.xml"
@@ -417,17 +418,6 @@ def _versao_do_sumo() -> str:
     return saida.stdout.splitlines()[0].strip()
 
 
-def _versao_do_codigo() -> str:
-    resultado = subprocess.run(
-        ["git", "rev-parse", "--short", "HEAD"],
-        capture_output=True,
-        text=True,
-        cwd=RAIZ,
-        check=False,
-    )
-    return resultado.stdout.strip() or "desconhecida"
-
-
 def gravar_csv(medicoes: Sequence[MedicaoDeFaixa], seed: int, destino: Path = SAIDA_CSV) -> Path:
     """Grava a medição em `analysis/data/fluxo_saturacao.csv`.
 
@@ -454,7 +444,7 @@ def gravar_csv(medicoes: Sequence[MedicaoDeFaixa], seed: int, destino: Path = SA
             ]
         )
         agora = datetime.now(UTC).isoformat(timespec="seconds")
-        sumo, codigo = _versao_do_sumo(), _versao_do_codigo()
+        sumo, codigo = _versao_do_sumo(), versao_do_codigo()
         for medicao in medicoes:
             escritor.writerow(
                 [
