@@ -12,8 +12,8 @@ Escopo: completo, conforme `context/` (`context/08` §2).
 > portanto, os Blocos 5, 6, 7, 10, 8 e 9 — nessa ordem de execução.
 >
 > **Estado em 2026-10-07.** Os Blocos 5, 6 e 7 estão na main (PRs #11 a #15 e
-> #17 a #20); do 5, falta só o item 5 do checklist da bancada, e do contrato de
-> hardware, as fotos e a versão do pacote `esp8266`. Do Bloco 10, as entregas
+> #17 a #20); do 5, o checklist da bancada está completo (o item 5 fechou em 2026-10-07,
+> à noite), e do contrato de hardware faltam as fotos e a versão do pacote `esp8266`. Do Bloco 10, as entregas
 > 10.1 a 10.5 estão na main (PR #16), e a 10.6 foi feita em 2026-10-07;
 > faltam 10.7 e 10.8. Depois, os Blocos 8 e 9.
 
@@ -357,9 +357,9 @@ a menos que `--repetir MOTIVO` autorize.
 >
 > **Estado em 2026-10-07: feito na bancada**, nesta ordem: o fio no A0, o firmware
 > gravado, `bridge.verificar` 20 de 20, as 100 passagens (RNF05 e H3), o
-> checklist de `context/06` §6 e o ensaio da demonstração. Falta o item 5 do
-> checklist, e do contrato de hardware (§15), as fotos e a versão do pacote
-> `esp8266`.
+> checklist de `context/06` §6 (o item 5 à noite, com a tag fora do mapa) e o
+> ensaio da demonstração. Do contrato de hardware (§15), faltam as fotos e a
+> versão do pacote `esp8266`.
 
 **Pronto quando:**
 - o carrinho passa pela tag → o UNO inicia a preempção em < 3 s (RF02) e chega ao verde exclusivo pelo amarelo e pelo all-red;
@@ -551,7 +551,7 @@ desempate determinístico.
 |---|---|
 | Fim do Bloco 2 | O núcleo do TCC existe e é seguro — invariantes verificados por property-based testing |
 | Fim do Bloco 4 | ✅ **2026-08-26.** H1 se sustenta em `moderado` (31,7%) e **não** em `intenso` (18,1%); H2 tem custo medido mas **sem** mitigação (P16 e P17). Zero gridlock, RNF01 com folga de três ordens de grandeza. O marco cumpriu seu papel: os problemas apareceram com margem — e **P16 foi corrigida em 2026-08-31** (`intenso` 31,2%), com quase três meses de folga, que é exatamente o que antecipar o piloto comprou |
-| Fim do Bloco 5 | ✅ **2026-10-07, menos o item 5 do checklist.** O protótipo físico funciona fim-a-fim, com transição segura, fim da emergência por duração e teto, e H3 medida: p95 31,6 ms em 100 passagens, RNF05 100 de 100, 33 min sem reinício |
+| Fim do Bloco 5 | ✅ **2026-10-07.** O protótipo físico funciona fim-a-fim, com transição segura, fim da emergência por duração e teto, e H3 medida: p95 31,6 ms em 100 passagens, RNF05 100 de 100, 33 min sem reinício |
 | **Entrega 10.1** | ✅ **2026-09-10, remedida em 2026-10-05.** Sabe-se **quantos eventos de conflito entre VEs existem por execução** — é o que define se há dado suficiente para treinar, e nenhuma decisão de modelagem é tomada antes disso |
 | Fim do Bloco 10 | Existe uma política aprendida, exportada como dado e comparada estatisticamente contra o desempate determinístico. Veredito favorável **ou** nulo, ambos reportáveis |
 | Fim do Bloco 8 | Os dados do capítulo 5 existem e são reprodutíveis |
@@ -561,7 +561,7 @@ desempate determinístico.
 > **Atualizado em 2026-10-07.** P8, P9, P11, P15, P16, P18 e P20 estão
 > **fechadas**. **P3 foi revogada:** a banca espera aprendizado de máquina, o que
 > abriu **P19** e o Bloco 10. **P17 foi calibrada e congelada.** Bloqueia o
-> Bloco 8 só o Bloco 10 (10.7). Da bancada, faltam o item 5 do checklist,
+> Bloco 8 só o Bloco 10 (10.7). Da bancada, faltam
 > as fotos e a versão do pacote `esp8266`.
 
 - ~~**P16** — H1 abaixo da meta em `intenso`.~~ ✅ **Resolvida em 2026-08-31**

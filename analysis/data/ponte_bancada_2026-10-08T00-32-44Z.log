@@ -1,0 +1,21 @@
+Medindo H3 e RNF05: emissor em COM5, sessão 2026-10-08T00:32:44.495549+00:00
+  amostras de H3 em C:\Users\User\Desktop\tcc\analysis\data\latencia_bancada.csv
+  desfechos de cada leitura em C:\Users\User\Desktop\tcc\analysis\data\deteccoes_bancada.csv
+Gravando a telemetria do UNO: sessão 2026-10-08T00:32:44.495549+00:00
+  cada linha do USB em C:\Users\User\Desktop\tcc\analysis\data\telemetria_bancada.csv
+INFO:     Started server process [9072]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8001 (Press CTRL+C to quit)
+2026-10-07 21:32:44 [info     ] porta_aberta
+2026-10-07 21:32:44 [info     ] porta_emissor_aberta
+2026-10-07 21:32:46 [info     ] evento_uno                     rua=None t_dispositivo_ms=0 tipo=BOOT veiculo=None
+2026-10-07 21:33:03 [debug    ] linha_do_emissor_ignorada      linha=b'\xc2\xe3\xfdTag F39BD606 lida -> Enviando RUA1\r\n'
+2026-10-07 21:33:03 [info     ] evento_uno                     rua=1 t_dispositivo_ms=17283 tipo=SEM_OCORRENCIA veiculo=AMBULANCIA
+2026-10-07 21:33:08 [info     ] autorizacoes_enviadas          autorizacoes={'AMBULANCIA': 1}
+INFO:     127.0.0.1:57124 - "PUT /autorizacoes HTTP/1.1" 202 Accepted
+INFO:     127.0.0.1:57125 - "GET /estado HTTP/1.1" 200 OK
+2026-10-07 21:34:02 [info     ] deteccao_do_emissor            rua=1 uid=F39BD606
+2026-10-07 21:34:02 [info     ] evento_uno                     rua=1 t_dispositivo_ms=76002 tipo=PREEMP_INI veiculo=AMBULANCIA
+2026-10-07 21:34:02 [info     ] amostra_h3                     latencia_total_ms=47.455 n=1 rua=1
+2026-10-07 21:34:13 [info     ] evento_uno                     rua=1 t_dispositivo_ms=87126 tipo=PREEMP_FIM veiculo=AMBULANCIA

@@ -461,8 +461,8 @@ silenciosamente.
 
 **Fechadas em 2026-10-05:** P8 (boot normal com o RC522 no D3) e P9 (não se
 aplica: o LCD está no UNO, de 5 V). **Bancada, 2026-10-07:** checklist de
-`context/06` §6 feito, menos o item 5 (falta uma tag fora das 4 ruas); faltam as
-fotos e a versão do pacote `esp8266` (`docs/contrato-hardware-software.md` §15).
+`context/06` §6 feito, com o item 5 fechado à noite (tag fora das 4 ruas, com
+desvios do roteiro registrados em `context/09`); faltam as fotos e a versão do pacote `esp8266` (`docs/contrato-hardware-software.md` §15).
 
 **Decidida em 2026-09-29:** P20 — a preempção exige tag reconhecida **e**
 ocorrência ativa aberta pela central de despacho (simulada), e a criticidade da
