@@ -19,14 +19,15 @@ Os passos:
 3. a Central despacha a ambulância — pelo dashboard, ou pela API com
    `--central-pela-api`;
 4. o carrinho passa de novo → preempção, e o ciclo volta pelo eixo oposto;
-5. a criticidade decide: a ponte injeta a ambulância na Rua 3 e, 3 s depois, o
-   bombeiro na Rua 1, uma vez com o bombeiro mais crítico e outra com a
-   ambulância mais crítica (o emissor físico é sempre ambulância);
+5. a criticidade decide, com os carrinhos (um por tipo desde 2026-10-08): a
+   ambulância passa pela Rua 3 e, quando o roteiro diz AGORA, ~3 s depois, o
+   segundo carrinho passa pela Rua 1. Primeiro o bombeiro, mais crítico, que
+   interrompe a ambulância; depois a polícia, menos crítica, que espera na fila;
 6. autonomia: o apresentador encerra a ponte, e o carrinho preempta assim mesmo.
    Sem a ponte ninguém no notebook vê o UNO, então este passo é conferido a olho.
 
-Com `--sem-carrinho`, a ponte injeta a ambulância no lugar do carrinho (plano B
-da apresentação, ou ensaio sem o veículo), e o passo 6 é pulado. As
+Com `--sem-carrinho`, a ponte injeta os VEs no lugar dos carrinhos (plano B
+da apresentação, ou ensaio sem os veículos), e o passo 6 é pulado. As
 ocorrências que o roteiro abriu são encerradas no fim.
 
 **Isto não é medição.** O que o roteiro confere é o comportamento, para o
@@ -75,8 +76,22 @@ TIPOS = ("AMBULANCIA", "BOMBEIRO", "POLICIA")
 RUA_DO_CARRINHO = 3
 
 #: No passo 5, o segundo VE entra 3 s depois do `PREEMP_INI` do primeiro: dá
-#: tempo de a plateia ver a transição começar antes da interrupção.
+#: tempo de a plateia ver a transição começar antes da interrupção. Com os
+#: carrinhos, é quando o roteiro diz AGORA; a mão chega um pouco depois.
 INTERVALO_SEGUNDO_VE_S = 3.0
+
+#: As duas disputas do passo 5: (primeiro VE, segundo VE, a Central). Na
+#: primeira, o bombeiro, de prioridade antiga menor, interrompe a ambulância
+#: porque a criticidade dele é maior; na segunda, a polícia, menos crítica,
+#: espera. Aparecem os três carrinhos e os dois desfechos.
+DISPUTAS: tuple[tuple[str, str, dict[str, int]], ...] = (
+    ("AMBULANCIA", "BOMBEIRO", {"AMBULANCIA": 2, "BOMBEIRO": 1, "POLICIA": 0}),
+    ("AMBULANCIA", "POLICIA", {"AMBULANCIA": 1, "BOMBEIRO": 0, "POLICIA": 2}),
+)
+RUA_DO_PRIMEIRO, RUA_DO_SEGUNDO = 3, 1
+
+_NOME = {"AMBULANCIA": "a ambulância", "BOMBEIRO": "o bombeiro", "POLICIA": "a polícia"}
+_DO = {"AMBULANCIA": "da ambulância", "BOMBEIRO": "do bombeiro", "POLICIA": "da polícia"}
 
 DECISOES = frozenset({"PREEMP_INI", "RENOVADO", "FILA", "DESCARTADO", "SEM_OCORRENCIA"})
 
@@ -394,7 +409,7 @@ class Demo:
                 continue
             self.tipo_do_veiculo[veiculo["id_veiculo"]] = veiculo["tipo"]
             self.veiculo_do_tipo.setdefault(veiculo["tipo"], veiculo)
-        faltam = [t for t in ("AMBULANCIA", "BOMBEIRO") if t not in self.veiculo_do_tipo]
+        faltam = [t for t in TIPOS if t not in self.veiculo_do_tipo]
         if faltam:
             raise DemoInterrompidaError(f"sem veículo ativo cadastrado do tipo {', '.join(faltam)}")
 
@@ -462,6 +477,37 @@ class Demo:
             )
         self.dizer(f"UNO decidiu: {decisao.tipo} — {decisao.veiculo} na Rua {decisao.rua}")
         return decisao
+
+    def chegada(self, veiculo: str, rua: int, desde_ms: int) -> Ev:
+        """O carrinho do `veiculo` passa pela tag da `rua`; devolve a decisão do UNO.
+
+        Só conta a decisão desse tipo: uma releitura do outro carrinho no meio
+        não é tomada pela chegada. O carrinho pode ler outra tag, e o roteiro
+        segue com a rua que ele leu. Com `--sem-carrinho`, a ponte injeta.
+        """
+        if self.op.sem_carrinho:
+            return self.injetar(rua, veiculo)
+        self.pedir(f"passe o carrinho {_DO[veiculo]} pela tag da Rua {rua}.")
+        decisao = self.esperar_evento(
+            DECISOES, desde_ms, self.op.espera_carrinho_s, veiculo=veiculo, lembrete_s=30
+        )
+        if decisao is None:
+            raise DemoInterrompidaError(
+                f"nenhuma leitura {_DO[veiculo]} chegou ao UNO em {self.op.espera_carrinho_s:.0f} s"
+            )
+        self.dizer(f"{veiculo} leu a tag da Rua {decisao.rua} → UNO decidiu {decisao.tipo}")
+        return decisao
+
+    def terminou_antes(self, atendido: Ev, chegada: Ev) -> bool:
+        """O verde do `atendido` acabou antes da `chegada`? Então não houve disputa."""
+        _, eventos = self.obs.copia()
+        return any(
+            ev.tipo == "PREEMP_FIM"
+            and ev.rua == atendido.rua
+            and ev.veiculo == atendido.veiculo
+            and atendido.ms <= ev.ms <= chegada.ms
+            for ev in eventos
+        )
 
     def injetar(self, rua: int, veiculo: str) -> Ev:
         status, corpo = self.ponte.injetar(rua, veiculo)
@@ -631,45 +677,58 @@ class Demo:
             self.conferir_volta(fim)
         self.narrar(False)
 
-    def _disputa(self, ambulancia: int, bombeiro: int) -> None:
-        """Ambulância na Rua 3, bombeiro na Rua 1 3 s depois, com estas criticidades."""
-        self.definir_central({"AMBULANCIA": ambulancia, "BOMBEIRO": bombeiro})
+    def _disputa(self, primeiro_tipo: str, segundo_tipo: str, central: dict[str, int]) -> None:
+        """O primeiro VE na Rua 3 e, 3 s depois do atendimento dele, o segundo na Rua 1."""
+        self.definir_central(central)
         self.ciclo_ocioso()
         self.narrar(True)
-        primeiro = self.injetar(3, "AMBULANCIA")
+        primeiro = self.chegada(primeiro_tipo, RUA_DO_PRIMEIRO, self.obs.agora_ms())
         if primeiro.tipo != "PREEMP_INI":
-            self.registrar("a ambulância é atendida", False, f"decisão {primeiro.tipo}")
+            self.registrar(f"{_NOME[primeiro_tipo]} é atendida", False, f"decisão {primeiro.tipo}")
             self.narrar(False)
             return
         self.esperar(lambda: False, INTERVALO_SEGUNDO_VE_S)
-        segundo = self.injetar(1, "BOMBEIRO")
-        atendido: Ev
-        fila_rua, fila_veiculo = (3, "AMBULANCIA") if bombeiro < ambulancia else (1, "BOMBEIRO")
-        if bombeiro < ambulancia:
-            fila = self.esperar_evento({"FILA"}, segundo.ms, 2, rua=3, veiculo="AMBULANCIA")
+        if not self.op.sem_carrinho:
+            self.dizer("AGORA!")
+        segundo = self.chegada(segundo_tipo, RUA_DO_SEGUNDO, primeiro.ms + 1)
+        if self.terminou_antes(primeiro, segundo):
             self.registrar(
-                "o bombeiro, mais crítico, interrompe a ambulância, que vai para a fila",
-                segundo.tipo == "PREEMP_INI" and fila is not None,
-                f"bombeiro {segundo.tipo}; ambulância {'na fila' if fila else 'sem FILA'}",
+                f"{_NOME[segundo_tipo]} chega durante o verde {_DO[primeiro_tipo]}",
+                False,
+                "chegou depois do fim do verde, e não houve disputa: repita o passo 5 "
+                "(--passos 5) e passe o segundo carrinho logo no AGORA",
             )
-            atendido = segundo
+            self.narrar(False)
+            return
+        if central[segundo_tipo] < central[primeiro_tipo]:
+            fila = self.esperar_evento(
+                {"FILA"}, segundo.ms, 2, rua=primeiro.rua, veiculo=primeiro_tipo
+            )
+            self.registrar(
+                f"{_NOME[segundo_tipo]}, mais crítico, interrompe {_NOME[primeiro_tipo]}, "
+                "que vai para a fila",
+                segundo.tipo == "PREEMP_INI" and fila is not None,
+                f"{segundo_tipo} {segundo.tipo}; "
+                f"{primeiro_tipo} {'na fila' if fila else 'sem FILA'}",
+            )
+            atendido, na_fila = segundo, primeiro
         else:
             self.registrar(
-                "o bombeiro, menos crítico, espera na fila",
+                f"{_NOME[segundo_tipo]}, menos crítica, espera na fila",
                 segundo.tipo == "FILA",
-                f"bombeiro {segundo.tipo}",
+                f"{segundo_tipo} {segundo.tipo}",
             )
-            atendido = primeiro
+            atendido, na_fila = primeiro, segundo
         # Quem está atendido vai até o fim; o da fila entra em seguida.
         fim = self.acompanhar_atendimento(atendido)
         if fim is None:
             self.narrar(False)
             return
         retomada = self.esperar_evento(
-            {"PREEMP_INI"}, fim.ms, 2, rua=fila_rua, veiculo=fila_veiculo
+            {"PREEMP_INI"}, fim.ms, 2, rua=na_fila.rua, veiculo=na_fila.veiculo
         )
         self.registrar(
-            f"{fila_veiculo} sai da fila e é atendido",
+            f"{na_fila.veiculo} sai da fila e é atendido",
             retomada is not None,
             "PREEMP_INI logo depois do fim do primeiro" if retomada else "não saiu da fila",
         )
@@ -681,14 +740,19 @@ class Demo:
 
     def passo5_criticidade(self) -> None:
         self.passo(5, "a criticidade decide quem interrompe")
-        self.dizer(
-            "O carrinho é sempre ambulância; o segundo VE vem pela ponte, como se o "
-            "receptor o tivesse ouvido."
-        )
-        self.dizer("Primeiro: ambulância em RISCO_COLETIVO (2), bombeiro em RISCO_VIDA (1).")
-        self._disputa(ambulancia=2, bombeiro=1)
-        self.dizer("Agora trocadas: ambulância em RISCO_VIDA (1), bombeiro em RISCO_COLETIVO (2).")
-        self._disputa(ambulancia=1, bombeiro=2)
+        if self.op.sem_carrinho:
+            self.dizer(
+                "Sem carrinhos: os VEs vêm pela ponte, como se o receptor os tivesse ouvido."
+            )
+        else:
+            self.dizer(
+                "Deixe os três carrinhos à mão. O segundo passa quando o roteiro disser "
+                "AGORA, enquanto o primeiro ainda está sendo atendido."
+            )
+        for primeiro_tipo, segundo_tipo, central in DISPUTAS:
+            em_servico = ", ".join(f"{_NOME[t]} {c}" for t, c in central.items() if c)
+            self.dizer(f"Central (criticidade): {em_servico}.")
+            self._disputa(primeiro_tipo, segundo_tipo, central)
         self.conferir_invariantes()
 
     def passo6_autonomia(self) -> None:
@@ -780,7 +844,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument(
         "--sem-carrinho",
         action="store_true",
-        help="a ponte injeta a ambulância no lugar do carrinho; pula o passo 6",
+        help="a ponte injeta os VEs no lugar dos carrinhos; pula o passo 6",
     )
     parser.add_argument(
         "--central-pela-api",
