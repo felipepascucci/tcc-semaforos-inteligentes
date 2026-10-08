@@ -322,7 +322,7 @@ Registro completo em `context/09`.
 
 Detalhado em [`docs/plano-desenvolvimento.md`](plano-desenvolvimento.md). Feito em 2026-10-05: protocolo (5.1), dublê com a regra da bancada (5.2), a ponte que escuta e mede H3 (5.7), os sketches dos NodeMCUs versionados como estão (5.6), os seeds da bancada (5.8) e o firmware do UNO (5.3), em `firmware/uno/semaforo/`, compilado e comparado com o dublê linha por linha no PC.
 
-**Feito na bancada (2026-10-06 e 2026-10-07):** o firmware gravado no UNO e a aceitação (§7, 20 de 20, com a Central), H3 e RNF05 nas 100 passagens (§10), o checklist de `context/06` §6 (falta o item 5) e o ensaio da demonstração (`bridge/demo.py`, 19 de 19). O firmware dos NodeMCUs não muda.
+**Feito na bancada (2026-10-06 e 2026-10-07):** o firmware gravado no UNO e a aceitação (§7, 20 de 20, com a Central), H3 e RNF05 nas 100 passagens (§10), o checklist de `context/06` §6 (o item 5 com a tag fora do mapa, à noite de 2026-10-07) e o ensaio da demonstração (`bridge/demo.py`, 19 de 19). O firmware dos NodeMCUs não muda.
 
 ---
 

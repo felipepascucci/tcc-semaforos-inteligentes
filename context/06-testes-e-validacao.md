@@ -190,7 +190,7 @@ ver a nota abaixo da tabela.
 | 2 | Nunca há verde nos dois eixos ao mesmo tempo; em emergência só a aproximação do VE fica verde — 5 min de observação e a telemetria do mesmo período. **2026-10-07, Felipe, sessão `17:44:10Z`:** 0 de 4.948 `ST` com verde nos dois eixos, nenhum verde novo fora da aproximação do VE, verde exclusivo nas 5 emergências atendidas até o fim; observação do Felipe nos 6 min de ciclo puro | ☑ |
 | 3 | Toda transição verde→vermelho passa por amarelo, e há all-red antes de todo verde novo, **inclusive na entrada e na saída da emergência**. **2026-10-07, sessão `17:44:10Z`:** 972 mudanças de luz, 4 entradas e 3 saídas de emergência (a quarta foi cortada pelo item 14), 0 violações de I2, I3 ou I4 | ☑ |
 | 4 | 100 passagens sobre as tags das ruas: em ≥ 95 a linha chega ao UNO com a rua certa, ou seja, há um evento de decisão com a rua da tag — RNF05. Um `RECUSADO` conta como falha (a linha chegou corrompida). **Medido na mesma rodada do 7b, com o emissor no USB do notebook** (decisão de 2026-10-06): o denominador são as leituras que o emissor imprimiu, e o resultado é declarado nessa condição, que alimenta o emissor melhor que a bateria de 9 V da demonstração. Cada leitura vira uma linha de `analysis/data/deteccoes_bancada.csv`; a taxa sai de `python -m analysis.resumo_bancada`. **2026-10-07: 100 de 100** (25 por rua), todas `PREEMP_INI`; duas linhas do emissor que chegaram ilegíveis ao notebook ficaram fora do denominador e foram repostas (`09`, 2026-10-07) | ☑ |
-| 5 | Tag fora das 4 ruas não gera envio nem mexe no semáforo. **Pendente:** falta uma tag fora do mapa (2026-10-07) | ☐ |
+| 5 | Tag fora das 4 ruas não gera envio nem mexe no semáforo. **Roteiro (declarado em 2026-10-07, antes da rodada):** ponte com `--porta COM3 --porta-veiculo COM5 --telemetria`, emissor no USB; a ambulância recebe ocorrência (pela Central, ou com o compose parado por `PUT /autorizacoes` na ponte); com o ciclo correndo, a tag fora do mapa passa pelo leitor do carrinho **10 vezes**, com pelo menos 4 s entre uma e outra, ao longo de pelo menos 1 min; por último, uma passagem de **controle** na tag da Rua 1. Julgado por `python -m analysis.checklist_bancada --item5`; o LCD sem mudança nas 10 passagens e a contagem delas são observação. **2026-10-07, Felipe, sessão `00:32:44Z`** (`analysis/data/checklist_bancada_item5_2026-10-07.md`), depois de uma passagem de aquecimento na Rua 1 antes da ocorrência (o lixo de boot do emissor suja a primeira linha da sessão, `09`): janela de 53,9 s sem leitura do emissor nem evento do UNO, 4 ciclos de 12.000 ms, controle `PREEMP_INI`. **Desvios do roteiro, registrados em `09`:** 4 ou 5 passagens da tag nova (não 10) e janela abaixo de 1 min. LCD parado em todas (observação do Felipe) | ☑ |
 | 5b | **Tag sem ocorrência** (volta em 2026-10-06): sem ocorrência aberta para a ambulância na Central, a passagem gera `SEM_OCORRENCIA`, não mexe no semáforo, e o LCD mostra `SEM OCORRENCIA` por 3 s; abrindo a ocorrência, a passagem seguinte preempta. **2026-10-07, Felipe, sessão `17:44:10Z`:** `SEM_OCORRENCIA` com a ambulância em `0` e o semáforo como estava; reaberta com criticidade 2, a passagem seguinte deu `PREEMP_INI`. LCD `SEM OCORRENCIA` por ~3 s (observação do Felipe) | ☑ |
 | 6 | LCD mostra o VE e a rua em < 1 s após a leitura. **2026-10-07, Felipe:** observação, sem atraso perceptível nas passagens do 5b e do 10; sem medida instrumentada | ☑ |
 | 7 | Preempção iniciada (`PREEMP_INI`) em < 3 s da leitura da tag — RF02. **2026-10-07:** nas 100 passagens do 7b, máximo de 46,3 ms | ☑ |
@@ -231,6 +231,17 @@ medição; as durações são do `millis()` do UNO, com a folga de 60 ms de
   verde exclusivo.
 - **3** — nenhum achado de `bridge.verificar.violacoes` (I2, I3, I4) na sessão
   inteira, com pelo menos uma entrada e uma saída de emergência.
+- **5** (declarado em 2026-10-07, só com `--item5`, na sessão da rodada) — a
+  janela vai da primeira `ST` com a ambulância em ocorrência até a primeira
+  leitura que o emissor imprimiu depois dela, que é o controle. Na janela: nenhum
+  evento do UNO, toda `ST` em regime `C`, e todo ciclo puro inteiro de 12 s. O
+  controle vira `PREEMP_INI`, e nenhum UID fora do mapa aparece no
+  `deteccoes_bancada.csv` da sessão. Janela sem um ciclo inteiro, ou com a
+  ambulância sem ocorrência em alguma `ST`, sai "sem veredito": um envio ali não
+  teria efeito para medir. **Premissa declarada:** a tag nova é da mesma família
+  das 4 do mapa (MIFARE, 13,56 MHz), lida pelo RC522. O sketch do emissor não
+  deixa rastro de UID fora da lista, e não muda (decisão de 2026-10-05); então
+  que o leitor a viu é observação, não dado.
 - **5b** — regime, rua ativa e fila iguais antes e depois do `SEM_OCORRENCIA`; se
   em ciclo, o ciclo que o contém dura 12 s. A primeira decisão do tipo depois de
   a lista do UNO lhe dar ocorrência é `PREEMP_INI`. O LCD é observação.
@@ -254,10 +265,7 @@ medição; as durações são do `millis()` do UNO, com a folga de 60 ms de
 o item, sem falha (as sessões de 20 s do item 15, para os itens 1 e 12), sai
 "sem veredito" (ajuste de 2026-10-07, depois da rodada; `09`).
 - **14** — o dado mostra só que a sessão terminou em emergência; o resto é
-  observação, como 5, 6, 8 e 13, registrados com data e executor.
-
-O item 5 espera uma tag fora do mapa das 4 ruas, que a bancada não tem
-(2026-10-07; o Felipe vai providenciar).
+  observação, como 6, 8 e 13, registrados com data e executor.
 
 Item 12 é o que pega: sketches com `String` travam depois de ~20 min. Rodar esse teste **antes** do dia da apresentação, não no dia.
 

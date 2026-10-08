@@ -4,6 +4,7 @@
     python -m analysis.checklist_bancada --sessao <iso>   # uma sessão (repetível)
     python -m analysis.checklist_bancada --todas
     python -m analysis.checklist_bancada --banco          # mais o item 9, no PostgreSQL
+    python -m analysis.checklist_bancada --item5          # mais o item 5 (tag fora do mapa)
 
 Lê `analysis/data/telemetria_bancada.csv`, que a ponte grava com `--telemetria`
 (`bridge/registro.py`): cada linha do USB do UNO, crua e carimbada no relógio do
@@ -32,10 +33,15 @@ sessão é a sequência completa das luzes, com o `millis()` de cada transição
   lista da Central leva para voltar;
 * **item 9**, com `--banco` — cada evento de decisão da sessão tem a sua linha em
   `log_prioridade`, com `id_correlacao`, e cada amostra de H3 em
-  `metrica_latencia` tem o mesmo `id_correlacao` da linha do `PREEMP_INI`.
+  `metrica_latencia` tem o mesmo `id_correlacao` da linha do `PREEMP_INI`;
+* **item 5**, com `--item5` — na sessão em que a tag fora do mapa passou, com o
+  emissor no USB (`--porta-veiculo`): da ambulância autorizada até a passagem de
+  controle numa tag do mapa, o emissor não imprimiu nada, o UNO não publicou
+  evento e o ciclo seguiu puro; e o controle preemptou. Lê também
+  `analysis/data/deteccoes_bancada.csv`.
 
-O resto do checklist (5, 6, 8, 13, e o que o LCD mostra em 5b e 10) é observação
-de quem está na bancada e não sai daqui.
+O resto do checklist (6, 8, 13, quantas vezes a tag do item 5 passou, e o que o
+LCD mostra em 5b e 10) é observação de quem está na bancada e não sai daqui.
 
 As durações são conferidas no `millis()` do UNO, com a folga de
 `bridge.verificar` (60 ms, uma volta do `loop()`); os intervalos entre a ponte e
@@ -53,9 +59,10 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from itertools import pairwise
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 
 from adapters.terminal import saida_utf8
+from bridge.latencia import CSV_DESFECHOS_PADRAO
 from bridge.ponte import SILENCIO_MAXIMO_S
 from bridge.protocolo import (
     EIXO_DE,
@@ -92,6 +99,11 @@ SESSAO_CONTINUA_S = 30 * 60
 #: reenvia a lista no máximo uma vez por segundo (`app/services/bancada.py`). O
 #: critério declarado antes da medição é este (`context/06` §6, 2026-10-07).
 LISTA_VOLTA_MAX_S = 2.0
+
+#: Item 5: as tags do mapa, como no cabeçalho de `veiculo_ambulancia.ino`. O
+#: emissor só imprime (e só envia) estas; qualquer outro UID no CSV de
+#: detecções seria a tag fora do mapa gerando envio.
+UIDS_DO_MAPA: Final = {"F39BD606": 1, "1BD2308E": 2, "B7EF8FA0": 3, "97ABAFA0": 4}
 
 
 # ---------------------------------------------------------------------------
@@ -142,6 +154,34 @@ def ler_sessoes(caminho: Path) -> dict[str, list[Linha]]:
                     texto=registro["linha"],
                     versao_codigo=registro["versao_codigo"],
                     resposta=_interpretar(direcao, registro["linha"]),
+                )
+            )
+    return sessoes
+
+
+@dataclass(frozen=True)
+class LeituraEmissor:
+    """Uma linha de `deteccoes_bancada.csv`: uma leitura que o emissor imprimiu."""
+
+    t: datetime
+    rua: int
+    uid: str
+    desfecho: str
+
+
+def ler_leituras(caminho: Path) -> dict[str, list[LeituraEmissor]]:
+    """As leituras do emissor de cada sessão; vazio se o arquivo não existir."""
+    sessoes: dict[str, list[LeituraEmissor]] = {}
+    if not caminho.is_file():
+        return sessoes
+    with caminho.open(encoding="utf-8", newline="") as arquivo:
+        for registro in csv.DictReader(arquivo):
+            sessoes.setdefault(registro["sessao"], []).append(
+                LeituraEmissor(
+                    t=datetime.fromisoformat(registro["t_deteccao"]),
+                    rua=int(registro["rua"]),
+                    uid=registro["uid"],
+                    desfecho=registro["desfecho"],
                 )
             )
     return sessoes
@@ -415,6 +455,86 @@ def item_3(partes: Sequence[Trecho]) -> Resultado:
         resultado.detalhes.append(
             "Sem entrada e saída de emergência na sessão: falta metade do item."
         )
+    return resultado
+
+
+def item_5(partes: Sequence[Trecho], leituras: Sequence[LeituraEmissor]) -> Resultado:
+    """Tag fora do mapa: da ambulância autorizada à passagem de controle, nada.
+
+    A tag fora do mapa não deixa rastro por construção (o emissor não imprime nem
+    envia), então o que o dado mostra é o silêncio na janela em que ela passou. A
+    passagem de controle no fim, numa tag do mapa, prova que a cadeia estava viva
+    e que um envio teria preemptado. Quantas vezes a tag passou é observação.
+    """
+    resultado = Resultado("5", "Tag fora das 4 ruas: sem envio e sem mexer no semáforo", None)
+    fora_do_mapa = [leitura for leitura in leituras if leitura.uid not in UIDS_DO_MAPA]
+    if fora_do_mapa:
+        resultado.ok = False
+        resultado.detalhes.append(
+            "O emissor imprimiu UID fora do mapa: "
+            + "; ".join(f"{leitura.uid} ({leitura.t.isoformat()})" for leitura in fora_do_mapa)
+        )
+        return resultado
+    validas = [linha for trecho in partes for linha in trecho.linhas]
+    amb = TipoVeiculo.AMBULANCIA
+    i0 = next(
+        (
+            i
+            for i, linha in enumerate(validas)
+            if linha.st is not None and linha.st.criticidade(amb)
+        ),
+        None,
+    )
+    if i0 is None:
+        resultado.detalhes.append(
+            "A ambulância não teve ocorrência na sessão: um envio não mexeria no semáforo."
+        )
+        return resultado
+    t0 = validas[i0].t
+    controle = next((leitura for leitura in leituras if leitura.t >= t0), None)
+    if controle is None:
+        resultado.detalhes.append(
+            "Sem passagem de controle numa tag do mapa depois de a ambulância ter ocorrência."
+        )
+        return resultado
+    janela = [linha for linha in validas[i0:] if linha.t < controle.t]
+    sts = [linha.st for linha in janela if linha.st is not None]
+    eventos = [linha for linha in janela if linha.ev is not None]
+    fora_do_ciclo = sum(1 for st in sts if st.regime is not Regime.CICLO)
+    sem_ocorrencia = sum(1 for st in sts if not st.criticidade(amb))
+    periodos = [periodo for _, _, periodo in _ciclos(sts)]
+    fora_da_tolerancia = [p for p in periodos if not _perto(p, CICLO_MS)]
+    controle_ok = controle.desfecho == TipoEvento.PREEMP_INI.value
+    duracao_s = (controle.t - t0).total_seconds()
+    resultado.detalhes += [
+        f"Janela: da primeira ST com a ambulância em ocorrência ({t0.isoformat()}) até a "
+        f"passagem de controle ({controle.t.isoformat()}): {duracao_s:.1f} s",
+        "Leituras do emissor na janela: 0 (a primeira depois da ocorrência é o controle)",
+        f"Eventos do UNO na janela: {len(eventos)}"
+        + ("" if not eventos else " — " + "; ".join(linha.texto for linha in eventos[:5])),
+        f"ST na janela: {len(sts)}; fora do regime de ciclo: {fora_do_ciclo}; "
+        f"com a ambulância sem ocorrência: {sem_ocorrencia}",
+        f"Ciclos puros inteiros na janela: {len(periodos)}"
+        + (
+            f"; período mín {min(periodos)} ms, máx {max(periodos)} ms "
+            f"(esperado {CICLO_MS} ± {FOLGA_MS} ms)"
+            if periodos
+            else ""
+        ),
+        f"Controle: {controle.uid} (RUA{controle.rua}) → {controle.desfecho} — "
+        f"{'ok' if controle_ok else 'FALHA'}",
+        "Quantas vezes a tag fora do mapa passou na janela é observação de quem está na bancada.",
+    ]
+    if eventos or fora_do_ciclo or fora_da_tolerancia:
+        resultado.ok = False
+    elif sem_ocorrencia or not periodos:
+        # Sem falha, mas a janela não serve: um envio não preemptaria, ou ela não
+        # cobre um ciclo inteiro para medir.
+        resultado.detalhes.append(
+            "Janela sem ocorrência o tempo todo ou sem um ciclo inteiro: nada a julgar."
+        )
+    else:
+        resultado.ok = controle_ok
     return resultado
 
 
@@ -853,26 +973,37 @@ def item_9(linhas: Sequence[Linha], url: str) -> Resultado:
 # ---------------------------------------------------------------------------
 
 
-def avaliar(linhas: Sequence[Linha], url_banco: str | None = None) -> list[Resultado]:
-    """Todos os itens que o dado de uma sessão permite julgar."""
+def avaliar(
+    linhas: Sequence[Linha],
+    url_banco: str | None = None,
+    leituras: Sequence[LeituraEmissor] | None = None,
+) -> list[Resultado]:
+    """Todos os itens que o dado de uma sessão permite julgar.
+
+    O item 5 só entra com `leituras`: é julgado na sessão declarada para ele.
+    """
     partes = trechos(linhas)
-    resultados = [
+    return [
         item_1(partes),
         item_2(partes),
         item_3(partes),
+        *([] if leituras is None else [item_5(partes, leituras)]),
         item_5b(partes),
+        *([] if url_banco is None else [item_9(linhas, url_banco)]),
         item_10(partes),
         item_11(partes),
         item_12(linhas, partes),
         item_14(partes),
         item_15(linhas, partes),
     ]
-    if url_banco is not None:
-        resultados.insert(4, item_9(linhas, url_banco))
-    return resultados
 
 
-def relatorio_da_sessao(sessao: str, linhas: Sequence[Linha], url_banco: str | None) -> list[str]:
+def relatorio_da_sessao(
+    sessao: str,
+    linhas: Sequence[Linha],
+    url_banco: str | None,
+    leituras: Sequence[LeituraEmissor] | None = None,
+) -> list[str]:
     do_uno = [linha for linha in linhas if linha.direcao is Direcao.UNO]
     invalidas = sum(1 for linha in do_uno if linha.resposta is None)
     eventos = Counter(linha.ev.tipo.value for linha in do_uno if linha.ev is not None)
@@ -889,7 +1020,7 @@ def relatorio_da_sessao(sessao: str, linhas: Sequence[Linha], url_banco: str | N
         "| Item | Verificação | Pelo dado |",
         "|---|---|---|",
     ]
-    resultados = avaliar(linhas, url_banco)
+    resultados = avaliar(linhas, url_banco, leituras)
     saida += [f"| {r.item} | {r.titulo} | {_veredito(r.ok)} |" for r in resultados]
     saida.append("")
     for r in resultados:
@@ -900,8 +1031,12 @@ def relatorio_da_sessao(sessao: str, linhas: Sequence[Linha], url_banco: str | N
 
 
 def gerar_relatorio(
-    sessoes: dict[str, list[Linha]], escolhidas: Sequence[str], url_banco: str | None = None
+    sessoes: dict[str, list[Linha]],
+    escolhidas: Sequence[str],
+    url_banco: str | None = None,
+    leituras: dict[str, list[LeituraEmissor]] | None = None,
 ) -> str:
+    """O relatório das sessões escolhidas; com `leituras`, cada uma julga também o item 5."""
     linhas = ["# Checklist da bancada — o que a telemetria gravada mostra", ""]
     if not escolhidas:
         linhas.append(
@@ -910,15 +1045,16 @@ def gerar_relatorio(
         )
         return "\n".join(linhas) + "\n"
     linhas += [
-        "Itens 5, 6, 8 e 13, e o LCD de 5b e 10, são observação de quem está na bancada "
-        "(`context/06` §6).",
+        "Itens 6, 8 e 13, quantas vezes a tag do item 5 passou, e o LCD de 5b e 10, são "
+        "observação de quem está na bancada (`context/06` §6).",
         "",
     ]
     for sessao in escolhidas:
         if sessao not in sessoes:
             linhas += [f"## Sessão {sessao}", "", "Não está no arquivo.", ""]
             continue
-        linhas += relatorio_da_sessao(sessao, sessoes[sessao], url_banco)
+        da_sessao = None if leituras is None else leituras.get(sessao, [])
+        linhas += relatorio_da_sessao(sessao, sessoes[sessao], url_banco, da_sessao)
     return "\n".join(linhas).rstrip() + "\n"
 
 
@@ -933,6 +1069,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     analisador.add_argument(
         "--banco", action="store_true", help="confere o item 9 no PostgreSQL (DATABASE_URL do .env)"
     )
+    analisador.add_argument(
+        "--item5",
+        action="store_true",
+        help="julga também o item 5 (tag fora do mapa) nas sessões escolhidas",
+    )
+    analisador.add_argument("--deteccoes", type=Path, default=CSV_DESFECHOS_PADRAO)
     analisador.add_argument("--saida", type=Path, default=None)
     opcoes = analisador.parse_args(argv)
 
@@ -944,7 +1086,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     else:
         escolhidas = [max(sessoes)] if sessoes else []
 
-    relatorio = gerar_relatorio(sessoes, escolhidas, _url_do_banco() if opcoes.banco else None)
+    relatorio = gerar_relatorio(
+        sessoes,
+        escolhidas,
+        _url_do_banco() if opcoes.banco else None,
+        ler_leituras(opcoes.deteccoes) if opcoes.item5 else None,
+    )
     if opcoes.saida is not None:
         opcoes.saida.parent.mkdir(parents=True, exist_ok=True)
         opcoes.saida.write_text(relatorio, encoding="utf-8")
