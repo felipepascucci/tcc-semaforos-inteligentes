@@ -1,7 +1,9 @@
 @startuml der
 ' GERADO por `python -m db.der` a partir de app.models. Não editar à mão.
 hide circle
-skinparam linetype ortho
+skinparam linetype polyline
+skinparam nodesep 100
+skinparam ranksep 90
 skinparam monochrome true
 
 entity deteccao {

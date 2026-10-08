@@ -4,6 +4,9 @@
 left to right direction
 skinparam monochrome true
 skinparam packageStyle rectangle
+' O operador chega ao login pelos <<include>> dos casos que o exigem; a
+' associação direta, redundante, foi tirada porque a curva dela atravessava o
+' diagrama inteiro (revisão de legibilidade, 2026-10-08).
 
 actor "Operador do\ncentro de monitoramento" as Operador
 actor "Central de despacho\n(simulada, P20)" as Central
@@ -39,7 +42,6 @@ Central --> UC_Abrir
 Central --> UC_Encerrar
 UC_Identificar ..> UC_Abrir : consulta a\nocorrência ativa
 
-Operador --> UC_Login
 Operador --> UC_Acompanhar
 Operador --> UC_Cadastrar
 Operador --> UC_Manual

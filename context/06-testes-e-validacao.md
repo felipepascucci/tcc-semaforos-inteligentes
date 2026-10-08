@@ -44,6 +44,16 @@ Cada RF/RNF vira pelo menos um teste automatizado. Esta tabela é a rastreabilid
 
 `test_arquitetura.py` é barato e evita a erosão da regra principal do §1 de `01-arquitetura-sistema.md`. Vale a pena.
 
+> **Estado em 2026-10-08 (relatório de validação).** Os quatro arquivos que a
+> tabela citava e que não existiam foram escritos: `test_recalculo.py` (RF07),
+> `test_e2e_preempcao.py` (RF02 e H3: a cadeia contra o dublê e os critérios
+> sobre o `latencia_bancada.csv` versionado), `test_corredor_verde.py` (RF03) e
+> `test_soak.py` (RNF02, `sumo` e `lento`). **O RF03 não é cumprido ao pé da
+> letra no Bloco 8**: parte dos VEs do braço `PREEMPCAO` para ao menos uma vez,
+> e o teste do critério literal fica `xfail` estrito (`09`, 2026-10-08).
+> `analysis/tests/test_gerar_relatorio_validacao.py` falha se um arquivo citado
+> aqui deixar de existir.
+>
 > **Estado em 2026-08-25 (fim do Bloco 3).** Já implementados: **RF01**
 > (`backend/tests/core/test_deteccao.py`), **RNF01** e **RNF03**
 > (`backend/tests/core/test_desempenho.py`), **RNF07**
@@ -176,6 +186,21 @@ Estrutura obrigatória:
 8. **Checklist do protótipo físico** — assinado pela equipe, com data da execução.
 9. **Anexos** — logs relevantes, capturas do dashboard, fotos da bancada.
 
+> **Implementado em 2026-10-08.** `python -m analysis.gerar_relatorio_validacao
+> --rodar-testes --banco` roda as três suítes (padrão com banco, `-m sumo` e o
+> Vitest), grava os XML do JUnit em `analysis/data/validacao/` e escreve o
+> relatório. Sem `--rodar-testes`, usa os XML já gravados. Todo número sai de
+> dado versionado ou do banco: os XML, os CSV do Bloco 8 e da bancada, o git
+> (hash dos arquivos de parâmetros no commit dos dados) e o próprio `context/`
+> (a tabela do §2, o checklist do §6 e os registros de falha de `09`, lidos dos
+> arquivos). Requisito sem teste sai "SEM TESTE"; falha esperada (`xfail`) sai
+> FALHOU. Fotos, capturas e o vídeo ficam "a anexar", com a maquete pronta.
+> **PDF com `--pdf`** (decisão de 2026-10-08): o mesmo `.md` passa pela imagem
+> Docker `pandoc/latex:3.11` (LuaLaTeX, A4 paisagem), com `analysis/pdf/`
+> (cabeçalho com a Latin Modern Math como fonte de fallback, para ≥, ≤, ≈, λ e
+> →, e um filtro Lua que deixa quebrar linha dentro de código). O comando falha
+> se o LaTeX acusar caractere faltando. Nada é instalado no Windows.
+
 ## 6. Checklist de aceitação do protótipo físico
 
 Executar e registrar antes da apresentação. Marcar data, executor e resultado.
@@ -248,6 +273,12 @@ medição; as durações são do `millis()` do UNO, com a folga de 60 ms de
 - **9** — todo evento de decisão da sessão tem exatamente uma linha em
   `log_prioridade` com o mesmo carimbo, e todas têm `id_correlacao`; toda amostra
   de H3 em `metrica_latencia` está ligada a uma linha com o mesmo `id_correlacao`.
+  **Ajuste de 2026-10-08, depois da rodada (mesmo tratamento do 15):** sessão
+  sem nenhuma linha de `log_prioridade` nem de `metrica_latencia` compara a
+  primeira lista não nula da `ST` com a da Central no banco. Diferente: a lista
+  veio de fora do backend (`PUT /autorizacoes` à mão, compose parado), "sem
+  veredito"; igual: o backend estava no caminho e não gravou, "não atende";
+  lista sempre `000`: "sem veredito" (`09`).
 - **10** — em toda interrupção, quem interrompe tem criticidade estritamente mais
   alta (número menor) que o interrompido, e este é atendido no `PREEMP_FIM` do
   outro. O `Fila:…` do LCD é observação.
@@ -260,6 +291,11 @@ medição; as durações são do `millis()` do UNO, com a folga de 60 ms de
   Central, **inteira** como a ponte a escreveu no primeiro envio depois do
   `BOOT`, chega à `ST` em até **2 s** do `BOOT`. É a leitura de "~1 s":
   enquanto a ponte esteve fora, o backend a procura só a cada 1 s.
+  **Ajuste de 2026-10-08, depois da rodada, sem mudar o limite:** se a ponte não
+  escreve a lista em 2 s do `BOOT`, o item consulta no banco (`--banco`) a
+  lista da Central naquele instante. Se ela era `000`, não havia nada a
+  reenviar, e o item sai "sem veredito"; se não era, "não atende". Sem o banco,
+  os dois casos não se separam, e o item sai "sem veredito" (`09`).
 
 "Não atende" quer dizer que o dado mostra uma falha. Sessão curta demais para
 o item, sem falha (as sessões de 20 s do item 15, para os itens 1 e 12), sai

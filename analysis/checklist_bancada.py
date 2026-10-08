@@ -30,7 +30,8 @@ sessão é a sequência completa das luzes, com o `millis()` de cada transição
 * **item 14** — se a sessão terminou com o UNO em emergência (a ponte foi
   encerrada no meio de uma);
 * **item 15** — a cada abertura da porta, o UNO volta negando todos, e quanto a
-  lista da Central leva para voltar;
+  lista da Central leva para voltar; com `--banco`, também qual era a lista da
+  Central no BOOT, para separar "nada a reenviar" de "não voltou";
 * **item 9**, com `--banco` — cada evento de decisão da sessão tem a sua linha em
   `log_prioridade`, com `id_correlacao`, e cada amostra de H3 em
   `metrica_latencia` tem o mesmo `id_correlacao` da linha do `PREEMP_INI`;
@@ -54,7 +55,7 @@ import argparse
 import csv
 import os
 from collections import Counter
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from itertools import pairwise
@@ -818,7 +819,24 @@ def item_14(partes: Sequence[Trecho]) -> Resultado:
     return resultado
 
 
-def item_15(linhas: Sequence[Linha], partes: Sequence[Trecho]) -> Resultado:
+#: A lista da Central num instante, por tipo da bancada (`TIPOS_DA_BANCADA`).
+ListaDaCentral = Callable[[datetime], tuple[int, ...]]
+
+
+def item_15(
+    linhas: Sequence[Linha],
+    partes: Sequence[Trecho],
+    central_no_boot: ListaDaCentral | None = None,
+) -> Resultado:
+    """O UNO volta negando todos, e a lista da Central volta em até 2 s do BOOT.
+
+    Sem envio da lista em 2 s do BOOT, há dois casos que a telemetria não separa:
+    a Central não tinha ocorrência no BOOT (a lista já era `000`, e não havia nada
+    a reenviar) ou havia, e o backend falhou. Com `central_no_boot` (o banco, na
+    linha de comando com `--banco`), o primeiro sai "sem veredito" e o segundo
+    "não atende"; sem ele, os dois saem "sem veredito", com o motivo. Ajuste de
+    2026-10-08, depois da rodada, sem mudar o limite (`context/09`).
+    """
     resultado = Resultado(
         "15", "Ponte reiniciada: o UNO volta negando todos, e a lista volta", None
     )
@@ -834,10 +852,15 @@ def item_15(linhas: Sequence[Linha], partes: Sequence[Trecho]) -> Resultado:
         assert primeira is not None
         negando = primeira.autorizacoes == NENHUMA_AUTORIZACAO
         envio = _primeira_lista_escrita(linhas, t_boot)
-        if envio is None:
+        if envio is None or (envio[0] - t_boot).total_seconds() > LISTA_VOLTA_MAX_S:
+            detalhe, ok_sem_envio = _sem_envio_logo_apos_o_boot(t_boot, envio, central_no_boot)
+            if not negando:
+                ok_sem_envio = False
+            if ok_sem_envio is not None:
+                oks.append(ok_sem_envio)
             resultado.detalhes.append(
-                f"Arranque {n}: primeira lista {_lista(primeira)}; a ponte não escreveu a lista "
-                "da Central na sessão (backend fora do ar?)"
+                f"Arranque {n}: primeira lista {_lista(primeira)}; {detalhe}"
+                + ("" if ok_sem_envio is None else f" — {'ok' if ok_sem_envio else 'FALHA'}")
             )
             continue
         t_envio, desejada = envio
@@ -862,6 +885,65 @@ def item_15(linhas: Sequence[Linha], partes: Sequence[Trecho]) -> Resultado:
 
 def _lista(st: Telemetria) -> str:
     return "".join(map(str, st.autorizacoes))
+
+
+def _sem_envio_logo_apos_o_boot(
+    t_boot: datetime,
+    envio: tuple[datetime, tuple[int, ...]] | None,
+    central_no_boot: ListaDaCentral | None,
+) -> tuple[str, bool | None]:
+    """O que dizer do item 15 quando a ponte não reenviou a lista em 2 s do BOOT."""
+    if envio is None:
+        quando = "a ponte não escreveu a lista da Central na sessão"
+    else:
+        atraso_s = (envio[0] - t_boot).total_seconds()
+        quando = f"a primeira lista que a ponte escreveu saiu {atraso_s:.2f} s depois do BOOT"
+    if central_no_boot is None:
+        return (
+            f"{quando}; sem o banco, não dá para saber se a Central tinha ocorrência no BOOT "
+            "(rode com --banco). Sem veredito.",
+            None,
+        )
+    lista = central_no_boot(t_boot)
+    texto = "".join(map(str, lista))
+    if lista == NENHUMA_AUTORIZACAO:
+        return (
+            f"{quando}; a lista da Central no BOOT era {texto}, a mesma da ST, e não havia "
+            "nada a reenviar. Sem veredito.",
+            None,
+        )
+    return (
+        f"{quando}; a lista da Central no BOOT era {texto}, e não voltou em "
+        f"{LISTA_VOLTA_MAX_S:.0f} s",
+        False,
+    )
+
+
+def lista_da_central(url: str) -> ListaDaCentral:
+    """A lista da Central num instante, tirada das ocorrências gravadas no banco.
+
+    A mesma regra de `app.repositories.ocorrencia.criticidade_por_tipo`, num
+    instante do passado: por tipo, a criticidade mais alta entre as ocorrências
+    abertas naquele instante, de veículos ativos. O status do veículo é o de
+    hoje, porque o banco não guarda a história dele. Ocorrência posta na ponte à
+    mão (`PUT /autorizacoes`, com o compose parado) não está no banco: para o
+    banco, a Central não tinha nenhuma.
+    """
+    import psycopg
+
+    def no_instante(instante: datetime) -> tuple[int, ...]:
+        with psycopg.connect(url) as conexao:
+            linhas = conexao.execute(
+                "SELECT v.tipo::text, min(o.criticidade) FROM ocorrencia o "
+                "JOIN veiculo_emergencia v ON v.id_veiculo = o.fk_veiculo "
+                "WHERE o.aberta_em <= %s AND (o.encerrada_em IS NULL OR o.encerrada_em > %s) "
+                "AND v.status_operacional = 'ATIVO' GROUP BY v.tipo",
+                (instante, instante),
+            ).fetchall()
+        ativas = {str(tipo): int(criticidade) for tipo, criticidade in linhas}
+        return tuple(ativas.get(tipo.value, 0) for tipo in TIPOS_DA_BANCADA)
+
+    return no_instante
 
 
 #: As linhas `AUT` de um mesmo envio saem juntas: o backend escreve as três em
@@ -938,6 +1020,8 @@ def item_9(linhas: Sequence[Linha], url: str) -> Resultado:
             "WHERE m.ambiente = 'HARDWARE' AND m.t_atuacao BETWEEN %s AND %s",
             (inicio, fim),
         ).fetchall()
+    if not logs and not latencias:
+        return _sem_nada_gravado(resultado, linhas, len(decisoes), lista_da_central(url))
     por_instante: dict[datetime, list[Any]] = {}
     for registro in logs:
         por_instante.setdefault(registro[2], []).append(registro)
@@ -968,6 +1052,56 @@ def item_9(linhas: Sequence[Linha], url: str) -> Resultado:
     return resultado
 
 
+def _sem_nada_gravado(
+    resultado: Resultado, linhas: Sequence[Linha], decisoes: int, central: ListaDaCentral
+) -> Resultado:
+    """Item 9 quando o backend não gravou nada na sessão.
+
+    Há dois casos que o banco sozinho não separa: o backend estava fora do ar
+    (as sessões do item 5 rodaram com o compose parado e a lista posta à mão por
+    `PUT /autorizacoes`) ou estava no ar e falhou em gravar. A lista que a `ST`
+    traz separa os dois: com o backend no caminho, ela é a da Central do banco.
+    Lista diferente da do banco: veio de fora do backend, "sem veredito". Igual
+    e não nula: o backend estava no caminho e não gravou, "não atende". Nunca
+    diferente de `000`: o dado não separa, "sem veredito". Mesmo tratamento do
+    item 15 (ajuste de 2026-10-08, depois da rodada, `context/09`).
+    """
+    resultado.detalhes.append(
+        f"Eventos de decisão na sessão: {decisoes}; nenhuma linha de log_prioridade nem de "
+        "metrica_latencia na janela"
+    )
+    primeira = next(
+        (
+            linha
+            for linha in linhas
+            if linha.st is not None and linha.st.autorizacoes != NENHUMA_AUTORIZACAO
+        ),
+        None,
+    )
+    if primeira is None or primeira.st is None:
+        resultado.detalhes.append(
+            "A lista do UNO ficou em 000 a sessão inteira: não dá para saber se o backend "
+            "estava no ar. Sem veredito."
+        )
+        return resultado
+    no_uno = primeira.st.autorizacoes
+    no_banco = central(primeira.t)
+    texto = "".join(map(str, no_uno))
+    if no_uno != no_banco:
+        resultado.detalhes.append(
+            f"A lista {texto} chegou ao UNO em {primeira.t.isoformat()}, e a Central do banco "
+            f"tinha {''.join(map(str, no_banco))}: a lista veio de fora do backend "
+            "(PUT /autorizacoes à mão), que não estava no caminho. Sem veredito."
+        )
+        return resultado
+    resultado.detalhes.append(
+        f"A lista {texto} do UNO é a da Central do banco: o backend estava no caminho e não "
+        "gravou nenhum evento — FALHA"
+    )
+    resultado.ok = False
+    return resultado
+
+
 # ---------------------------------------------------------------------------
 # Relatório
 # ---------------------------------------------------------------------------
@@ -994,7 +1128,7 @@ def avaliar(
         item_11(partes),
         item_12(linhas, partes),
         item_14(partes),
-        item_15(linhas, partes),
+        item_15(linhas, partes, None if url_banco is None else lista_da_central(url_banco)),
     ]
 
 
@@ -1067,7 +1201,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     grupo.add_argument("--sessao", action="append", default=None, help="repetível")
     grupo.add_argument("--todas", action="store_true", help="todas as sessões do arquivo")
     analisador.add_argument(
-        "--banco", action="store_true", help="confere o item 9 no PostgreSQL (DATABASE_URL do .env)"
+        "--banco",
+        action="store_true",
+        help="confere no PostgreSQL (DATABASE_URL do .env) o item 9 e a lista da Central "
+        "no BOOT do item 15",
     )
     analisador.add_argument(
         "--item5",

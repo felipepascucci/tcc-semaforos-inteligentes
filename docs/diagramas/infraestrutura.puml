@@ -1,0 +1,110 @@
+@startuml infraestrutura
+' Diagrama de infraestrutura, implantação local — context/08 §5 e context/02 §8.
+' Fontes: context/02 §1 (camadas), §3 (serviços do compose), §5 (rede do
+' protótipo), §6 (HTTPS); docker-compose.yml; context/05 §2 (bancada).
+' Decidido em 2026-10-08: PlantUML no lugar do draw.io, para ficar versionado e
+' regenerável como os outros diagramas (context/09).
+' tests/diagramas/test_infraestrutura.py confere que todo serviço do
+' docker-compose.yml aparece aqui.
+skinparam monochrome true
+skinparam componentStyle rectangle
+skinparam nodesep 40
+skinparam ranksep 60
+
+actor "Operador\n(navegador)" as Operador
+
+node "Notebook junto ao protótipo" {
+  node "docker compose (tcc-semaforos)" {
+    component "frontend\nnginx 1.27 + build do Vite\n:8443 HTTPS / wss" as frontend
+    component "backend\nFastAPI + Uvicorn\n:8000 HTTP" as backend
+    component "migracoes\nalembic upgrade head + seeds\n(vida curta)" as migracoes
+    database "db\nPostgreSQL 16\n:5432" as db
+    component "adminer\n(perfil dev) :8080" as adminer
+  }
+  node "Processos no host" {
+    component "bridge\nponte serial, 127.0.0.1:8001\no backend lê GET /estado (5 Hz)\ne escreve PUT /autorizacoes" as bridge
+    component "sim.controlador\nexecutor, lote, atendente\ntransmite o estado ao backend (5 Hz)" as sim
+    component "SUMO 1.27.1" as sumo
+    component "analysis\ncapítulo 5 e validação" as analysis
+    artifact "analysis/data/\nCSV e logs" as csv
+    note as NotaBridge
+      Abrir a porta COM3 reinicia o UNO.
+      Na medição de H3, o emissor da ambulância
+      também vai ao USB (COM5), e a ponte
+      carimba a leitura da tag.
+    end note
+  }
+}
+
+node "Bancada (protótipo físico)" {
+  component "3 carrinhos: NodeMCU emissor + RC522\nambulância, bombeiro, polícia" as emissores
+  artifact "4 tags RFID\n(uma por rua)" as tags
+  component "Cruzamento: NodeMCU receptor" as receptor
+  component "Cruzamento: Arduino UNO R3\ndecide e atua (regra local)\nLCD 16x2, 4 semáforos\nUSB do notebook (COM3, 9600)" as uno
+}
+
+Operador --> frontend : HTTPS :8443
+frontend --> backend : /api (REST e WebSocket)\nrede interna do Docker
+backend --> db : psycopg
+migracoes --> db : DDL e seeds
+adminer ..> db
+bridge <-- backend
+bridge --> uno
+emissores --> tags : leitura RC522
+emissores --> receptor : ESP-NOW 2,4 GHz\n(sem rede, sem criptografia)
+receptor --> uno : serial 9600, pino A0
+sim --> sumo : TraCI
+sim --> backend
+sim --> db : execucao_simulacao,\npedido_simulacao
+sim --> csv : CSV do lote
+bridge --> csv : latência, detecções,\ntelemetria
+analysis --> csv
+analysis ..> db
+
+note bottom of uno
+  A decisão de preempção fica na borda: o UNO
+  decide sozinho, sem rede e sem o notebook no
+  caminho da decisão (I1 a I4, I6). O USB do
+  notebook só o alimenta, observa e leva a
+  lista da Central.
+end note
+@enduml
+
+@startuml infraestrutura_aws
+' Arquitetura-alvo em AWS — context/02 §8. Documental: a implementação local em
+' Docker é o equivalente funcional, e migrar é trocar o provedor de
+' infraestrutura, não a arquitetura.
+skinparam monochrome true
+skinparam componentStyle rectangle
+left to right direction
+skinparam nodesep 40
+skinparam ranksep 60
+
+actor "Operador\n(navegador)" as Operador
+
+rectangle "AWS (nuvem)" {
+  component "S3 + CloudFront\ndashboard estático" as cdn
+  component "ECS Fargate ou EC2 t3.small\nAPI (o contêiner do backend)" as api
+  database "RDS PostgreSQL\nMulti-AZ" as rds
+  component "AWS IoT Core\nMQTT, no lugar do\nPOST HTTP direto" as iot
+  component "CloudWatch\nlogs e métricas" as cw
+  component "Secrets Manager\nno lugar do .env" as sm
+}
+
+component "Borda, no cruzamento:\nAWS IoT Greengrass" as gg
+component "Controlador do cruzamento\n(no protótipo: Arduino UNO)" as ctrl
+
+node "Veículo de emergência" {
+  component "Unidade embarcada\n(no protótipo: NodeMCU + RC522)" as obu
+}
+
+Operador --> cdn : HTTPS
+cdn --> api : /api
+api --> rds
+api --> sm
+api --> cw
+obu --> gg : V2I
+gg --> ctrl : atuação local
+gg --> iot : MQTT
+iot --> api
+@enduml
