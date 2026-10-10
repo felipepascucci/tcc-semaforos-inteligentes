@@ -12,8 +12,10 @@ abortar a preempção, voltar ao ciclo fixo e registrar o incidente.
 | I4 | Verde nunca truncado antes de `verde_min` | a sequência de transições |
 | I5 | Nenhum acesso em vermelho além de `vermelho_max_s` | o estado, a cada passo |
 
-I6 (watchdog) é responsabilidade exclusiva do firmware e não aparece aqui: se o
-backend travar ou o cabo cair, ele não está lá para garantir nada.
+I6 é responsabilidade exclusiva do firmware e não aparece aqui: se o backend
+travar ou o cabo cair, ele não está lá para garantir nada. Desde 2026-10-05 I6
+não é mais um watchdog: nenhum verde de emergência depende de comunicação para
+terminar, e o teto é de 30 s (`context/01` §6).
 
 As verificações de I2, I3 e I4 operam exatamente sobre os campos que
 `estado_semaforo_amostra` persiste (decisão P5). Isso é deliberado: o mesmo
@@ -90,10 +92,13 @@ def comandos_criam_conflito(
 ) -> tuple[Comando, ...]:
     """Comandos que levariam a um verde conflitante — a metade do motor em P13.
 
-    A matriz de conflito é aplicada **duas vezes, de forma independente**: aqui,
-    para que o motor nunca emita o comando, e no firmware, que recusa com
-    `NAK,<cmd>,CONFLITO` caso receba um. Defesa em profundidade — a segurança
-    não pode depender de a serial estar íntegra nem de o backend estar correto.
+    A matriz de conflito é aplicada aqui para que o motor nunca emita o comando.
+    *(Até 2026-10-05 ela era aplicada uma segunda vez, de forma independente, no
+    firmware do UNO, que recusava com `NAK,<cmd>,CONFLITO`: defesa em
+    profundidade, para a segurança não depender de a serial estar íntegra nem
+    de o backend estar correto. Desde então o UNO não recebe comandos do motor,
+    e garante I1 na bancada com uma guarda própria, que lê os pinos antes de
+    acender qualquer verde, `context/05` §3.5.)*
 
     Returns:
         Os comandos perigosos. Vazio significa que o conjunto é seguro.

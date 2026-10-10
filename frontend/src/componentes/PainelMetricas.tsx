@@ -4,8 +4,10 @@
 //
 // As duas latências medem coisas diferentes (decisão P2): RNF01 é a decisão do
 // motor, na simulação; H3 é a cadeia fim-a-fim da bancada. Por isso não dividem
-// gráfico nem eixo. H3 é reportada como mín/mediana/máx com o n: com 5
-// repetições o p95 não é estimável (decisão de 2026-08-31).
+// gráfico nem eixo. Desde 2026-10-06 H3 se mede em 100 passagens, com o
+// critério no p95, que sai de analysis/ sobre o latencia_bancada.csv
+// (context/05 §4.3). GET /metricas/resumo devolve da bancada só mín/mediana/máx
+// e o n das amostras gravadas no banco, e é isso que esta tela mostra.
 import { useCallback, useEffect, useState } from "react";
 import {
   Bar,
@@ -161,7 +163,8 @@ export function PainelMetricas({
                 <Numero rotulo="n" valor={String(resumo?.latencia.hardware.n ?? "—")} />
               </div>
               <p className="mt-1 text-xs text-slate-500">
-                Sem p95: com poucas repetições ele não é estimável. O limiar vale sobre o máximo.
+                O limiar de H3 vale sobre o p95 das 100 passagens, calculado em{" "}
+                <code>analysis/</code> a partir do <code>latencia_bancada.csv</code>.
               </p>
             </div>
           </div>

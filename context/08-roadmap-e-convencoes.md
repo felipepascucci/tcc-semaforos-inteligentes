@@ -95,6 +95,8 @@ Além do código, o TCC exige (pré-projeto §2.7):
 | DER | eralchemy2, a partir do banco | `docs/diagramas/der.pdf` |
 | Diagrama de Infraestrutura | PlantUML (decisão de 2026-10-08, era draw.io) | `docs/diagramas/infraestrutura.puml` |
 | Máquina de estados do semáforo | PlantUML | `docs/diagramas/maquina_estados.puml` |
+| Diagrama de Sequência da bancada (2026-10-10) | PlantUML | `docs/diagramas/sequencia_bancada.puml` |
+| Máquina de estados do firmware do UNO (2026-10-10) | PlantUML | `docs/diagramas/maquina_estados_firmware.puml` |
 | Especificação de casos de teste | Gerada (`python -m analysis.gerar_casos_de_teste`) | `docs/casos_de_teste.md` |
 | Relatório de validação | Gerado (`python -m analysis.gerar_relatorio_validacao`) | `docs/relatorios/` |
 | Esquema elétrico do protótipo | Fritzing | `docs/hardware/esquema.fzz` |
@@ -125,6 +127,18 @@ Preferir PlantUML a diagrama desenhado à mão: fica versionado, regenerável e 
 > vez de `ortho`). **O PDF do PlantUML só desenha caracteres do conjunto WinAnsi
 > (cp1252)**: `→`, `≤`, `≥` e `≠` sumiam sem aviso. Os `.puml` usam `->`, `<=`,
 > `>=` e `!=`, e `tests/diagramas/test_caracteres_do_pdf.py` barra a volta.
+>
+> **Feito em 2026-10-10:** `sequencia_bancada.puml` (a preempção na bancada, do
+> carrinho ao painel, com o notebook fora do caminho da decisão) e
+> `maquina_estados_firmware.puml` (regimes CICLO e EMERGÊNCIA do UNO, a partir de
+> `controlador.cpp`). `maquina_estados.puml` passa a ser declarado como a máquina
+> do motor e da simulação: desde 2026-10-05 o firmware não a reimplementa.
+> `tests/diagramas/test_bancada.py` lê do código os eventos do UNO, os tempos de
+> `controlador.h`, o verde por tipo e os eventos de decisão da ponte, e falha se
+> algum faltar nos diagramas. Na máquina do firmware, notas presas a estado
+> composto saíam de dentro dele com linhas tracejadas atravessando o desenho, e
+> rótulo de seta presa ao regime inteiro ficava longe da seta: as notas viraram
+> legenda, e o teto sai dos dois estados internos.
 
 > **P20 (2026-09-29) — o que os diagramas precisam mostrar quando forem feitos.**
 > Casos de uso: o ator **Central de despacho** (simulada), com "abrir ocorrência"

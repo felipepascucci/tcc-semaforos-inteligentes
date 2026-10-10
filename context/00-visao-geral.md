@@ -144,9 +144,13 @@ O **motor de decisão** (`backend/core/priorizacao/`) é o objeto do experimento
 > urgência"*. O RNF05 continua medindo apenas o primeiro fator, a identificação
 > da tag.
 >
-> **Na bancada, só o primeiro fator existe** (decisão de 2026-10-05). O UNO
+> ~~**Na bancada, só o primeiro fator existe** (decisão de 2026-10-05). O UNO
 > decide sem consultar ocorrência, e o VE do protótipo é tratado como em serviço.
-> P20 vale no motor, na API e na simulação.
+> P20 vale no motor, na API e na simulação.~~ **Revisto em 2026-10-06: os dois
+> fatores valem também na bancada.** O backend leva ao UNO, pela ponte, a
+> criticidade de cada tipo com ocorrência ativa, e o UNO só preempta o tipo em
+> serviço (`05` §3.2.1 e §3.3). Na bancada a identidade é o tipo, e não o
+> veículo, então "em serviço" é por tipo.
 
 > **Decisão P14 (2026-08-25) — onde termina a medição do RF02.** O requisito
 > original não dizia até que ponto contar os 3 s, e as duas leituras possíveis

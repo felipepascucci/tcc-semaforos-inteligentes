@@ -1,0 +1,83 @@
+@startuml maquina_estados_firmware
+' Máquina de estados do firmware do Arduino UNO, na bancada — context/08 §5.
+' Fonte (a verdade é o código): firmware/uno/semaforo/controlador.cpp e .h
+' (iniciar, decidir, atender, enfileirar, encerrarAtendimento, estourarTeto,
+' voltarAoCiclo, mirar, umPasso, guardaI1), e context/05 §3.1, §3.3 e §3.4.
+' O código não enumera estados: persegue um destino com quatro regras (05 §8).
+' Os estados abaixo são o que essas regras produzem, e não variáveis do código.
+' Não é a máquina do motor e da simulação, que está em maquina_estados.puml.
+skinparam monochrome true
+hide empty description
+
+state "CICLO (regime C)" as CICLO {
+  state "All-red do boot" as Boot
+  Boot : tudo vermelho, EV BOOT; lista da Central 000 (nega todos)
+  Boot : dura 1 s; na placa ~1,1 s, porque lcd.init() bloqueia
+  state "F1: S1+S2 verdes\n(eixo principal)" as F1
+  F1 : verde 3 s
+  state "Amarelo S1+S2" as Y1
+  Y1 : 2 s
+  state "All-red" as R12
+  R12 : 1 s
+  state "F2: S3+S4 verdes\n(eixo transversal)" as F2
+  F2 : verde 3 s
+  state "Amarelo S3+S4" as Y2
+  Y2 : 2 s
+  state "All-red " as R21
+  R21 : 1 s
+  state "Saída da emergência" as Saida
+  Saida : verdes acesos: verde mínimo 3 s, amarelo 2 s, all-red 1 s
+  Saida : abre o eixo OPOSTO ao do último VE atendido
+
+  [*] --> Boot
+  Boot --> F1 : [all-red 1 s]\nguarda I1
+  F1 --> Y1 : [3 s]
+  Y1 --> R12 : [2 s]
+  R12 --> F2 : [1 s]\nguarda I1
+  F2 --> Y2 : [3 s]
+  Y2 --> R21 : [2 s]
+  R21 --> F1 : [1 s]\nguarda I1
+  Saida --> F1 : [último VE no eixo transversal]
+  Saida --> F2 : [último VE no eixo principal]
+}
+
+state "EMERGÊNCIA (regime E)" as EMERG {
+  state "Transição ao verde exclusivo" as Trans
+  Trans : verde fora do destino: verde mínimo 3 s, amarelo 2 s
+  Trans : depois, all-red 1 s e guarda I1
+  Trans : aproximação do VE já verde: fica acesa, só as outras saem
+  Trans : VE mais crítico / PREEMP_INI dele; o destino muda,\na troca em curso segue até o all-red
+  Trans : RENOVADO / sem efeito no tempo: o verde ainda não conta
+  state "Verde exclusivo do VE" as Excl
+  Excl : só a aproximação do VE verde; as outras três vermelhas
+  Excl : conta 9 s (ambulância), 8 s (bombeiro), 7 s (polícia)
+  Excl : RENOVADO (mesma rua e tipo) / o verde recomeça a contar
+
+  [*] --> Trans
+  Trans --> Excl : [só o verde do VE aceso]
+  Excl --> Trans : VE mais crítico / PREEMP_INI dele;\no atendido vai para a FILA
+  Excl --> Trans : [fim do verde do tipo] e fila ocupada /\nPREEMP_FIM; PREEMP_INI do VE da fila
+}
+
+CICLO --> EMERG : VE com ocorrência\n/ PREEMP_INI
+' O teto sai dos dois estados, e não do regime: rótulo de seta presa a um
+' estado composto fica solto no render, longe da seta.
+Excl --> Saida : [fim do verde, fila vazia] / PREEMP_FIM\nou [teto de 30 s] / TIMEOUT, PREEMP_FIM
+Trans --> Saida : [teto de 30 s] /\nTIMEOUT, PREEMP_FIM
+
+' Legenda, e não notas: nota presa a estado composto sai de dentro dele, com
+' uma linha tracejada que atravessa o diagrama (revisão de 2026-10-10).
+legend bottom
+  Ciclo: 2 x (3 + 2 + 1) = 12 s. Pior caso da chegada do VE ao verde exclusivo: 3 + 2 + 1 = 6 s.
+  Entra em EMERGÊNCIA o VE válido cujo tipo tem ocorrência ativa na lista da Central (criticidade 1..3).
+  Em qualquer estado, sem mudar as luzes: SEM_OCORRENCIA (criticidade 0; LCD por 3 s), RECUSADO (linha
+  inválida) e AUT (lista da Central, só pelo USB; sai na ST).
+  Fila de UM lugar. VE que não interrompe vai para a FILA se ela está vazia ou se ele é mais crítico que o
+  da fila (quem perde o lugar sai com DESCARTADO); senão, DESCARTADO. No mesmo nível, fica quem chegou primeiro.
+  Teto: 30 s contados da entrada no regime, com renovações, interrupções e fila; ao estourar, descarta a fila.
+  I1: a guarda lê os PINOS antes de acender verde; nunca verde nos dois eixos e, em emergência, um verde só.
+  Recusou: fica tudo vermelho. I2: verde só sai pelo amarelo. I3: todo verde novo depois de 1 s de all-red.
+  I4: verde mínimo de 3 s. Nunca amarelo -> verde.
+endlegend
+
+@enduml

@@ -1,7 +1,8 @@
 // Painel "Central" (P20): a central de despacho simulada. Abrir uma ocorrência
 // põe o VE em serviço com a criticidade dada; encerrar tira a prioridade.
-// Vale no motor, na API e na simulação. Na bancada não tem efeito, porque o UNO
-// decide sem consultar ocorrência (decisão de 2026-10-05).
+// Vale no motor, na API, na simulação e, desde 2026-10-06, na bancada: o backend
+// leva ao UNO, pela ponte, a criticidade de cada tipo com ocorrência ativa, e o
+// UNO decide contra essa lista (context/05 §3.2.1 e §3.3).
 import { useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
 

@@ -598,8 +598,10 @@ tentativa negada é gravada em `deteccao` com `autorizado = false`.
 > **Simulações pela API.** O backend está no contêiner, e o SUMO no host
 > (`02` §3). `POST /simulacoes` grava em `pedido_simulacao`, e
 > `python -m sim.controlador.atendente` executa o pedido com transmissão ao
-> vivo. A API e o atendente recusam as seeds 1..50 e 101..105, que são do
-> experimento, e a execução nunca escreve em `analysis/data/`.
+> vivo. A API e o atendente recusam as seeds reservadas de
+> `sim/config/cenarios.yaml` (`seeds_reservadas`): 1..50 (Bloco 8), 101..105
+> (calibração de P16 e P17) e 201..250 (treino e validação do modelo de P19).
+> A execução nunca escreve em `analysis/data/`.
 
 `timestamp_dispositivo` é `millis()` do ESP8266 — sem sincronia com o relógio do servidor. Serve apenas para detectar reordenação e para calcular *deltas* dentro do dispositivo. **A latência oficial é medida com o relógio do servidor.** `sequencia` é um contador monotônico para descartar duplicatas (o RC522 lê a mesma tag várias vezes por segundo).
 

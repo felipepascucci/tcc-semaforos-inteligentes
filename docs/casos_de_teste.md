@@ -588,6 +588,7 @@ telemetria gravada; os demais são observação de quem está na bancada.
 | `sim/tests/test_validacao.py` | 10 |
 | `sim/tests/test_versao_do_codigo.py` | 6 |
 | `tests/cli/test_saida_utf8.py` | 4 |
+| `tests/diagramas/test_bancada.py` | 6 |
 | `tests/diagramas/test_caracteres_do_pdf.py` | 2 |
 | `tests/diagramas/test_der.py` | 2 |
 | `tests/diagramas/test_infraestrutura.py` | 2 |
@@ -596,5 +597,5 @@ telemetria gravada; os demais são observação de quem está na bancada.
 | `tests/firmware/test_firmware_uno.py` | 24 |
 | `tests/firmware/test_sketches_nodemcu.py` | 10 |
 
-95 arquivos, 1002 funções de teste. Um teste parametrizado ou com
+96 arquivos, 1008 funções de teste. Um teste parametrizado ou com
 Hypothesis conta uma vez aqui e roda várias vezes na suíte.
