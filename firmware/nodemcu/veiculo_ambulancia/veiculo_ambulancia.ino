@@ -34,8 +34,9 @@
  *   MOSI   -> D7 (GPIO 13)
  *   SCK    -> D5 (GPIO 14)
  *   SDA/SS -> D8 (GPIO 15)
- * Alimentação: bateria de 9 V em VIN/GND. Na medição de H3, USB do notebook,
- * com a bateria desconectada.
+ * Alimentação: power bank no micro-USB (corrigido em 2026-10-10; o registro
+ * anterior dizia bateria de 9 V em VIN/GND). Na medição de H3, USB do
+ * notebook, no lugar da power bank.
  *
  * Serial a 9600 baud. Depois de cada esp_now_send imprime
  * "Tag <UID> lida -> Enviando RUAn": o primeiro byte dessa linha é o

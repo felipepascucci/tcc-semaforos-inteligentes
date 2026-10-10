@@ -45,7 +45,7 @@ O que isso significa:
  [tag fixa na pista — identifica a RUA]
                 │  RC522 lê o UID a 2–5 cm
                 ▼
- [NodeMCU EMISSOR — no veículo, bateria 9 V]
+ [NodeMCU EMISSOR — no veículo, power bank no micro-USB]
    UID -> RUA1..RUA4 ; tipo fixo "AMBULANCIA"
                 │  ESP-NOW { rua, veiculo }  (rádio direto, MAC a MAC, sem roteador)
                 ▼
@@ -275,7 +275,7 @@ Verificação: Hypothesis contra o dublê e `bridge.verificar` contra a placa, s
 
 **Como medir H3:**
 
-1. Ligar o NodeMCU emissor ao notebook por USB, alimentado por ele (bateria desconectada). Nenhum fio da bancada muda.
+1. Ligar o NodeMCU emissor ao notebook por USB, alimentado por ele, no lugar da power bank. Nenhum fio da bancada muda.
 2. Rodar `python -m bridge.main --porta COM3 --porta-veiculo COM4`.
 3. Com a ambulância **em serviço na Central** (senão toda passagem vira `SEM_OCORRENCIA`), passar o carrinho pela tag de uma rua, com o cruzamento em ciclo normal. Uma passagem durante a emergência anterior vira `RENOVADO` e não conta. São 100 passagens, as mesmas do RNF05.
 
