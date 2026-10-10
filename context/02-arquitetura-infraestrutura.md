@@ -38,6 +38,7 @@ Não introduzir dependência fora desta lista sem registrar em `09-pendencias-e-
 | Mapa | Leaflet + react-leaflet | — |
 | Gráficos | Recharts | — |
 | Análise | pandas, numpy, scipy, matplotlib | — |
+| Esquema elétrico (desde 2026-10-10) | **schemdraw**, sobre o matplotlib, no extra `analysis` | 0.23 |
 | Testes backend | pytest, pytest-asyncio, httpx, testcontainers, **hypothesis**, **ziglang** | — |
 | Testes frontend | Vitest + Testing Library | — |
 | Container | Docker + Docker Compose | — |
