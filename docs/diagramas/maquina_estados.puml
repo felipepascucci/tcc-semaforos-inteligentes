@@ -1,8 +1,10 @@
 @startuml maquina_estados
-' Máquina de estados de um cruzamento — context/08 §5.
+' Máquina de estados de um cruzamento, a do motor e da simulação — context/08 §5.
 ' Fonte: backend/core/priorizacao/fases.py (avancar, _do_verde, _do_amarelo,
-' _do_all_red, _expirar_preempcao). É a mesma máquina que o adaptador SUMO roda
-' e que o firmware do UNO reimplementa em C++ (context/04 §8).
+' _do_all_red, _expirar_preempcao). É a máquina que o adaptador SUMO roda
+' (context/04 §8). O firmware do UNO NÃO a reimplementa desde 2026-10-05: a dele
+' tem ciclo de 2 fases, verde exclusivo e fila de um lugar, e está em
+' maquina_estados_firmware.puml.
 skinparam monochrome true
 hide empty description
 ' Os dois comandos que não trocam de estado ficam como ações internas do verde

@@ -1,0 +1,92 @@
+@startuml sequencia_bancada
+' Diagrama de sequência da preempção, na BANCADA — context/08 §5.
+' Fontes: context/05 §2, §3.3, §4.2 e §4.3; context/01 §4; bridge/ponte.py;
+' backend/app/services/bancada.py; firmware/uno/semaforo/controlador.cpp.
+' A da simulação, com o motor de decisão, está em sequencia_preempcao.puml.
+skinparam monochrome true
+skinparam BoxPadding 8
+autonumber
+
+box "Bancada: o caminho da decisão" #FFFFFF
+  participant "Tag da rua\n(RUA1..RUA4)" as Tag
+  participant "NodeMCU emissor\n(no veículo)" as Emissor
+  participant "NodeMCU receptor\n(no cruzamento)" as Receptor
+  participant "Arduino UNO R3" as UNO
+end box
+box "Notebook: observa e leva a lista da Central" #FFFFFF
+  participant "Ponte\n(bridge/)" as Ponte
+  participant "Backend\n(services/bancada.py)" as Backend
+  database "PostgreSQL" as Banco
+  participant "Dashboard" as Painel
+end box
+
+group a lista da Central chega ao UNO antes da passagem (desde 2026-10-06)
+  Backend -> Ponte : GET /estado (a 5 Hz)
+  Ponte --> Backend : telemetrias (ST), eventos (EV)\ne amostras de H3, carimbados
+  Backend -> Banco : criticidade_por_tipo()\n(ocorrências abertas de veículos ativos)
+  opt a lista do banco difere da que a ST traz (no máximo 1 vez/s)
+    Backend -> Ponte : PUT /autorizacoes
+    Ponte -> UNO : AUT,AMBULANCIA,1 (USB -> RX 0, 9600)
+    UNO -> UNO : guarda a lista na RAM\n(perde no reinício: volta negando todos)
+    UNO --> Ponte : ST,...,100 (a lista nova sai na ST)
+  end
+end
+
+Emissor -> Tag : RC522 lê o UID (2 a 5 cm)
+Emissor -> Emissor : UID -> rua; tag fora do mapa é ignorada;\nnão reenvia antes de 3 s
+Emissor -> Receptor : ESP-NOW { rua: "RUA3", veiculo: "AMBULANCIA" }
+note over Emissor
+  Logo depois do envio, imprime na
+  própria serial "Tag <UID> lida -> Enviando RUA3".
+  Na medição de H3 o emissor fica no USB do
+  notebook, e a ponte carimba o 1º byte: t_deteccao.
+end note
+Receptor -> UNO : RUA3,AMBULANCIA (TX -> A0, 9600)
+
+group decisão local no UNO, sem rede e sem notebook
+  UNO -> UNO : consulta a lista da Central na RAM
+  alt tipo sem ocorrência (criticidade 0)
+    UNO -> Ponte : EV,...,SEM_OCORRENCIA,3,AMBULANCIA
+    note right of UNO : luzes não mudam;\nLCD "SEM OCORRENCIA" por 3 s
+  else sem emergência, ou VE estritamente mais crítico que o atendido
+    UNO -> Ponte : EV,...,PREEMP_INI,3,AMBULANCIA
+    note right of UNO : o 1º byte, carimbado\nna ponte: t_atuacao
+  else mesma rua e mesmo tipo do atendido
+    UNO -> Ponte : EV,...,RENOVADO,3,AMBULANCIA
+  else não interrompe, e cabe na fila de um lugar
+    UNO -> Ponte : EV,...,FILA,3,AMBULANCIA
+  else não interrompe, e não cabe na fila
+    UNO -> Ponte : EV,...,DESCARTADO,3,AMBULANCIA
+  end
+  UNO -> UNO : evento antes do LCD: a escrita I2C\nnão atrasa o carimbo de H3
+  opt PREEMP_INI: o VE passa a ser atendido
+    UNO -> UNO : transição segura até o verde exclusivo:\nverde mínimo 3 s -> amarelo 2 s -> all-red 1 s
+    UNO -> Ponte : ST a cada mudança de luz, e a 2 Hz
+    UNO -> UNO : verde exclusivo da Rua 3 por 9 s\n(bombeiro 8 s, polícia 7 s)
+    alt fim do verde do tipo
+      UNO -> Ponte : EV,...,PREEMP_FIM,3,AMBULANCIA
+    else 30 s de emergência contínua
+      UNO -> Ponte : EV,...,TIMEOUT e EV,...,PREEMP_FIM
+    end
+    UNO -> UNO : atende a fila, ou volta ao ciclo\npelo eixo oposto (amarelo, all-red)
+  end
+end
+
+Ponte -> Ponte : carimba cada linha no 1º byte,\nno relógio do notebook
+opt medição de H3 (--porta-veiculo)
+  Ponte -> Ponte : casa "Tag ... lida" com a 1ª decisão\nda mesma rua em 3 s; só PREEMP_INI é amostra:\nH3 = t_atuacao - t_deteccao
+  Ponte -> Ponte : grava latencia_bancada.csv\ne deteccoes_bancada.csv
+end
+
+Backend -> Ponte : GET /estado (a 5 Hz)
+Ponte --> Backend : eventos novos e amostras de H3
+Backend -> Banco : log_prioridade (uma linha por decisão do UNO)\nmetrica_latencia (amostra de H3, t_decisao nulo)
+Backend -> Painel : WebSocket: estado_semaforo,\nevento e metrica
+
+note over Tag, Painel
+  O notebook não está no caminho da decisão: o UNO decide sozinho, com a última lista da Central
+  que recebeu. Se a ponte cair, o cruzamento continua preemptando; param o dashboard, o registro
+  e a atualização da lista. Na bancada nenhum dispositivo chama POST /deteccoes (context/01 §7).
+end note
+
+@enduml
