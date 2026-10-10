@@ -32,7 +32,7 @@ para o A0 (decisão de 2026-10-06).
            bombeiro e polícia)
 ┌──────────────────────────┐   ESP-NOW   ┌────────────────────┐  TX→A0   ┌──────────────────────┐
 │ NodeMCU EMISSOR + RC522  │ ──rádio──▶  │ NodeMCU RECEPTOR   │ ──9600──▶│ Arduino UNO R3       │
-│ bateria 9 V (VIN)        │  MAC a MAC  │ 5 V vindo do UNO   │          │ 4 semáforos + LCD    │
+│ power bank (micro-USB)   │  MAC a MAC  │ 5 V vindo do UNO   │          │ 4 semáforos + LCD    │
 └──────────▲───────────────┘             └────────────────────┘          └──────────┬───────────┘
            │ lê (2–5 cm)                                                            │ USB: ST/EV para
    [tag fixa na rua]                                                                │ o notebook; AUT e
@@ -62,8 +62,14 @@ não como o clone com CH340 que o questionário descrevia; nada muda por isso.
 | Reservado: TX da serial por software, nada ligado | A1 |
 | Alimentação do NodeMCU receptor | **5V do ICSP (pino 2)** → VIN do NodeMCU, e GND (desde 2026-10-06; ver a nota abaixo) |
 | USB (a ponte) | RX (0) e TX (1) |
+| GND dos 4 módulos de semáforo | barramento negativo da protoboard, ligado ao GND do UNO |
 
 Livres: **A2 e A3**.
+
+**Esquema elétrico** (desde 2026-10-10): `docs/diagramas/esquema_cruzamento` e
+`esquema_veiculo` (PDF e PNG), gerados por `python docs/diagramas/esquema_eletrico.py`
+a partir das tabelas desta seção. `tests/diagramas/test_esquema_eletrico.py`
+confere as ligações do esquema contra estas tabelas e contra o firmware.
 
 > **Por que o receptor saiu do RX (0).** O RX do UNO é o mesmo que o conversor
 > USB usa, e o TX do NodeMCU, ligado direto ao pino, prevalecia sobre o
@@ -112,7 +118,9 @@ Livres: **A2 e A3**.
 
 ### Subsistema B — Veículos (NodeMCU 1.0 ESP-12E "emissor" + RC522, um por tipo)
 
-Bateria de 9 V em VIN/GND. Lê a tag a **2–5 cm**. Desde 2026-10-08 são três
+Alimentado por **power bank no micro-USB** do NodeMCU (corrigido em 2026-10-10:
+o registro anterior, desde o questionário, dizia bateria de 9 V em VIN/GND;
+ver `09`). Lê a tag a **2–5 cm**. Desde 2026-10-08 são três
 carrinhos, com a mesma placa, a mesma pinagem e o mesmo sketch, que só difere
 na linha do tipo (§5):
 
@@ -567,7 +575,7 @@ atendê-lo**, os dois carimbados **no relógio do notebook** (decisão de
 - `t_deteccao` — chegada do **primeiro byte** da linha
   `Tag <UID> lida -> Enviando RUAn`, que o emissor imprime logo depois do
   `esp_now_send`. Para isso, **durante a medição** o NodeMCU do veículo fica
-  ligado ao notebook por USB e alimentado por ele (bateria desconectada).
+  ligado ao notebook por USB e alimentado por ele, no lugar da power bank.
   Nenhum fio da bancada muda.
 - `t_atuacao` — chegada do primeiro byte da linha `EV,…,PREEMP_INI,…` do UNO.
 

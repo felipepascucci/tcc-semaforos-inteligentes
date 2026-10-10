@@ -481,7 +481,7 @@ telemetria gravada; os demais são observação de quem está na bancada.
 | 1 | Ciclo alterna os **2 eixos** (ciclo de 12 s) por 5 min sem travar; liga em all-red. | `analysis.checklist_bancada` |
 | 2 | Nunca há verde nos dois eixos ao mesmo tempo; em emergência só a aproximação do VE fica verde — 5 min de observação e a telemetria do mesmo período. | `analysis.checklist_bancada` |
 | 3 | Toda transição verde→vermelho passa por amarelo, e há all-red antes de todo verde novo, **inclusive na entrada e na saída da emergência**. | `analysis.checklist_bancada` |
-| 4 | 100 passagens sobre as tags das ruas: em ≥ 95 a linha chega ao UNO com a rua certa, ou seja, há um evento de decisão com a rua da tag — RNF05. Um `RECUSADO` conta como falha (a linha chegou corrompida). **Medido na mesma rodada do 7b, com o emissor no USB do notebook** (decisão de 2026-10-06): o denominador são as leituras que o emissor imprimiu, e o resultado é declarado nessa condição, que alimenta o emissor melhor que a bateria de 9 V da demonstração. Cada leitura vira uma linha de `analysis/data/deteccoes_bancada.csv`; a taxa sai de `python -m analysis.resumo_bancada`. | `analysis.resumo_bancada` |
+| 4 | 100 passagens sobre as tags das ruas: em ≥ 95 a linha chega ao UNO com a rua certa, ou seja, há um evento de decisão com a rua da tag — RNF05. Um `RECUSADO` conta como falha (a linha chegou corrompida). **Medido na mesma rodada do 7b, com o emissor no USB do notebook** (decisão de 2026-10-06): o denominador são as leituras que o emissor imprimiu, e o resultado é declarado nessa condição, que não é a da demonstração: nela o emissor fica na power bank, no micro-USB (P21, 2026-10-10; o texto anterior dizia bateria de 9 V). Cada leitura vira uma linha de `analysis/data/deteccoes_bancada.csv`; a taxa sai de `python -m analysis.resumo_bancada`. | `analysis.resumo_bancada` |
 | 5 | Tag fora das 4 ruas não gera envio nem mexe no semáforo. **Roteiro (declarado em 2026-10-07, antes da rodada):** ponte com `--porta COM3 --porta-veiculo COM5 --telemetria`, emissor no USB; a ambulância recebe ocorrência (pela Central, ou com o compose parado por `PUT /autorizacoes` na ponte); com o ciclo correndo, a tag fora do mapa passa pelo leitor do carrinho **10 vezes**, com pelo menos 4 s entre uma e outra, ao longo de pelo menos 1 min; por último, uma passagem de **controle** na tag da Rua 1. Julgado por `python -m analysis.checklist_bancada --item5`; o LCD sem mudança nas 10 passagens e a contagem delas são observação. | `analysis.checklist_bancada` |
 | 5b | **Tag sem ocorrência** (volta em 2026-10-06): sem ocorrência aberta para a ambulância na Central, a passagem gera `SEM_OCORRENCIA`, não mexe no semáforo, e o LCD mostra `SEM OCORRENCIA` por 3 s; abrindo a ocorrência, a passagem seguinte preempta. | `analysis.checklist_bancada` |
 | 6 | LCD mostra o VE e a rua em < 1 s após a leitura. | observação |
@@ -591,11 +591,12 @@ telemetria gravada; os demais são observação de quem está na bancada.
 | `tests/diagramas/test_bancada.py` | 6 |
 | `tests/diagramas/test_caracteres_do_pdf.py` | 2 |
 | `tests/diagramas/test_der.py` | 2 |
+| `tests/diagramas/test_esquema_eletrico.py` | 12 |
 | `tests/diagramas/test_infraestrutura.py` | 2 |
 | `tests/e2e/test_corredor_verde.py` | 3 |
 | `tests/e2e/test_e2e_preempcao.py` | 6 |
 | `tests/firmware/test_firmware_uno.py` | 24 |
 | `tests/firmware/test_sketches_nodemcu.py` | 10 |
 
-96 arquivos, 1008 funções de teste. Um teste parametrizado ou com
+97 arquivos, 1020 funções de teste. Um teste parametrizado ou com
 Hypothesis conta uma vez aqui e roda várias vezes na suíte.

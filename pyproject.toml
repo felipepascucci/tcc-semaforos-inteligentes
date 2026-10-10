@@ -44,7 +44,16 @@ dev = [
     # dublê (tests/firmware/test_firmware_uno.py). Só teste (context/09, 2026-10-05).
     "ziglang>=0.13",
 ]
-analysis = ["pandas>=2.2", "numpy>=1.26", "scipy>=1.13", "matplotlib>=3.8"]
+analysis = [
+    "pandas>=2.2",
+    "numpy>=1.26",
+    "scipy>=1.13",
+    "matplotlib>=3.8",
+    # Esquema elétrico da bancada (docs/diagramas/esquema_eletrico.py), sobre o
+    # matplotlib. Registrado em context/09, 2026-10-10. Versão fixada: trocá-la
+    # pode mudar o desenho.
+    "schemdraw==0.23",
+]
 hardware = ["pyserial==3.5"]
 
 # NÃO existe extra "sim". O cliente TraCI/libsumo vem com a instalação do SUMO,

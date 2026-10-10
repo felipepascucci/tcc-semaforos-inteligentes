@@ -510,7 +510,9 @@ resultado (mesma execução com e sem, `context/06` §2).
 > Docker do PlantUML). Os quatro arquivos de teste que `context/06` §2 citava e não
 > existiam (RF02/H3, RF03, RF07, RNF02) foram escritos; o RF03 sai FALHOU no
 > Bloco 8 (`context/09`). Falta: o PDF do relatório (decisão do grupo), as fotos e
-> o vídeo, a assinatura do checklist e o esquema Fritzing, com a maquete.
+> o vídeo e a assinatura do checklist, com a maquete. O esquema elétrico saiu em
+> 2026-10-10, por código (`python docs/diagramas/esquema_eletrico.py`, schemdraw
+> no lugar do Fritzing, `context/09`).
 
 Em paralelo: diagramas PlantUML do `context/08` §5, DER (`python -m db.der`, sem eralchemy2), relatório de validação, checklist assinado do protótipo.
 

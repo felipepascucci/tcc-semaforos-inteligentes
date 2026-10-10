@@ -99,7 +99,7 @@ Além do código, o TCC exige (pré-projeto §2.7):
 | Máquina de estados do firmware do UNO (2026-10-10) | PlantUML | `docs/diagramas/maquina_estados_firmware.puml` |
 | Especificação de casos de teste | Gerada (`python -m analysis.gerar_casos_de_teste`) | `docs/casos_de_teste.md` |
 | Relatório de validação | Gerado (`python -m analysis.gerar_relatorio_validacao`) | `docs/relatorios/` |
-| Esquema elétrico do protótipo | Fritzing | `docs/hardware/esquema.fzz` |
+| Esquema elétrico do protótipo (2026-10-10) | schemdraw, por código (decisão de 2026-10-10, era Fritzing) | `docs/diagramas/esquema_eletrico.py` → `esquema_cruzamento` e `esquema_veiculo` (PDF e PNG) |
 
 Preferir PlantUML a diagrama desenhado à mão: fica versionado, regenerável e consistente com o código. Um diagrama que diverge do sistema é passivo, não ativo.
 
