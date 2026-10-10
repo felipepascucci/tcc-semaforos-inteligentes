@@ -2,8 +2,10 @@
 
 Abrir uma ocorrência põe o VE em serviço com a criticidade dada; encerrá-la tira a
 prioridade. É o dado que `core.autorizacao.autorizar()` consulta em
-`POST /deteccoes`. Na bancada não tem efeito: o UNO decide sem consultar
-ocorrência (decisão de 2026-10-05).
+`POST /deteccoes`. Desde 2026-10-06 vale também na bancada: o backend leva ao
+UNO, pela ponte, a criticidade de cada tipo com ocorrência ativa
+(`app/services/bancada.py`), e o UNO decide contra essa lista (`context/05`
+§3.2.1 e §3.3).
 """
 
 from __future__ import annotations

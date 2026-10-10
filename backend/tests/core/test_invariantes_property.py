@@ -62,7 +62,7 @@ def _comandos(cruzamento: Cruzamento) -> st.SearchStrategy[Comando]:
     """Comandos plausíveis e implausíveis, de propósito.
 
     Fases inválidas e durações absurdas entram na geração: o controlador precisa
-    recusá-las com `NAK`, e recusar é comportamento correto, não erro.
+    recusá-las (`Recusa`), e recusar é comportamento correto, não erro.
     """
     indices = list(cruzamento.indices_de_fase)
     return st.one_of(
@@ -211,7 +211,7 @@ def test_nunca_ha_mais_de_um_verde_no_prototipo(roteiro: list[tuple[int, Comando
     )
 )
 def test_comando_recusado_nao_altera_a_sinalizacao(roteiro: list[tuple[int, Comando]]) -> None:
-    """Recusar é seguro: um `NAK` nunca deixa efeito colateral pela metade."""
+    """Recusar é seguro: uma `Recusa` nunca deixa efeito colateral pela metade."""
     parametros = construir_parametros()
     por_passo: dict[int, list[Comando]] = {}
     for passo, comando in roteiro:

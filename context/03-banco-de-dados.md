@@ -329,8 +329,9 @@ Consequência para o coletor: ele mantém a fase corrente de cada TLS em memóri
   um banco já semeado os ganha na próxima carga, sem migration. Nenhum deles
   chama a API, então `token_hash` não é exercitado pela bancada.
 - **Nenhuma ocorrência** — de propósito (P20). O sistema sobe sem VE em
-  serviço. *(A demonstração na bancada não passa mais por aqui: desde
-  2026-10-05 o UNO decide sem consultar ocorrência, `05` §7.)*
+  serviço. *(Desde 2026-10-06 isso vale também na bancada: o UNO liga negando
+  todos, e só preempta o tipo com ocorrência aberta pela Central; o roteiro de
+  demonstração abre a ocorrência no passo 3, `05` §7.)*
 
 ## 6. DER para o TCC
 

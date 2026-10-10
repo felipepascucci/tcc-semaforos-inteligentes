@@ -135,7 +135,7 @@ _SEM_ATUADOR = (
         401: {"description": "Login necessário"},
         409: {"description": "Cruzamento sem atuador ligado ao backend"},
         503: {"description": "Ponte não configurada ou fora do ar"},
-        504: {"description": "O UNO não decidiu: o fio do NodeMCU está no RX?"},
+        504: {"description": "O UNO não decidiu em 1 s: calado, ou firmware antigo?"},
     },
 )
 async def preemptar(

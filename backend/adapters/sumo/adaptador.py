@@ -87,8 +87,9 @@ class AdaptadorSumo:
         recusas: Contagem de comandos recusados pela máquina de estados, por
             (tipo, motivo). **Recusa não é erro**: o motor reafirma a intenção a
             cada passo e a máquina recusa enquanto a transição anterior não
-            termina — exatamente como o firmware responde `NAK,<cmd>,MODO`
-            (decisão P13, defesa em profundidade). Contar em vez de alertar é o
+            termina, como o firmware respondia `NAK,<cmd>,MODO` até 2026-10-05,
+            quando ainda recebia comandos (decisão P13, defesa em
+            profundidade). Contar em vez de alertar é o
             que separa o ruído esperado do sinal: um `FASE_INVALIDA` aqui, sim,
             indicaria mapa de fases errado.
     """

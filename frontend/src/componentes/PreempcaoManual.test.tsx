@@ -74,13 +74,13 @@ describe("PreempcaoManual", () => {
     expect(chamadas[0]?.metodo).toBe("DELETE");
   });
 
-  it("504 da ponte vira a explicação do fio do RX", async () => {
+  it("504 da ponte vira a explicação do UNO sem decisão", async () => {
     fetchFalso({ status: 504, corpo: { linha: "RUA1,AMBULANCIA", decisao: null, t_decisao: null } });
     const usuario = userEvent.setup();
     render(<PreempcaoManual semaforos={SEMAFOROS} />);
 
     await usuario.click(screen.getByRole("button", { name: "Solicitar preempção" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("fio do NodeMCU receptor solto do RX");
+    expect(await screen.findByRole("alert")).toHaveTextContent("O UNO não decidiu em 1 s");
   });
 });

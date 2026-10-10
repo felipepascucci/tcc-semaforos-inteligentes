@@ -455,8 +455,11 @@ fila, volta pelo mesmo eixo, guarda lendo a máquina em vez do pino, e `ST`
 periódica nunca pulada.
 
 **Compilado com `arduino-cli`** (core `arduino:avr` 1.8.8, `LiquidCrystal I2C`
-1.1.2, `SoftwareSerial` do core): **10.926 bytes de flash (33%) e 894 bytes de
-RAM global (43%)** em 2026-10-06, contra 8.722 e 841 antes da Central. A
+1.1.2, `SoftwareSerial` do core): **11.042 bytes de flash (34%) e 902 bytes de
+RAM global (44%)** na compilação de 2026-10-10, contra 8.722 e 841 antes da
+Central. *(A anotação de 2026-10-06 dizia 10.926 e 894. O código da placa não
+mudou desde o commit `536e48e`, de 2026-10-07, e o core e a biblioteca são os
+mesmos; a diferença é do código alterado entre a anotação e esse commit.)* A
 `SoftwareSerial` e o segundo buffer de linha passavam a RAM de 1 KB (1.080
 bytes); os textos fixos (nomes de evento e mensagens do LCD) foram para a flash
 (`FIXO(...)`, que é `PSTR` no AVR e literal comum no PC), e o buffer do A0 ficou

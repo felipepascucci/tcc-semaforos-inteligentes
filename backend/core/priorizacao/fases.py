@@ -1,8 +1,10 @@
 """Etapas E4 e E5 — seleção de fase e transição segura (`context/01` §5.2).
 
 Além de E4/E5, este módulo contém a **máquina de estados do controlador**: um
-modelo puro e executável do que o firmware do UNO e o `traci.trafficlight` fazem
-com os comandos que o motor emite.
+modelo puro e executável do que o `traci.trafficlight` faz com os comandos que o
+motor emite. Desde 2026-10-05 o firmware do UNO não recebe comandos do motor: a
+bancada decide sozinha, com uma regra própria (`context/01` §1 e §4,
+`context/05` §3), e o dublê dela não reusa esta máquina.
 
 Ela existe por três motivos:
 
@@ -11,8 +13,10 @@ Ela existe por três motivos:
 2. É o alvo do teste property-based de I1 (`context/06` §3): o Hypothesis
    dirige sequências aleatórias de comandos contra esta máquina e verifica os
    invariantes em **todo estado alcançado**.
-3. Documenta, em código testável, o mesmo comportamento que o firmware precisa
-   implementar em C++ — as duas implementações podem então ser comparadas.
+3. Documenta, em código testável, a transição segura que o motor pressupõe na
+   simulação. O firmware do UNO cumpre os mesmos invariantes I1 a I4 com uma
+   máquina própria, de 2 fases e verde exclusivo, comparada linha por linha com
+   o dublê da bancada, e não com esta (`context/05` §3.7).
 
 A sequência de E5 é obrigatória e não tem atalho::
 
@@ -37,9 +41,10 @@ from core.parametros import Parametros
 class Recusa:
     """Um comando que a máquina não pôde executar.
 
-    Recusar é comportamento correto, não erro: o firmware responde
-    `NAK,<cmd>,<motivo>` exatamente assim, e a defesa em profundidade da decisão
-    P13 depende de o atuador ter o direito de dizer não.
+    Recusar é comportamento correto, não erro: a defesa em profundidade da
+    decisão P13 depende de o atuador ter o direito de dizer não. *(Até
+    2026-10-05 o firmware do UNO também recusava, com `NAK,<cmd>,<motivo>`;
+    desde então ele não recebe comandos, e a recusa vive só nesta máquina.)*
     """
 
     comando: Comando

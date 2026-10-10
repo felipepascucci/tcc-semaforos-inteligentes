@@ -1,6 +1,7 @@
 // Preempção manual (context/01 §7). Só a bancada tem atuador ligado ao backend,
-// pela injeção da ponte, com o fio do NodeMCU solto do RX (context/05 §6). Nos
-// CRUZ_xx e no cancelamento a resposta é 409, e a tela mostra o motivo que o
+// pela injeção da ponte, que desde 2026-10-06 funciona com a bancada montada (o
+// receptor está no A0) e passa pela Central como a do receptor (context/05 §6).
+// Nos CRUZ_xx e no cancelamento a resposta é 409, e a tela mostra o motivo que o
 // backend deu, não um erro genérico.
 import { useState } from "react";
 
@@ -15,7 +16,7 @@ import { Aviso, Botao, Campo, Cartao, ESTILO_ENTRADA } from "./ui";
 type Resultado = { tipo: "sucesso" | "erro"; texto: string };
 
 const SEM_DECISAO =
-  "O UNO não decidiu no prazo. A injeção exige o fio do NodeMCU receptor solto do RX do UNO (context/05 §6).";
+  "O UNO não decidiu em 1 s: ele está calado, ou com um firmware anterior a 2026-10-06, que ainda lia o receptor no RX (context/05 §6).";
 
 export function descreverDecisao(resposta: RespostaPreempcao): string {
   return `UNO decidiu ${resposta.decisao ?? "—"} para a linha "${resposta.linha}".`;
