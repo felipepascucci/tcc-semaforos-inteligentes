@@ -124,11 +124,17 @@ ver `09`). Lê a tag a **2–5 cm**. Desde 2026-10-08 são três
 carrinhos, com a mesma placa, a mesma pinagem e o mesmo sketch, que só difere
 na linha do tipo (§5):
 
-| Carrinho | Sketch | Conversor USB | MAC | Gravado |
-| --- | --- | --- | --- | --- |
-| Ambulância | `firmware/nodemcu/veiculo_ambulancia/` | CP2102 (`10C4:EA60`) | não lido | pela equipe, Arduino IDE |
-| Bombeiro | `firmware/nodemcu/veiculo_bombeiro/` | CH340 (`1A86:7523`) | `BC:DD:C2:08:7A:D0` | 2026-10-08, `arduino-cli` |
-| Polícia | `firmware/nodemcu/veiculo_policia/` | CH340 (`1A86:7523`) | `4C:EB:D6:1F:F7:F2` | 2026-10-08, `arduino-cli` |
+| Carrinho | Sketch | Conversor USB | Porta no notebook do Felipe | MAC | Gravado |
+| --- | --- | --- | --- | --- | --- |
+| Ambulância | `firmware/nodemcu/veiculo_ambulancia/` | CP2102 (`10C4:EA60`) | COM5 | não lido | pela equipe, Arduino IDE |
+| Bombeiro | `firmware/nodemcu/veiculo_bombeiro/` | CH340 (`1A86:7523`) | COM4 | `BC:DD:C2:08:7A:D0` | 2026-10-08, `arduino-cli` |
+| Polícia | `firmware/nodemcu/veiculo_policia/` | CH340 (`1A86:7523`) | COM4 | `4C:EB:D6:1F:F7:F2` | 2026-10-08, `arduino-cli` |
+
+As portas são as observadas nas gravações e medições (o UNO fica no COM3).
+Bombeiro e polícia saíram ambos no COM4 porque foram ligados um de cada vez; o
+Windows costuma numerar o CH340 pela entrada USB, então com os dois ligados juntos, ou em
+outra entrada, um deles recebe outro número. Conferir com
+`arduino-cli board list` antes de gravar ou de abrir a ponte.
 
 **Polícia: o RST do RC522 vai ao 3V3, e não ao D3** (2026-10-08, decisão do
 Felipe). O pino D3 desse NodeMCU não leva o nível ao fio: com o RST no D3, o
