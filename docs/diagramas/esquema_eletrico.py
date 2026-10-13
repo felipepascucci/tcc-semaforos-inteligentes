@@ -298,7 +298,7 @@ def desenhar_veiculo() -> Any:
     for pino in PINOS_DO_RC522:
         if pino in RC522:
             _fio(d, nodemcu[ancora(pino)], rc522[ancora(pino)])
-    _texto(d, (7.4, rc522["IRQ"][1]), "IRQ sem fio", halign="right")
+    _texto(d, (7.2, rc522["IRQ"][1]), "IRQ sem fio", halign="right")
 
     # Alimentação: power bank no micro-USB do NodeMCU (2026-10-10).
     xp0, xp1 = -4.6, -2.4

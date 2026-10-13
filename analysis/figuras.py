@@ -488,7 +488,7 @@ def f5_reducao_saturacao(
     *,
     cenarios_da_tendencia: Sequence[str] = ("leve", "moderado", "intenso"),
 ) -> Path:
-    """Redução da travessia por seed contra o v/c medido do cenário.
+    """Redução da travessia por seed contra o v/c derivado do cenário.
 
     A tendência é uma reta de mínimos quadrados sobre os pontos dos cenários de
     um VE só; o `multiplas_emergencias` aparece com marcador próprio e fica fora
@@ -548,7 +548,7 @@ def f5_reducao_saturacao(
         linewidth=0.8,
         label=f"Meta de H1 ({meta * 100:.0f}%)".replace(".", ","),
     )
-    eixo.set_xlabel("Grau de saturação medido (v/c)")
+    eixo.set_xlabel("Grau de saturação derivado (v/c)")
     eixo.set_ylabel("Redução da travessia do VE (%)")
     # Abaixo do eixo: dentro dele, qualquer canto cobre pontos ou a linha da meta.
     eixo.legend(loc="upper center", bbox_to_anchor=(0.5, -0.18), ncols=2, frameon=False)
