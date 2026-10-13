@@ -17,7 +17,8 @@ viabilidade, sem papel estatístico).
 
 ## Começando
 
-Pré-requisitos: **Docker Desktop**, **Python 3.11+**, **SUMO 1.19+**. **Node 20+**
+Pré-requisitos: **Docker Desktop**, **Python 3.11+**, **SUMO 1.19+** (os dados do capítulo 5 foram gerados
+com o 1.27.1). **Node 20+**
 só para desenvolver o dashboard: o compose compila o frontend sozinho.
 
 ```powershell
@@ -132,6 +133,11 @@ um marcador seria escondê-los. Para uma rodada rápida sem Docker:
 ```powershell
 pytest -m "not banco and not lento and not sumo and not hardware"
 ```
+
+Doze testes sem marcador (`sim/tests/test_exportar_mapa.py`, dois de
+`test_transmissor.py` e um de `test_demanda.py`) leem `sim/rede/malha.net.xml`,
+que não é versionado. Num clone novo, rode `make rede` (seção SUMO) antes do
+`pytest`; sem isso eles falham com `FileNotFoundError` (verificado em 2026-10-13).
 
 ## O motor de decisão
 
@@ -279,9 +285,10 @@ mão.
 
 Duas coisas nos seeds são deliberadas e não devem surpreender:
 
-- **As tags RFID são placeholder e estão inativas.** Só recebem UID real na
-  entrega 5.8. Tag placeholder ativa seria uma credencial válida publicada no
-  repositório.
+- **As tags RFID do seed são placeholder e estão inativas, e continuam assim.**
+  As tags reais da bancada identificam ruas, não veículos, e o mapa UID → rua
+  vive no firmware do receptor (context/05 §1), não no banco. Tag placeholder
+  ativa seria uma credencial válida publicada no repositório.
 - **Os 8 TLS da malha não têm fases semeadas.** Elas vêm do `.net.xml` e do
   `sim/config/mapa_fases.yaml` no Bloco 3. Suas coordenadas e `tempo_ciclo` são
   provisórios, e o próprio [db/seeds/dados.yaml](db/seeds/dados.yaml) diz quais
@@ -380,7 +387,8 @@ para `analysis/data/`.
 
 ## Firmware
 
-`firmware/uno/semaforo/` é o UNO; `firmware/nodemcu/` são os dois NodeMCUs, como
+`firmware/uno/semaforo/` é o UNO; `firmware/nodemcu/` são os quatro NodeMCUs (o receptor do
+cruzamento e um emissor por tipo de veículo), como
 a equipe de hardware os escreveu (context/05). Para compilar o UNO sem a IDE:
 
 ```powershell
@@ -450,14 +458,19 @@ silenciosamente.
 
 ## Pendências de maior risco
 
-1. **P6** — os números do capítulo 5 ainda não vêm de execução real. Maior risco
-   acadêmico. **Aberta.**
-2. **P4 / P12** — correções e registros pendentes no texto do TCC. **Abertas.**
-3. **P11** — fechada em 2026-10-01 (o método foi aprovado), mas a redação da
-   metodologia depende das referências que o orientador ficou de devolver.
-4. **P19 / Bloco 10** — o modelo está treinado (10.5), a inferência está em
-   `core/` (10.6) e o braço `PREEMPCAO_ML` está no executor e no lote (10.7).
-   Falta a análise de H4 (10.8), sobre as execuções do Bloco 8.
+Validação do TCC v3 contra o repositório em 2026-10-13 (context/09, tabela de
+decisões):
+
+1. **P6** — **fechada.** O capítulo 5 sai das execuções do Bloco 8, e a
+   estimativa do pré-projeto ficou só no Quadro 39, como comparação.
+2. **P4 / P12** — **fechadas.** As 14 tabelas estão no dicionário de dados do
+   texto, com as correções de tipo; a mudança na ordem das sprints está na
+   metodologia.
+3. **P11** — fechada em 2026-10-01. A redação usa a FHWA (2022) como referência
+   do fluxo de saturação e declara os cortes 0,40/0,75 como convenção do trabalho.
+4. **P19 / Bloco 10** — concluído. A análise de H4 (10.8) deu efeito **nulo**.
+5. **H1** — o enunciado foi reescrito no TCC v3 para dizer "com detecção ideal".
+   **Comunicar ao orientador.**
 
 **Fechadas em 2026-10-05:** P8 (boot normal com o RC522 no D3) e P9 (não se
 aplica: o LCD está no UNO, de 5 V). **Bancada, 2026-10-07:** checklist de

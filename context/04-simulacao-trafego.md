@@ -2,7 +2,13 @@
 
 ## 1. Papel da simulação
 
-A simulação **é** o experimento do TCC. Todos os números das hipóteses H1, H2 e H3 saem daqui. O protótipo físico demonstra viabilidade; ele não gera estatística.
+A simulação **é** o experimento do TCC. Os números de H1, H2, H4 e RNF01 saem daqui. H3 e RNF05 saem da bancada (`05` §4.3), e o protótipo não gera estatística de comparação entre braços. *(Corrigido em 2026-10-13: a versão anterior dizia "H1, H2 e H3".)*
+
+> **A detecção na simulação é ideal** (decisão D1, 2026-10-13). O adaptador lê
+> do TraCI a posição, a velocidade e a rota exatas de cada VE em serviço. Não há
+> modelo de radar, de V2I nem de fusão de sensores: ruído, atraso e falha de
+> detecção não são simulados. H1 foi reescrita no TCC para dizer isso
+> (`00` §5), e a detecção imperfeita é limitação declarada.
 
 ## 2. Estrutura de arquivos
 
@@ -246,8 +252,8 @@ declarada para via urbana.
 | Modo | Descrição | Serve para |
 | --- | --- | --- |
 | `FIXO` | Baseline: programa semafórico estático do `.tll.xml`, sem TraCI intervindo | Controle |
-| `PREEMPCAO` | Preempção sem compensação pós-evento | H1 e H3 |
-| `PREEMPCAO_COMPENSADA` | Preempção + compensação (E7) | H1, H2, H3 |
+| `PREEMPCAO` | Preempção sem compensação pós-evento | H1, H4 (base) e RNF01 |
+| `PREEMPCAO_COMPENSADA` | Preempção + compensação (E7) | H1, H2 e RNF01 |
 | `PREEMPCAO_ML` | `PREEMPCAO` com a política aprendida em E8 (P19). Só nos cenários com mais de um VE | H4 |
 
 Rodar os três primeiros é o que permite isolar o efeito da compensação. Comparar apenas fixo vs. compensado não permite afirmar nada sobre H2.
@@ -298,7 +304,7 @@ python -m sim.controlador.lote \
     --saida analysis/data/
 ```
 
-Com `libsumo` e 4 processos em paralelo, isso roda em algumas horas. Com `traci` + GUI, em dias. Rodar o lote com `libsumo` e headless.
+~~Com `libsumo` e 4 processos em paralelo, isso roda em algumas horas. Com `traci` + GUI, em dias. Rodar o lote com `libsumo` e headless.~~ **Superado por P15 (2026-10-01):** o lote roda com `traci`, headless, em 6 processos paralelos; o Bloco 8 levou 3h36.
 
 > **Implementado no Bloco 4** (`sim/controlador/lote.py`), antecipado porque o
 > piloto já são 60 execuções. A CLI é a de cima, com dois acréscimos: `--repetir
@@ -402,7 +408,7 @@ Pontos de atenção:
 | `throughput_veic_h` | contagem em detectores de saída |
 | `atraso_total_rede_s` | soma de `timeLoss` |
 
-### 9.3 Do sistema (H3 / RNF01)
+### 9.3 Do sistema (RNF01; H3 é medida na bancada)
 
 `latencia_decisao_ms` — mín, média, p95, p99, máx. **Reportar p95 e p99, não só a média.** Sistema crítico se avalia pela cauda; média de 68 ms com p99 de 400 ms não atende ao requisito, e a banca pode perguntar exatamente isso.
 
@@ -567,6 +573,21 @@ Um gridlock não detectado invalida silenciosamente todo o experimento. Este pas
 > teleporte, zero violação de invariante no baseline. **Malha aprovada** — e com
 > isso a cadeia de P11 fecha: saturação medida → capacidade → v/c derivado → v/c
 > medido na malha completa.
+>
+> **Segunda execução, 2026-10-13, os quatro cenários (900 s, `FIXO`, seed 1),
+> rodada pelo Felipe para a validação do TCC v3** (saída guardada em
+> `analysis/data/validacao/validacao_malha_2026-10-13.txt`):
+>
+> | Cenário | v/c derivado | Medido, arterial | Medido, transversal | Resultado |
+> |---|---|---|---|---|
+> | `leve` | 0,182 | 0,193 | 0,194 | aprovada |
+> | `moderado` | 0,424 | 0,450 | 0,429 | aprovada |
+> | `intenso` | 0,726 | 0,726 | 0,664 | aprovada |
+> | `multiplas_emergencias` | 0,424 | 0,450 | 0,429 | aprovada |
+>
+> O maior desvio é o da transversal do `intenso` (−8,5%), dentro dos 10%. Os
+> rótulos de cenário no texto e nas figuras (0,18 / 0,42 / 0,73) são o v/c
+> **derivado**, lido de `calibracao_cenarios.csv`.
 >
 > A verificação estrutural de **cada execução** (`context/06` §4) é outra coisa e
 > mora em `sim/validacao/execucao.py`: ela roda em toda execução do lote e reprova

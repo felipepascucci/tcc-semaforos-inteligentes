@@ -225,7 +225,7 @@ CREATE TABLE metrica_latencia (
 );
 
 -- Bloco 6 (2026-10-05): POST /simulacoes grava aqui; o atendente do host executa.
--- Demonstração, não experimento: seeds 1..50 e 101..105 são recusadas.
+-- Demonstração, não experimento: seeds 1..50, 101..105 e 201..250 são recusadas.
 CREATE TABLE pedido_simulacao (
     id_pedido      SERIAL PRIMARY KEY,
     nome_cenario   VARCHAR(50) NOT NULL,
@@ -279,6 +279,26 @@ CREATE UNIQUE INDEX uq_ocorrencia_aberta_por_veiculo
 2. **Só execuções exemplares** (`execucao_simulacao.exemplar = true`, uma por par cenário × modo, as que geram as figuras) são persistidas no banco. As demais das 600 ficam em CSV sob `analysis/data/`.
 
 Consequência para o coletor: ele mantém a fase corrente de cada TLS em memória e só enfileira um registro quando ela muda, calculando `duracao_fase_anterior_s` na virada.
+
+### 3.4 O que cada ambiente grava (registrado em 2026-10-13)
+
+O modelo tem as 14 tabelas, mas nem toda tabela recebe dado de todo ambiente. É o
+que o código faz hoje, e o texto do TCC descreve assim (decisão D3, `09`):
+
+| Tabela | Simulação (lote) | Bancada | API |
+| --- | --- | --- | --- |
+| `execucao_simulacao` | sim, toda execução | — | — |
+| `estado_semaforo_amostra` | só exemplares (P5) | — | — |
+| `pedido_simulacao` | — | — | `POST /simulacoes` |
+| `log_prioridade` | **não** | um registro por decisão do UNO | `POST /deteccoes`, preempção manual |
+| `metrica_latencia` | **não** (a latência de decisão fica nos CSV) | amostras de H3 | — |
+| `metrica_simulacao` | **não** (reservada; as métricas ficam nos CSV) | — | — |
+| `metrica_via_transversal` | **não** (reservada; o custo transversal fica nos CSV) | — | — |
+
+`backend/app/repositories/experimento.py` tem `registrar_metrica_simulacao` e
+`registrar_metrica_transversal`, exercitadas só pelos testes. Fazer o lote
+preenchê-las não mudaria nenhum resultado e reabriria o código congelado antes do
+Bloco 8, então ficaram reservadas.
 
 ## 4. Regras de persistência
 

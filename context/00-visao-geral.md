@@ -65,10 +65,18 @@ O **motor de decisão** (`backend/core/priorizacao/`) é o objeto do experimento
 
 | ID | Hipótese | Como será testada |
 | --- | --- | --- |
-| H1 | A fusão radar + V2I reduz em **no mínimo 25%** o tempo total de travessia do VE, em cenários de saturação **moderada a intensa**, em relação à temporização estática | Comparação pareada por seed, baseline vs. proposto. O cenário `leve` é medido e discutido, mas **sem meta numérica** |
+| H1 | A priorização com **detecção ideal** do VE (posição, velocidade e rota conhecidas, como as entregaria um conjunto radar + V2I) reduz em **no mínimo 25%** o tempo total de travessia do VE, em cenários de saturação **moderada a intensa**, em relação à temporização estática | Comparação pareada por seed, baseline vs. proposto. O cenário `leve` é medido e discutido, mas **sem meta numérica** |
 | H2 | É possível mitigar em **no mínimo 15%** o impacto negativo nas vias transversais com compensação dinâmica de ciclo pós-evento | Três braços: baseline / preempção sem compensação / preempção com compensação. Mitigação = fração do **acréscimo** de espera transversal causado pela preempção, em `moderado` e `intenso` (P17) |
 | H3 | A infraestrutura em borda sustenta latência operacional **fim-a-fim inferior a 200 ms** | Da **leitura da tag no veículo** até o **UNO decidir atuar** (`PREEMP_INI`), os dois instantes carimbados no relógio do notebook, medida no **protótipo**, em **100 passagens** (as do RNF05), critério sobre o **p95** (`05` §4.3; n decidido pelo grupo em 2026-10-06) |
 | **H4** | Uma política aprendida para escolher entre VEs em conflito **reduz o tempo de travessia do VE mais prejudicado**, em cenários com múltiplos VEs, em relação ao desempate determinístico de E8 | Braço `PREEMPCAO_ML` contra `PREEMPCAO`, pareado por seed, nos cenários com múltiplos VEs. Mesmo rigor de H1: Wilcoxon pareado, Cliff's δ e IC 95% por bootstrap |
+
+> **H1 reescrita em 2026-10-13 (decisão D1, `09`).** O enunciado anterior dizia
+> "a fusão radar + V2I", e o texto do TCC, "detecção de radar e V2I, modelada na
+> simulação". Não há modelo de sensor: o adaptador lê do TraCI a posição exata do
+> VE. O enunciado passou a dizer o que a simulação mede, uma detecção ideal, e a
+> detecção imperfeita (ruído, atraso, falha) é limitação declarada. Meta,
+> cenários e régua não mudaram, e nenhum número muda. **Comunicar ao orientador**,
+> porque é uma hipótese do pré-projeto.
 
 > **H4 formulada em 2026-09-10, antes de qualquer treino** (P19). O critério de
 > otimização escolhido é **minimax**: minimizar o tempo do VE mais prejudicado.
@@ -104,6 +112,13 @@ O **motor de decisão** (`backend/core/priorizacao/`) é o objeto do experimento
 > saturação moderada e moderada-alta. Os nomes dos cenários são rótulos do ponto
 > experimental; a caracterização do regime é o v/c medido, e é ele que vai no
 > texto.
+>
+> **Correção de 2026-10-13 (validação do TCC v3):** os 0,18 / 0,42 / 0,73 acima
+> são o v/c **derivado** (`analysis/data/calibracao_cenarios.csv`), não o medido
+> na malha completa. O medido, na validação de 2026-10-13 (`04` §12), foi 0,193 /
+> 0,450 / 0,726 na arterial, dentro da tolerância de 10%; a classificação de cada
+> cenário não muda. O texto passou a chamar os rótulos de "derivados" e a trazer
+> os medidos na seção 3.2.5.
 > - **RNF01 e H3 medem coisas diferentes e coexistem.** RNF01 (< 100 ms) é a latência de *decisão* — do estado recebido à emissão do comando, software puro. H3 (< 200 ms) é a latência *fim-a-fim* — da detecção física à atuação, incluindo rede. Instrumentar as duas separadamente em `metrica_latencia`, reportando p95 e p99 de ambas.
 
 > **Decisões de 2026-08-31** (ver `09-pendencias-e-decisoes.md`):
@@ -196,7 +211,7 @@ Registrar isso evita que o agente "melhore" o projeto para fora do prazo:
   - **O que o modelo não decide (P20, 2026-09-29):** se há emergência de fato (ocorrência ativa, regra determinística) e qual emergência importa mais (criticidade da ocorrência, regra acima do modelo). O ML escolhe só entre VEs de mesmo nível de criticidade.
 - ❌ Integração com sistemas reais da CET, SAMU ou Corpo de Bombeiros. A **central de despacho** que abre e encerra ocorrências (P20) é **simulada** — painel do dashboard ou endpoint da API.
 - ❌ Detecção acústica de sirene. Considerada e recusada em P20: a emergência é declarada pela central, não inferida do ambiente. A chave do giroflex no veículo fica como trabalho futuro.
-- ❌ Radar físico. **Decisão P7, 2026-08-24:** no protótipo, o RFID-RC522 **emula** a função do conjunto radar + V2I, e isso é declarado explicitamente no texto. A validação da fusão de sensores ocorre exclusivamente em ambiente simulado. Sem sensor adicional (HC-SR04 descartado — ampliaria escopo sem sustentar nenhuma das três hipóteses).
+- ❌ Radar físico. **Decisão P7, 2026-08-24:** no protótipo, o RFID-RC522 **emula** a função do conjunto radar + V2I, e isso é declarado explicitamente no texto. ~~A validação da fusão de sensores ocorre exclusivamente em ambiente simulado.~~ **Corrigido em 2026-10-13 (D1):** não há fusão de sensores modelada em lugar nenhum; na simulação a detecção é ideal (`04` §1). Sem sensor adicional (HC-SR04 descartado — ampliaria escopo sem sustentar nenhuma das três hipóteses).
 - ❌ Autenticação multi-tenant, gestão de usuários, RBAC completo. Um login simples basta.
 - ❌ Alta disponibilidade real em AWS (multi-AZ, auto-scaling). A infra em nuvem é **descrita** como arquitetura-alvo e, se houver tempo, demonstrada em instância única.
 

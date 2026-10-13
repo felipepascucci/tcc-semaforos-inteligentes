@@ -16,8 +16,10 @@
 #   fluxo transversal       DERIVADO: é o fluxo que põe a transversal no mesmo
 #                           grau de saturação da arterial (decisão de
 #                           2026-08-25). Ver `sim/calibracao/cenarios.py`.
-#   limiares 0,40 / 0,75    do context/04 §5. A referência bibliográfica que os
-#                           sustenta é item aberto de P11.
+#   limiares 0,40 / 0,75    do context/04 §5. CONVENÇÃO DO TRABALHO, declarada
+#                           antes da medição: nenhuma fonte normativa foi achada
+#                           para esses cortes, e o TCC os declara assim (P11,
+#                           fechada de novo em 2026-10-13).
 # ─────────────────────────────────────────────────────────────────────────────
 
 # --- Programa semafórico do baseline (espelha sim/rede/malha.tll.xml) --------
@@ -55,8 +57,10 @@ limiares_saturacao:
 # Faixa de plausibilidade do fluxo de saturação em via urbana, em veíc./h/faixa.
 # NÃO é a fonte do número — o número é medido. Serve de guarda: valor medido
 # fora desta faixa significa parâmetro errado em veiculos.typ.xml, e é isso que
-# se corrige (P11, encaminhamento de 2026-08-25). A referência bibliográfica
-# ainda é AÇÃO DA EQUIPE.
+# se corrige (P11, encaminhamento de 2026-08-25). Referência de conferência
+# (2026-10-13): fluxo de saturação base de 1.900 ucp/h/faixa dos procedimentos
+# derivados do HCM (FHWA, HPMS Field Manual, Appendix N, 2022). Os extremos
+# 1.500 e 2.100 em si continuam convenção do trabalho em volta desse valor.
 faixa_plausivel_saturacao_veic_h_faixa: [1500, 2100]
 
 # --- Composição do tráfego de fundo -----------------------------------------

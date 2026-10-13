@@ -1,0 +1,12 @@
+# Saída de `python -m sim.validacao.malha --todos` (900 s, modo FIXO, seed 1),
+# rodada pelo Felipe em 2026-10-13 no computador da equipe e colada na sessão de
+# validação do TCC v3. Transcrita como recebida (formato resumido).
+
+=== leve (900 s, FIXO) ===               v/c derivado 0.182
+  medido  arterial 0.193  transversal 0.194   APROVADA
+=== moderado ===                         v/c derivado 0.424
+  medido  arterial 0.450  transversal 0.429   APROVADA
+=== intenso ===                          v/c derivado 0.726
+  medido  arterial 0.726  transversal 0.664   APROVADA
+=== multiplas_emergencias ===            v/c derivado 0.424
+  medido  arterial 0.450  transversal 0.429   APROVADA

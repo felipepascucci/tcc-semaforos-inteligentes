@@ -28,13 +28,13 @@ Ver `09-pendencias-e-decisoes.md` item P6.
 > simulação `t_atuacao` é o mesmo passo de `t_decisao` — não há atuação física a
 > cronometrar —, então a comparação simulação × hardware do §6 item 4 é entre
 > grandezas diferentes e precisa ser apresentada como tal, com o n de cada uma
-> declarado (a de hardware tem n = 5; ver `06` §6).
+> declarado (a de hardware tem n = 100 desde 2026-10-06; antes eram 5; ver `06` §6).
 
 ## 2. Pipeline de análise
 
 ```
 analysis/
-├── data/                       # CSVs gerados pelas execuções (gitignored, regeneráveis)
+├── data/                       # CSVs gerados pelas execuções (versionados; só latencias.csv fica fora, 04 §10)
 ├── carregar.py                 # leitura e validação dos CSVs
 ├── estatistica.py              # testes de hipótese, tamanho de efeito, IC
 ├── tabelas.py                  # gera tabelas em Markdown + LaTeX

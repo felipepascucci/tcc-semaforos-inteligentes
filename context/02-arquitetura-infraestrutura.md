@@ -30,7 +30,7 @@ Não introduzir dependência fora desta lista sem registrar em `09-pendencias-e-
 | ORM / migrations | SQLAlchemy 2.x + Alembic | — |
 | Validação | Pydantic | v2 |
 | Banco | PostgreSQL | 16 |
-| Simulador | Eclipse SUMO | 1.19+ |
+| Simulador | Eclipse SUMO | 1.19+ (mínimo); os dados do capítulo 5 foram gerados com a **1.27.1** |
 | Cliente do simulador | TraCI (`libsumo` opcional) | pacote `traci` |
 | Serial | pyserial | 3.5 |
 | Frontend | React + TypeScript + Vite | React 18 |
@@ -241,7 +241,7 @@ Escopo realista para TCC, com honestidade sobre o que é demonstração:
 
 - **Logs estruturados** (JSON) com `structlog`, campos obrigatórios: `timestamp`, `nivel`, `evento`, `id_correlacao`, `id_semaforo`, `id_veiculo`.
 - **`id_correlacao`** — gerado na detecção e propagado por todo o fluxo até a atuação. É o que permite reconstruir uma priorização completa nos relatórios de validação. Sem ele, o item 6 do escopo (relatórios de validação) fica inviável.
-- **Métricas de latência** gravadas em `metrica_latencia` a cada priorização, com os três carimbos: `t_deteccao`, `t_decisao`, `t_atuacao`.
+- **Métricas de latência** gravadas em `metrica_latencia` a cada priorização **da bancada**, com `t_deteccao` e `t_atuacao` (`t_decisao` nulo, não observável no UNO). A latência de decisão da simulação (RNF01) fica nos CSV do lote (`execucoes.csv` e, nas exemplares, `latencias.csv`), e não no banco (corrigido em 2026-10-13, decisão D3 de `09`).
 - **Health check** em `/health` retornando estado de banco, adaptadores e da porta serial da bancada.
 
 > **Implementado no Bloco 6** (`app/logs.py`, `app/api/v1/health.py`). Os seis
@@ -260,8 +260,8 @@ Descrever no TCC, implantar somente se sobrar tempo:
 | API | ECS Fargate ou EC2 t3.small | Contêiner já pronto |
 | Banco | RDS PostgreSQL Multi-AZ | Durabilidade e failover |
 | Dashboard | S3 + CloudFront | Estático, baixo custo |
-| Ingestão IoT | AWS IoT Core (MQTT) | Substituiria o POST HTTP direto |
-| Borda | AWS IoT Greengrass | Formalizaria o nó de borda |
+| Ingestão IoT | AWS IoT Core (MQTT) | Ingestão das detecções numa versão com rede (o `POST /deteccoes` de `01` §7); a bancada não usa HTTP |
+| Borda | AWS IoT Greengrass | Num gateway junto ao cruzamento, e não no microcontrolador: o UNO não roda Greengrass |
 | Logs/métricas | CloudWatch | Auditoria |
 | Segredos | Secrets Manager | Substitui `.env` |
 

@@ -496,7 +496,8 @@ def f5_reducao_saturacao(
 
     Args:
         reducoes: Para cada cenário, a redução de cada seed (fração).
-        vc: v/c medido de cada cenário (`calibracao_cenarios.csv`).
+        vc: v/c derivado de cada cenário (`calibracao_cenarios.csv`, coluna
+            `grau_saturacao`); o medido fica em `context/04` §12.
         meta: Meta de H1, desenhada como referência.
         destino: Arquivo PDF.
         cenarios_da_tendencia: Os que entram na reta.

@@ -41,7 +41,16 @@ P11 e P20, que estavam nesta lista, foram fechadas pela equipe em 2026-10-01.
 
 ---
 
-## P4 — Tabelas novas no banco precisam entrar no texto · `AÇÃO DA EQUIPE`
+## P4 — Tabelas novas no banco precisam entrar no texto · ✅ **FECHADA em 2026-10-13**
+
+> **Fechada na validação do TCC v3.** O texto traz o dicionário das 14 tabelas
+> (Apêndice A), o DER regerado (Figura 9) e as três correções abaixo
+> (`NUMERIC(11, 8)` na longitude, `NUMERIC(8, 2)` em `tempo_medio_resposta`,
+> `fk_metrica` em `log_prioridade`), declaradas no §4 como mudanças em relação ao
+> pré-projeto. O TCC v3 acrescentou o que o v2 não dizia: quais tabelas a
+> simulação **não** grava (`03` §3.4).
+>
+> O registro abaixo é o histórico.
 
 `03-banco-de-dados.md` adiciona: `fase_semaforo`, `tag_rfid`, `dispositivo_iot`, `deteccao`, `execucao_simulacao`, `estado_semaforo_amostra`, `metrica_latencia`, `metrica_via_transversal` — e, desde 2026-09-29 (P20), `ocorrencia`, com as colunas `autorizado` e `fk_ocorrencia` em `deteccao`. Desde 2026-10-05 (Bloco 6), também `pedido_simulacao`, e `metrica_latencia.t_decisao` passou a aceitar nulo. No Bloco 7, `pedido_simulacao` ganhou `velocidade`.
 
@@ -56,7 +65,15 @@ O código já implementa a versão corrigida. O que falta é a atualização do 
 
 ---
 
-## P6 — Números do capítulo 5 são esperados, não medidos · `AÇÃO DA EQUIPE — ALTA PRIORIDADE`
+## P6 — Números do capítulo 5 são esperados, não medidos · ✅ **FECHADA em 2026-10-13**
+
+> **Fechada na validação do TCC v3.** O capítulo 5 do texto sai das execuções do
+> Bloco 8 (`analysis/gerar_resultados_tcc.py`), e a estimativa do pré-projeto
+> ficou só no Quadro 39 (§5.2.6), na coluna "Estimativa preliminar do
+> pré-projeto", ao lado do valor medido. Nenhum número do pré-projeto sobrou como
+> resultado.
+>
+> O registro abaixo é o histórico.
 
 Ver `07-resultados-e-analise.md` §1. As tabelas 1 e 2, as 1.250 intervenções, as 120 h de simulação e o "100% de uptime" ainda não correspondem a execuções reais.
 
@@ -118,6 +135,14 @@ Ver `05-integracao-hardware.md` §1C (versão anterior a 2026-10-05). Operação
 > sobra é **redação do capítulo de metodologia**, sem bloquear nada: as citações
 > dos itens 1 e 2 e os itens 4 a 6 da lista abaixo (caracterização pelo v/c
 > medido, simplificações da demanda, calibração de `tau`).
+>
+> **Redação fechada em 2026-10-13 (TCC v3).** Nenhuma referência devolvida pelo
+> orientador chegou a ser registrada, e a equipe decidiu buscá-las. Resultado:
+> o fluxo de saturação base de 1.900 ucp/h/faixa dos procedimentos derivados do
+> HCM (FHWA, *HPMS Field Manual*, Appendix N, 2022) serve de referência para a
+> faixa de plausibilidade; os cortes 0,40/0,75 de v/c **não têm fonte normativa**
+> e o texto os declara como convenção do trabalho, fixada antes da medição.
+> Comentários de `sim/config/cenarios.yaml` atualizados no mesmo commit.
 >
 > O registro abaixo é o histórico, mantido como roteiro dessa redação.
 
@@ -2010,7 +2035,11 @@ diferenças) foram verificados.
 
 ---
 
-## P12 — Ordem das sprints alterada · `REGISTRO`
+## P12 — Ordem das sprints alterada · ✅ **FECHADA em 2026-10-13**
+
+> **Fechada na validação do TCC v3.** A metodologia (§3, antes do Quadro 7)
+> registra que a ordem foi orientada a riscos e que o banco, previsto para a
+> quinta sprint, foi construído logo no início, com a justificativa.
 
 `08-roadmap-e-convencoes.md` §1 antecipa o banco de dados (Sprint 5 do texto) porque a Sprint 2 já precisa persistir. Registrar a alteração no capítulo de metodologia, com a justificativa — mudança de plano justificada é normal em processo iterativo e demonstra maturidade; mudança silenciosa parece descuido.
 
@@ -2061,6 +2090,16 @@ bank no lugar do notebook), não a forma de alimentação.
 | 2026-10-10 | **P21 — a ressalva do RNF05 fica, com power bank no lugar da bateria** (decisão do Felipe) | O texto declara que o RNF05 foi medido com o emissor no USB do notebook, e que a demonstração alimenta o emissor por power bank no micro-USB, condição não medida. Trocado em `06` §6 (item 4) e na linha de 2026-10-06 desta tabela; `docs/casos_de_teste.md` regerado. | Escolhida contra tirar a ressalva: a forma de alimentação é a mesma (5 V no micro-USB), mas a fonte não, e a condição da demonstração continua sem medição. A ressalva fica mais fraca e continua verdadeira. |
 | 2026-10-10 | **Esquema elétrico por código, com o schemdraw, e não no Fritzing** (decisão do Felipe) | `python docs/diagramas/esquema_eletrico.py` gera `esquema_cruzamento` e `esquema_veiculo` (PDF e PNG) em `docs/diagramas/`. As ligações ficam em constantes do script, e `tests/diagramas/test_esquema_eletrico.py` as confere contra `semaforo.ino`, os `#define` dos três emissores e as tabelas de `05` §1. O `schemdraw` (0.23, MIT, desenha sobre o matplotlib) entra no extra `analysis`, registrado em `02` §2; `08` §5 aponta o script no lugar do `docs/hardware/esquema.fzz`. Fiação conferida pelo Felipe: os GND dos 4 módulos de semáforo estão no barramento negativo da protoboard, ligado ao GND do UNO, e o VCC do LCD está no 5V do UNO. O pino do receptor que vai ao A0 é o TX (GPIO 1), dado pelo próprio sketch (`Serial` sem `swap()`). | O Fritzing não estava instalado, o instalador é pago, e o desenho nele é manual: o esquema ficaria fora do repositório versionado e sem conferência. Por código, ele segue o caminho dos diagramas PlantUML (fonte versionada, regenerável, com teste que quebra se o firmware mudar de pino). |
 | 2026-10-10 | **Os carrinhos são alimentados por power bank no micro-USB, e não por bateria de 9 V** (correção de registro, informada pelo Felipe) | Corrigidos `05` §1 (diagrama de blocos, subsistema B e a medição de H3 em §4.3), o contrato (§3 e "Como medir H3") e o cabeçalho de `veiculo_ambulancia.ino` (só comentário; o corpo do sketch não muda). O esquema do veículo desenha a power bank. A consequência para a ressalva do RNF05 ficou aberta como **P21**. | O registro da bateria vinha do questionário de 2026-10-05 e nunca foi conferido na bancada. Um esquema elétrico com a alimentação errada seria o erro objetivo mais fácil de a banca apontar olhando a maquete. |
+| 2026-10-13 | **Validação do TCC v2 contra o repositório; TCC v3 corrigido** (pedido do Felipe) | Cada afirmação do texto foi cruzada com código, dados e `context/`. As correções foram aplicadas no `TCC_v3.docx` (fora do repositório) e as da documentação neste commit. Fechadas P4, P6 e P12; P11 com a redação concluída. | O texto é o que a banca lê; uma frase que o código desmente é o erro mais fácil de apontar na arguição. |
+| 2026-10-13 | **H1 reescrita para "com detecção ideal"** (decisão do Felipe; D1) | O enunciado de H1 em `00` §5 e no TCC passa a dizer que o ganho é medido com a posição, a velocidade e a rota exatas do VE, vindas do SUMO. Limitação nova em §5.2.7 do texto; nota em `04` §1. **Comunicar ao orientador.** | A simulação não tem modelo de sensor (`sim/controlador/`): sem a ressalva, H1 afirmaria um ganho que um radar ou enlace V2I reais, com ruído e atraso, não garantem. A meta de 25% e os números medidos não mudam. |
+| 2026-10-13 | **v/c: os rótulos são derivados, e o medido vai para a 3.2.5** (D2) | A Tabela 1, o §1.3 e a Figura 20 do texto chamavam de "medido" o v/c derivado (`calibracao_cenarios.csv`). Passam a dizer "derivado", e a 3.2.5 traz a validação de 2026-10-13 dos quatro cenários (arterial 0,193 / 0,450 / 0,726; todos aprovados). Registro em `04` §12 e `analysis/data/validacao/validacao_malha_2026-10-13.txt`; docstrings de `analysis/figuras.py` e `gerar_resultados_tcc.py` corrigidas. | Só o `leve` tinha medição registrada (2026-08-25). Os números do capítulo 5 não mudam, e a classificação de nenhum cenário muda. |
+| 2026-10-13 | **O que a simulação grava no banco, declarado** (D3) | A simulação grava só `execucao_simulacao` e, nas execuções exemplares, `estado_semaforo_amostra`. `log_prioridade` e `metrica_latencia` são da bancada e da API; `metrica_simulacao` e `metrica_via_transversal` existem no modelo e não são preenchidas pelo lote (as métricas ficam em CSV). Tabela em `03` §3.4; ajustados `01` §3, `02`, `04` §1 e §6, e o Quadro 27, o §4 e o Apêndice A do texto. | O texto e o `01` diziam que a simulação registrava cada decisão e as métricas no banco. Não registra; os números do capítulo 5 saem dos CSV versionados. |
+| 2026-10-13 | **Sem testes com usuários** (informado pelo Felipe; D4) | O texto deixa de citar testes com usuários como fonte de requisitos (de três fontes para duas) e diz que o fluxo do operador foi percorrido pela equipe. | Não houve sessão com usuários de fora da equipe; o texto não pode descrever uma que não aconteceu. |
+| 2026-10-13 | **Dicionário de dados escrito à mão, conferido contra os modelos** (D5) | O texto deixa de dizer que o dicionário do Apêndice A sai do código; só o DER e as migrations saem. | Não há gerador de dicionário no repositório; o DER é que é gerado. |
+| 2026-10-13 | **Escopo do RNF05 declarado** (D6; perdas no RC522 não anotadas, informado pelo Felipe) | O 100 de 100 passa a ser descrito como entrega ao controlador das leituras feitas pelo emissor; passagens em que o RC522 não leu a tag não foram contadas. | A equipe não anotou leituras perdidas. Sem a ressalva, "100%" pareceria taxa de detecção do leitor. |
+| 2026-10-13 | **Referências: buscadas pela equipe; bibliografia citada onde couber** (D7) | Entra FHWA (2022) para o fluxo de saturação; saem MINELLI e RUSSELL; NORVIG (2013), que não eram citadas nem tinham lugar; as demais obras soltas passam a ser citadas no ponto em que sustentam o texto. Os cortes de v/c ficam como convenção (P11). | A ABNT exige que toda referência listada seja citada; e um corte sem fonte declarado como convenção é mais defensável que uma citação que não diz o que se atribui a ela. |
+| 2026-10-13 | **Objetivo específico de ML acrescentado ao Quadro 40** (D8) | Quadro 40 renumerado de a) a h); h) é avaliar o modelo de aprendizado entre VEs em conflito, atendido com veredito nulo de H4. O objetivo d) (persistência) passa a dizer que as métricas da simulação ficam em CSV. | O ML entrou depois do pré-projeto (P3 revogada, P19) e não constava como objetivo, embora tenha capítulo e hipótese próprios. |
+| 2026-10-13 | **`watchdog_s` fica em `parametros.yaml`, documentado como sem uso** (D9) | Só o comentário muda. O host não manda PING ao UNO desde 2026-10-05, e I6 é garantida pelo teto do firmware. | Remover a chave quebraria `Parametros` (que a exige) e mudaria o snapshot comparado ao gravado em `execucao_simulacao` no Bloco 8. |
 | 2026-10-08 | **PDF do relatório de validação pela imagem Docker do pandoc** (decisão do Felipe) | `python -m analysis.gerar_relatorio_validacao --pdf` converte o `.md` com `pandoc/latex:3.11` (LuaLaTeX, A4 paisagem) e grava o `.pdf` ao lado. `analysis/pdf/cabecalho.tex` põe a Latin Modern Math como fallback de fonte, e `analysis/pdf/quebrar_codigo.lua` deixa quebrar linha depois de `/ _ . :` dentro de código; só no PDF, `<br>` vira `; ` e `☑` vira `OK`. O comando falha se o LaTeX acusar caractere faltando. As colunas das tabelas passaram a ter largura proporcional ao conteúdo, e a tabela por sessão mostra a sessão até o segundo. | Escolhida contra deixar só o `.md`: `06` §5 pede o PDF. Mesma solução do PlantUML: não instala nada no Windows, e a versão fica fixada no script. **Conferido no PDF:** a fonte padrão da imagem (Latin Modern) não tem ≥, ≤, ≈, λ nem →, e sem o fallback eles sumiam (o mesmo defeito dos diagramas); caminhos em código e o identificador da sessão invadiam a coluna ao lado. |
 | 2026-10-08 | **Item 9 do checklist: sessão sem backend no caminho sai "sem veredito"** (mesmo tratamento do item 15, decisão do Felipe; ajuste depois dos dados) | Quando a sessão não tem nenhuma linha de `log_prioridade` nem de `metrica_latencia`, `analysis.checklist_bancada --banco` compara a primeira lista não nula da `ST` com a lista da Central no banco naquele instante. Diferente: a lista veio de fora do backend, "sem veredito"; igual: o backend estava no caminho e não gravou, "não atende"; lista sempre `000`: "sem veredito". | O item saía "não atende" nas três sessões do item 5 (`00:25:27Z`, `00:28:01Z`, `00:32:44Z`), que rodaram com o compose parado e a lista posta à mão, como o roteiro do item 5 permite: não havia backend para gravar. Na de `00:32:44Z` a `ST` trouxe `100` com a Central do banco em `000`. Uma sessão com o backend no ar continua sendo julgada como antes; as três que atendiam continuam atendendo. |
 | 2026-10-08 | **Revisão de legibilidade dos diagramas, e o PDF que perdia símbolos** (pedido do Felipe, que viu rótulos sobrepostos) | Os sete diagramas foram abertos em PNG e em PDF. Corrigidos: rótulos em cima de linhas, bordas e títulos em `componentes`, `maquina_estados` (os dois laços do verde viraram ações internas do estado), `infraestrutura`, `infraestrutura_aws` e `der` (`db/der.py` passou de `ortho` a polilinha com mais espaço); em `casos_uso` saiu a associação direta Operador → login, redundante com os `<<include>>`, cuja curva atravessava o diagrama. A `sequencia_preempcao` já estava legível. **Achado:** o PDF do PlantUML escreve o texto em WinAnsi (cp1252), e `→`, `≤`, `≥` e `≠` sumiam sem aviso: a máquina de estados saía "[tempo no verde  verde_min]". Os `.puml` passaram a `->`, `<=`, `>=` e `!=`, e `tests/diagramas/test_caracteres_do_pdf.py` falha se um caractere fora do WinAnsi voltar. A nota do diagrama de infraestrutura também foi corrigida: dizia que o UNO decide "sem notebook", e o UNO é alimentado pelo USB do notebook. | O PNG desenha todos os caracteres e o PDF não, então o defeito só aparecia no arquivo que vai para o texto do TCC (`07` §5: figuras vetoriais). Trocar a fonte não resolve: a fonte DejaVu do contêiner não é embutida no PDF. O teste é o que impede o defeito de voltar sem ninguém abrir o PDF. |

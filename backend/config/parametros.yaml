@@ -56,8 +56,11 @@ prioridade_tipo: [AMBULANCIA, BOMBEIRO, POLICIA]
 # --- Invariantes de segurança — context/01 §6 -----------------------------
 # I5: nenhum acesso em vermelho por mais que isto (starvation).
 vermelho_max_s: 120.0
-# I6: garantido pelo firmware; replicado aqui para o adaptador de hardware
-# saber com que cadência precisa enviar PING.
+# I6: garantido pelo firmware. PARÂMETRO SEM USO desde 2026-10-05: o host não
+# manda mais PING ao UNO, e I6 deixou de ser watchdog (teto de 30 s no firmware,
+# context/01 §6). Fica aqui, com o valor de sempre, porque `Parametros` o exige
+# e porque o snapshot gravado em execucao_simulacao no Bloco 8 o contém; remover
+# mudaria o snapshot comparado com este arquivo (decisão D9, context/09).
 watchdog_s: 3.0
 
 # --- Orçamentos de latência — decisão P2 (context/09) ---------------------

@@ -377,7 +377,7 @@ há múltiplos VEs em rotas que se cruzam.
 | 10.5 | Treino e exportação dos pesos | ✅ `politica_desempate.yaml` |
 | 10.6 | Inferência pura em `core/priorizacao/` | ✅ `politica.py` (2026-10-07); nenhum número dos braços existentes muda |
 | 10.7 | Braço `PREEMPCAO_ML` no executor e no lote | ✅ 2026-10-07: só no `multiplas_emergencias` (650 execuções no Bloco 8), sem E7, com quem decidiu cada disputa registrado; nenhum número dos braços existentes muda |
-| 10.8 | Análise estatística de H4 | 🛠️ script pronto em 2026-10-07 (`python -m analysis.analise_h4`), testado com dado sintético; o veredito espera o Bloco 8. A variável de resposta e a regra de veredito estão em `07` §3.5, como proposta a confirmar |
+| 10.8 | Análise estatística de H4 | ✅ 2026-10-08: rodada sobre o Bloco 8 (`analysis/saida/h4.md`), regras de `07` §3.5 confirmadas pelo grupo. Veredito **NULO**: −4,6 s [−11,0; 2,6], δ −0,22, p de Holm 0,174; o modelo decidiu 429 disputas e divergiu do E8 em 323 |
 
 Atualizar esta tabela no mesmo commit de cada entrega, junto com
 `docs/plano-desenvolvimento.md` e o `09`.

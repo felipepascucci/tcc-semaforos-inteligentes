@@ -235,7 +235,8 @@ def calcular(
 
     Args:
         dados: A pasta do lote, lida.
-        vc: v/c medido por cenário, para a caracterização e a F5.
+        vc: v/c derivado por cenário (`calibracao_cenarios.csv`), para a
+            caracterização e a F5.
         bancada: Latências fim a fim da sessão de H3, em ms.
         reamostragens: Reamostras do bootstrap (os testes usam menos).
     """

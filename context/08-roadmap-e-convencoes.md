@@ -10,7 +10,7 @@ O pré-projeto define 8 sprints. Abaixo, o que cada uma significa em termos de a
 | 2 | Integração SUMO + Python | `sim/controlador/adaptador_traci.py`, `executor.py`; esqueleto de `core/modelos.py` | `python -m sim.controlador.executor --cenario leve --modo FIXO --seed 1` produz `tripinfo.xml` |
 | 3 | Lógica de priorização | `core/priorizacao/` completo (E1–E8) + `core/seguranca.py` + testes unitários | Testes de I1–I5 passam; corredor verde visível na GUI |
 | 4 | Camada IoT | Firmware UNO reescrito com transição segura e decisão local; sketches dos NodeMCUs versionados como estão; `bridge/` que escuta o UNO e mede H3 (`05`, 2026-10-05) | Tag aproxima → semáforo físico preempta em < 3 s |
-| 5 | Banco de dados | Migrations Alembic, models, repositories, seeds | Execução de simulação grava `execucao_simulacao` + `log_prioridade` |
+| 5 | Banco de dados | Migrations Alembic, models, repositories, seeds | Execução de simulação grava `execucao_simulacao` (+ `estado_semaforo_amostra` nas exemplares); `log_prioridade` só pela bancada e pela API (`03` §3.4, corrigido em 2026-10-13) |
 | 6 | Dashboard | React + mapa + WebSocket + telas de log e métricas | Estado dos semáforos e VEs em tempo real |
 | 7 | Testes integrados | Suite E2E, `sim/controlador/lote.py`, validador de execução | Lote de 600 execuções roda sem intervenção manual |
 | 8 | Validação e análise | `analysis/` completo, tabelas e figuras | `gerar_resultados_tcc.py` produz o capítulo 5 inteiro |
@@ -150,7 +150,7 @@ Preferir PlantUML a diagrama desenhado à mão: fica versionado, regenerável e 
 
 | Risco | Impacto | Mitigação |
 | --- | --- | --- |
-| Resultados reais não confirmam H1 (≥30%) | Alto | Rodar experimento piloto **cedo** (Sprint 3), com 5 seeds, para conhecer a ordem de grandeza antes de comprometer o texto |
+| Resultados reais não confirmam H1 (≥ 25%) | Alto | Rodar experimento piloto **cedo** (Sprint 3), com 5 seeds, para conhecer a ordem de grandeza antes de comprometer o texto |
 | Protótipo trava durante a apresentação | Alto | Teste de 30 min obrigatório (feito em 2026-10-07: 33 min sem reinício, `06` §6 item 12); sem `String`; emergência que termina sozinha e teto de 30 s (I6); roteiro ensaiado (`bridge/demo.py`, 19 de 19) com plano B `--sem-carrinho`; ter vídeo gravado de backup (**ainda não gravado**) |
 | 600 execuções não cabem no prazo | Médio | `traci` com 6 processos em paralelo: medido no piloto, as 600 levam ~6 h (P15). O braço `PREEMPCAO_ML` (10.7) acrescenta 50 execuções, só no `multiplas_emergencias`: 650 no total |
 | ~~Rede da faculdade bloqueia o ESP8266~~ | — | **Não se aplica desde 2026-10-05:** o protótipo não usa rede; os NodeMCUs falam por ESP-NOW, MAC a MAC (`05`). Resta a interferência em 2,4 GHz: testar no local antes |

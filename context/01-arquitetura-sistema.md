@@ -59,12 +59,24 @@ AdaptadorSUMO coleta EstadoMalha
 MotorDecisao.avaliar(EstadoMalha) -> list[Comando]
   │  (mede t_decisao; deve ser < 100 ms — RNF01)
   ▼
-AdaptadorSUMO aplica os comandos via traci.trafficlight.setPhase()
+AdaptadorSUMO passa os comandos pela máquina de estados (core/priorizacao/fases.py)
+  │  e escreve a state string resultante com traci.trafficlight.setRedYellowGreenState()
   ▼
-Persistência assíncrona: log_prioridade, estado_semaforo_amostra
+Coletor em memória -> CSV de analysis/data/ (todas as execuções)
+  │  + execucao_simulacao e, só nas exemplares, estado_semaforo_amostra (P5)
   ▼
-Broadcast WebSocket -> Dashboard
+Broadcast WebSocket -> Dashboard (só com --transmitir)
 ```
+
+> **Corrigido em 2026-10-13** (validação do TCC contra o sistema). A versão
+> anterior deste diagrama dizia `setPhase()` e "persistência: log_prioridade". O
+> adaptador nunca usou `setPhase()`, que saltaria o amarelo e o all-red
+> (`backend/adapters/sumo/adaptador.py`), e **a simulação não grava
+> `log_prioridade`, `metrica_latencia`, `metrica_simulacao` nem
+> `metrica_via_transversal`**: as decisões e as métricas do experimento ficam nos
+> CSV do lote. Essas tabelas recebem dados da bancada e da API (`log_prioridade`,
+> `metrica_latencia`) ou estão reservadas (`metrica_simulacao`,
+> `metrica_via_transversal`). Decisão D3, tabela do fim de `09`.
 
 O loop roda com `--step-length 0.1` (100 ms de tempo simulado por passo). O motor é chamado **a cada passo**.
 
@@ -245,7 +257,7 @@ senão:
     -> fase_alvo (verde)
 ```
 
-**E6 — Manutenção e liberação.** Manter a fase até o VE cruzar a linha de retenção, com timeout de segurança `PREEMPCAO_TIMEOUT_S = 45`. Ao liberar, registrar em `log_prioridade` com `status_execucao`.
+**E6 — Manutenção e liberação.** Manter a fase até o VE cruzar a linha de retenção, com timeout de segurança `PREEMPCAO_TIMEOUT_S = 45`. Ao liberar, o motor emite `LIBERAR` (ou `COMPENSAR`) com o `motivo` por extenso; na simulação o comando não é gravado no banco (§3).
 
 **E7 — Compensação pós-evento (H2).** Após a liberação, por `N_CICLOS_COMPENSACAO = 3` ciclos, redistribuir o verde proporcionalmente à fila acumulada de cada acesso, respeitando `VERDE_MIN` e `VERDE_MAX`:
 
@@ -280,7 +292,7 @@ onde `DEFICIT_TOTAL` é o tempo de verde que o acesso deixou de receber durante 
 2. Menor ETA ao cruzamento.
 3. Preempção já em curso vence (evita oscilação/thrashing).
 
-Se dois VEs demandam fases conflitantes no mesmo TLS, **um espera**. Nunca conceder as duas. Registrar em `log_prioridade` com `status_execucao = 'CONFLITO_ADIADO'`.
+Se dois VEs demandam fases conflitantes no mesmo TLS, **um espera**. Nunca conceder as duas. O adiamento sai em `Resolucao.adiados`; na simulação ele é contado por episódio em `conflitos_por_execucao.csv` (a simulação não grava `log_prioridade`, §3), e o `status_execucao = 'CONFLITO_ADIADO'` fica para quem registrar decisões no banco.
 
 > **Empate em todos os critérios (registrado em 2026-10-08, sem mudança de
 > código).** Se dois VEs empatam em criticidade, tipo e ETA, e nenhum tem

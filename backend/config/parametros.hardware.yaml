@@ -32,8 +32,9 @@ preempcao_timeout_s: 30.0
 n_fases_prototipo: 2
 
 # --- Verde do VE, por tipo — a regra do sketch da equipe de hardware ---------
-# A ordem de prioridade entre os tipos é herdada de `prioridade_tipo`
-# (AMBULANCIA > BOMBEIRO > POLICIA), a mesma do sketch.
+# Desde 2026-10-06 o tipo fixa SÓ a duração do verde. Quem interrompe quem na
+# bancada é a criticidade da ocorrência que a Central manda ao UNO (AUT), e não
+# `prioridade_tipo` (context/05 §3.2 e §3.3).
 verde_por_tipo_s:
   AMBULANCIA: 9.0
   BOMBEIRO: 8.0
