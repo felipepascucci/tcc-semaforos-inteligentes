@@ -568,6 +568,13 @@ Um gridlock não detectado invalida silenciosamente todo o experimento. Este pas
 > aquecimento não cai exatamente na virada do regime. Desvio maior não é ruído — é
 > a malha operando em regime diferente do previsto.
 >
+> Validação não é experimento: os CSV da execução de validação vão para
+> `sim/saida/validacao/<cenario>_<seed>/` (descartados a cada nova validação),
+> nunca para `analysis/data/` nem para a pasta do lote. Até 2026-10-13 eles eram
+> anexados a `analysis/data/execucoes.csv`; a checagem de cabeçalho do coletor
+> expôs isso quando ganhou as colunas de conflito. O dataset foi conferido e não
+> continha linhas de validação.
+>
 > **Primeira execução, 2026-08-25, cenário `leve` (1.200 s):** v/c derivado 0,182
 > contra medido 0,186 na arterial e 0,194 na transversal. Zero colisão, zero
 > teleporte, zero violação de invariante no baseline. **Malha aprovada** — e com

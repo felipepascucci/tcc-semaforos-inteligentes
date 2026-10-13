@@ -158,6 +158,15 @@ def validar(
             problemas.append(str(erro))
 
     # 2 e 3 — a execução propriamente dita, no baseline.
+    #
+    # Validação não é experimento: os CSV ficam numa pasta só dela, e não em
+    # `analysis/data/` (o dataset) nem na pasta do lote. Cada validação é uma
+    # execução avulsa, então o CSV da anterior é descartado — anexar a ele
+    # misturaria versões do código com cabeçalhos diferentes.
+    diretorio_csv = executor.SAIDA / "validacao" / f"{nome_cenario}_{seed}"
+    diretorio_csv.mkdir(parents=True, exist_ok=True)
+    for antigo in diretorio_csv.glob("*.csv"):
+        antigo.unlink()
     execucao = executor.executar(
         executor.Opcoes(
             cenario=nome_cenario,
@@ -165,6 +174,7 @@ def validar(
             seed=seed,
             duracao_s=duracao_s,
             persistir=False,
+            diretorio_csv=diretorio_csv,
         )
     )
     if execucao.colisoes:
