@@ -508,6 +508,7 @@ telemetria gravada; os demais são observação de quem está na bancada.
 | `analysis/tests/test_gerar_casos_de_teste.py` | 5 |
 | `analysis/tests/test_gerar_relatorio_validacao.py` | 26 |
 | `analysis/tests/test_gerar_resultados_tcc.py` | 12 |
+| `analysis/tests/test_metricas_politica.py` | 5 |
 | `analysis/tests/test_relatorio_piloto.py` | 17 |
 | `analysis/tests/test_resumo_bancada.py` | 8 |
 | `analysis/tests/test_resumo_conflitos.py` | 10 |
@@ -598,5 +599,5 @@ telemetria gravada; os demais são observação de quem está na bancada.
 | `tests/firmware/test_firmware_uno.py` | 24 |
 | `tests/firmware/test_sketches_nodemcu.py` | 10 |
 
-97 arquivos, 1020 funções de teste. Um teste parametrizado ou com
+98 arquivos, 1025 funções de teste. Um teste parametrizado ou com
 Hypothesis conta uma vez aqui e roda várias vezes na suíte.

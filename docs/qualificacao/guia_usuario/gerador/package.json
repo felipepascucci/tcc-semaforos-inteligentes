@@ -1,0 +1,8 @@
+{
+  "name": "gerador-guia-usuario",
+  "private": true,
+  "description": "Gera o .docx do Guia do Usuário v2.0 a partir de ../guia_usuario.md (ver gerar_docx.mjs)",
+  "type": "module",
+  "scripts": { "docx": "node gerar_docx.mjs" },
+  "dependencies": { "docx": "9.5.1" }
+}
